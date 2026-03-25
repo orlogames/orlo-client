@@ -1,10 +1,11 @@
 using UnityEngine;
 using Orlo.Network;
+using Orlo.Player;
 
 namespace Orlo
 {
     /// <summary>
-    /// Entry point — creates core managers and initiates server connection.
+    /// Entry point — connects to the server, logs in, selects character, and spawns the player.
     /// Attach to an empty GameObject in the boot scene.
     /// </summary>
     public class GameBootstrap : MonoBehaviour
@@ -13,25 +14,131 @@ namespace Orlo
         [SerializeField] private string serverHost = "127.0.0.1";
         [SerializeField] private int serverPort = 7777;
 
+        [Header("Player")]
+        [SerializeField] private string playerName = "Explorer";
+        [SerializeField] private GameObject playerPrefab;
+
+        private ulong _sessionId;
+        private ulong _characterEntityId;
+
+        // Ping every 5 seconds for latency tracking
+        private float _pingTimer;
+        private const float PingInterval = 5f;
+
         private void Start()
         {
             Debug.Log("[Orlo] Bootstrapping...");
 
-            // Connect to game server
             NetworkManager.Instance.OnConnected += OnConnected;
             NetworkManager.Instance.OnDisconnected += OnDisconnected;
+
+            PacketHandler.Instance.OnLoginResponse += OnLoginResponse;
+            PacketHandler.Instance.OnCharacterSpawn += OnCharacterSpawn;
+            PacketHandler.Instance.OnPong += OnPong;
+
             NetworkManager.Instance.Connect();
+        }
+
+        private void Update()
+        {
+            if (!NetworkManager.Instance.IsConnected) return;
+
+            _pingTimer -= Time.deltaTime;
+            if (_pingTimer <= 0)
+            {
+                _pingTimer = PingInterval;
+                NetworkManager.Instance.Send(PacketBuilder.Ping());
+            }
         }
 
         private void OnConnected()
         {
-            Debug.Log("[Orlo] Connected to server — sending login...");
-            // TODO: Send LoginRequest protobuf
+            Debug.Log("[Orlo] Connected — sending login...");
+            var loginData = PacketBuilder.LoginRequest(playerName, "dev-token");
+            NetworkManager.Instance.Send(loginData);
+        }
+
+        private void OnLoginResponse(Auth.LoginResponse resp)
+        {
+            _sessionId = resp.SessionId;
+            Debug.Log($"[Orlo] Logged in, session={_sessionId} — selecting character...");
+
+            var selectData = PacketBuilder.CharacterSelect(_sessionId, playerName);
+            NetworkManager.Instance.Send(selectData);
+        }
+
+        private void OnCharacterSpawn(Auth.CharacterSpawnResponse spawn)
+        {
+            _characterEntityId = spawn.EntityId.Id;
+            var pos = new Vector3(
+                spawn.Transform.Position.X,
+                spawn.Transform.Position.Y,
+                spawn.Transform.Position.Z
+            );
+            var rot = Quaternion.identity;
+            if (spawn.Transform.Rotation != null)
+            {
+                rot = new Quaternion(
+                    spawn.Transform.Rotation.X,
+                    spawn.Transform.Rotation.Y,
+                    spawn.Transform.Rotation.Z,
+                    spawn.Transform.Rotation.W
+                );
+            }
+
+            Debug.Log($"[Orlo] Character spawned at {pos} — creating player object");
+
+            // Instantiate player
+            GameObject player;
+            if (playerPrefab != null)
+            {
+                player = Instantiate(playerPrefab, pos, rot);
+            }
+            else
+            {
+                player = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                player.transform.SetPositionAndRotation(pos, rot);
+                player.AddComponent<CharacterController>();
+                player.AddComponent<PlayerController>();
+            }
+
+            player.tag = "Player";
+            player.name = $"Player_{playerName}";
+
+            // Set up camera to follow
+            var cam = Camera.main;
+            if (cam != null)
+            {
+                cam.transform.SetParent(player.transform);
+                cam.transform.localPosition = new Vector3(0, 2f, -5f);
+                cam.transform.localRotation = Quaternion.Euler(15f, 0, 0);
+            }
+        }
+
+        private void OnPong(Auth.Pong pong)
+        {
+            float rtt = (float)(Time.realtimeSinceStartup * 1000 - pong.ClientTime.Ms);
+            Debug.Log($"[Network] RTT: {rtt:F1}ms");
         }
 
         private void OnDisconnected()
         {
             Debug.Log("[Orlo] Disconnected from server");
+        }
+
+        private void OnDestroy()
+        {
+            if (NetworkManager.Instance != null)
+            {
+                NetworkManager.Instance.OnConnected -= OnConnected;
+                NetworkManager.Instance.OnDisconnected -= OnDisconnected;
+            }
+            if (PacketHandler.Instance != null)
+            {
+                PacketHandler.Instance.OnLoginResponse -= OnLoginResponse;
+                PacketHandler.Instance.OnCharacterSpawn -= OnCharacterSpawn;
+                PacketHandler.Instance.OnPong -= OnPong;
+            }
         }
     }
 }

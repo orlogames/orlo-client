@@ -1,0 +1,71 @@
+name: CI — Unity Client Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Unity Build (StandaloneLinux64)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Checkout orlo-proto (sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/orlo-proto
+          path: ../orlo-proto
+
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Generate C# proto sources
+        run: |
+          PROTO_DIR="../orlo-proto/proto"
+          OUT_DIR="Assets/Scripts/Proto/Generated"
+          mkdir -p "$OUT_DIR"
+          protoc \
+            --proto_path="$PROTO_DIR" \
+            --csharp_out="$OUT_DIR" \
+            "$PROTO_DIR"/orlo/common.proto \
+            "$PROTO_DIR"/orlo/auth.proto \
+            "$PROTO_DIR"/orlo/world.proto \
+            "$PROTO_DIR"/orlo/packet.proto
+          echo "Generated C# files:"
+          ls -la "$OUT_DIR"
+
+      # Unity requires a valid license. Set UNITY_LICENSE secret in repo settings.
+      # For personal license: base64 encode your .ulf file and store as UNITY_LICENSE.
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-StandaloneLinux64-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-StandaloneLinux64-
+            Library-
+
+      - name: Build Unity project
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: StandaloneLinux64
+          unityVersion: auto
+          buildMethod: ""
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StandaloneLinux64
+          path: build/StandaloneLinux64
+          retention-days: 7

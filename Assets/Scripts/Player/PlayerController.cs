@@ -4,8 +4,8 @@ using Orlo.Network;
 namespace Orlo.Player
 {
     /// <summary>
-    /// Third-person player controller with jump support.
-    /// Sends movement input to server, receives authoritative position corrections.
+    /// Third-person player controller with server-authoritative movement.
+    /// Sends PlayerMoveInput packets, receives position corrections.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public class PlayerController : MonoBehaviour
@@ -20,14 +20,22 @@ namespace Orlo.Player
         [SerializeField] private Transform cameraRig;
         [SerializeField] private float mouseSensitivity = 2f;
 
+        [Header("Network")]
+        [SerializeField] private float correctionLerpSpeed = 0.3f;
+
         private CharacterController _cc;
         private Vector3 _velocity;
         private float _cameraPitch;
         private bool _isSprinting;
+        private bool _isJumping;
 
-        // Send rate: 10 times per second (every other frame at 20 tick)
+        // Send rate: 10 times per second
         private float _sendTimer;
         private const float SendInterval = 0.1f;
+
+        // Server correction target
+        private Vector3? _serverPosition;
+        private Quaternion? _serverRotation;
 
         private void Start()
         {
@@ -39,6 +47,7 @@ namespace Orlo.Player
         {
             HandleMouseLook();
             HandleMovement();
+            ApplyServerCorrections();
             SendMovementInput();
         }
 
@@ -66,17 +75,45 @@ namespace Orlo.Player
             Vector3 move = transform.right * h + transform.forward * v;
             move = Vector3.ClampMagnitude(move, 1f) * speed;
 
+            _isJumping = false;
             if (_cc.isGrounded)
             {
-                _velocity.y = -2f; // Small downward force to stay grounded
+                _velocity.y = -2f;
                 if (Input.GetButtonDown("Jump"))
                 {
                     _velocity.y = jumpForce;
+                    _isJumping = true;
                 }
             }
 
             _velocity.y += gravity * Time.deltaTime;
             _cc.Move((move + Vector3.up * _velocity.y) * Time.deltaTime);
+        }
+
+        private void ApplyServerCorrections()
+        {
+            if (_serverPosition.HasValue)
+            {
+                float dist = Vector3.Distance(transform.position, _serverPosition.Value);
+                // Only correct if drift exceeds threshold (avoids jitter on good connections)
+                if (dist > 0.1f)
+                {
+                    transform.position = Vector3.Lerp(transform.position, _serverPosition.Value, correctionLerpSpeed);
+                }
+                if (dist < 0.05f)
+                {
+                    _serverPosition = null; // Close enough, stop correcting
+                }
+            }
+
+            if (_serverRotation.HasValue)
+            {
+                transform.rotation = Quaternion.Slerp(transform.rotation, _serverRotation.Value, correctionLerpSpeed);
+                if (Quaternion.Angle(transform.rotation, _serverRotation.Value) < 1f)
+                {
+                    _serverRotation = null;
+                }
+            }
         }
 
         private void SendMovementInput()
@@ -87,8 +124,14 @@ namespace Orlo.Player
 
             if (!NetworkManager.Instance.IsConnected) return;
 
-            // TODO: Serialize PlayerMoveInput protobuf and send
-            // For now this is a placeholder for the network integration
+            var data = PacketBuilder.PlayerMoveInput(
+                transform.position,
+                transform.rotation,
+                _cc.velocity,
+                _isJumping,
+                _isSprinting
+            );
+            NetworkManager.Instance.Send(data);
         }
 
         /// <summary>
@@ -96,9 +139,8 @@ namespace Orlo.Player
         /// </summary>
         public void ApplyServerCorrection(Vector3 position, Quaternion rotation)
         {
-            // Smooth interpolation to server position
-            transform.position = Vector3.Lerp(transform.position, position, 0.3f);
-            transform.rotation = Quaternion.Slerp(transform.rotation, rotation, 0.3f);
+            _serverPosition = position;
+            _serverRotation = rotation;
         }
     }
 }
