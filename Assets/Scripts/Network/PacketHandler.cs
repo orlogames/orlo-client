@@ -17,6 +17,7 @@ namespace Orlo.Network
         public static PacketHandler Instance { get; private set; }
 
         public event Action<Auth.LoginResponse> OnLoginResponse;
+        public event Action<Auth.RegisterResponse> OnRegisterResponse;
         public event Action<Auth.CharacterSpawnResponse> OnCharacterSpawn;
         public event Action<Auth.Pong> OnPong;
 
@@ -54,6 +55,9 @@ namespace Orlo.Network
             {
                 case Packet.PayloadOneofCase.LoginResponse:
                     HandleLoginResponse(packet.LoginResponse);
+                    break;
+                case Packet.PayloadOneofCase.RegisterResponse:
+                    HandleRegisterResponse(packet.RegisterResponse);
                     break;
                 case Packet.PayloadOneofCase.CharacterSpawn:
                     HandleCharacterSpawn(packet.CharacterSpawn);
@@ -167,13 +171,27 @@ namespace Orlo.Network
         {
             if (resp.Success)
             {
-                Debug.Log($"[Auth] Login successful — session {resp.SessionId}");
+                Debug.Log($"[Auth] Login successful — session {resp.SessionId}, account {resp.AccountId}");
                 OnLoginResponse?.Invoke(resp);
             }
             else
             {
                 Debug.LogError($"[Auth] Login failed: {resp.Error}");
+                OnLoginResponse?.Invoke(resp);
             }
+        }
+
+        private void HandleRegisterResponse(Auth.RegisterResponse resp)
+        {
+            if (resp.Success)
+            {
+                Debug.Log($"[Auth] Registration successful — account {resp.AccountId}");
+            }
+            else
+            {
+                Debug.LogError($"[Auth] Registration failed: {resp.Error}");
+            }
+            OnRegisterResponse?.Invoke(resp);
         }
 
         private void HandleCharacterSpawn(Auth.CharacterSpawnResponse spawn)

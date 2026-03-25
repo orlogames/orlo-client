@@ -23,14 +23,27 @@ namespace Orlo.Network
             };
         }
 
-        public static byte[] LoginRequest(string username, string token, uint protocolVersion = 1)
+        public static byte[] LoginRequest(string username, string password, string token = "", uint protocolVersion = 1)
         {
             var pkt = NewPacket();
             pkt.LoginRequest = new Auth.LoginRequest
             {
                 Username = username,
+                Password = password,
                 Token = token,
                 ProtocolVersion = protocolVersion
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] RegisterRequest(string username, string password, string email)
+        {
+            var pkt = NewPacket();
+            pkt.RegisterRequest = new Auth.RegisterRequest
+            {
+                Username = username,
+                Password = password,
+                Email = email
             };
             return pkt.ToByteArray();
         }

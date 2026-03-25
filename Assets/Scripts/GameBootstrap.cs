@@ -22,8 +22,10 @@ namespace Orlo
         [SerializeField] private GameObject playerPrefab;
 
         private ulong _sessionId;
+        private ulong _accountId;
         private ulong _characterEntityId;
         private CharacterCreationUI _charCreationUI;
+        private LoginUI _loginUI;
         private bool _characterSpawned = false;
 
         // Ping every 5 seconds for latency tracking
@@ -41,10 +43,11 @@ namespace Orlo
             NetworkManager.Instance.OnDisconnected += OnDisconnected;
 
             PacketHandler.Instance.OnLoginResponse += OnLoginResponse;
+            PacketHandler.Instance.OnRegisterResponse += OnRegisterResponse;
             PacketHandler.Instance.OnCharacterSpawn += OnCharacterSpawn;
             PacketHandler.Instance.OnPong += OnPong;
 
-            NetworkManager.Instance.Connect();
+            ShowLoginUI();
         }
 
         private void InitializeWorldSystems()
@@ -111,17 +114,102 @@ namespace Orlo
             }
         }
 
+        private string _pendingUsername;
+        private string _pendingPassword;
+
+        private void ShowLoginUI()
+        {
+            if (_loginUI == null)
+            {
+                var go = new GameObject("LoginUI");
+                _loginUI = go.AddComponent<LoginUI>();
+            }
+
+            _loginUI.OnLogin = (username, password) =>
+            {
+                _pendingUsername = username;
+                _pendingPassword = password;
+                playerName = username;
+
+                if (!NetworkManager.Instance.IsConnected)
+                    NetworkManager.Instance.Connect();
+                else
+                    SendLogin();
+            };
+
+            _loginUI.OnRegister = (username, password, email) =>
+            {
+                _pendingUsername = username;
+                _pendingPassword = password;
+                playerName = username;
+                _pendingRegister = true;
+
+                if (!NetworkManager.Instance.IsConnected)
+                    NetworkManager.Instance.Connect();
+                else
+                    SendRegister();
+            };
+
+            _loginUI.Show();
+        }
+
+        private bool _pendingRegister = false;
+
+        private void SendLogin()
+        {
+            var loginData = PacketBuilder.LoginRequest(_pendingUsername, _pendingPassword);
+            NetworkManager.Instance.Send(loginData);
+        }
+
+        private void SendRegister()
+        {
+            var data = PacketBuilder.RegisterRequest(_pendingUsername, _pendingPassword, "");
+            NetworkManager.Instance.Send(data);
+        }
+
         private void OnConnected()
         {
-            Debug.Log("[Orlo] Connected — sending login...");
-            var loginData = PacketBuilder.LoginRequest(playerName, "dev-token");
-            NetworkManager.Instance.Send(loginData);
+            Debug.Log("[Orlo] Connected to server");
+            if (_pendingRegister)
+            {
+                _pendingRegister = false;
+                SendRegister();
+            }
+            else if (!string.IsNullOrEmpty(_pendingUsername))
+            {
+                SendLogin();
+            }
+        }
+
+        private void OnRegisterResponse(Auth.RegisterResponse resp)
+        {
+            if (resp.Success)
+            {
+                Debug.Log($"[Orlo] Registered account {resp.AccountId} — logging in...");
+                _loginUI?.SetStatus("Account created! Logging in...");
+                SendLogin();
+            }
+            else
+            {
+                Debug.LogError($"[Orlo] Registration failed: {resp.Error}");
+                _loginUI?.SetError($"Registration failed: {resp.Error}");
+            }
         }
 
         private void OnLoginResponse(Auth.LoginResponse resp)
         {
+            if (!resp.Success)
+            {
+                Debug.LogError($"[Orlo] Login failed: {resp.Error}");
+                _loginUI?.SetError($"Login failed: {resp.Error}");
+                return;
+            }
+
             _sessionId = resp.SessionId;
-            Debug.Log($"[Orlo] Logged in, session={_sessionId} — requesting character list...");
+            _accountId = resp.AccountId;
+            Debug.Log($"[Orlo] Logged in, session={_sessionId}, account={_accountId} — requesting character list...");
+
+            _loginUI?.Hide();
 
             // Request character list — if empty, show creation screen
             NetworkManager.Instance.Send(PacketBuilder.CharacterListRequest(_sessionId));
@@ -258,6 +346,7 @@ namespace Orlo
             if (PacketHandler.Instance != null)
             {
                 PacketHandler.Instance.OnLoginResponse -= OnLoginResponse;
+                PacketHandler.Instance.OnRegisterResponse -= OnRegisterResponse;
                 PacketHandler.Instance.OnCharacterSpawn -= OnCharacterSpawn;
                 PacketHandler.Instance.OnPong -= OnPong;
             }
