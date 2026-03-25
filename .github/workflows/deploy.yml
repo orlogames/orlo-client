@@ -1,0 +1,75 @@
+name: Deploy — Unity Client Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Assets/**'
+      - 'Packages/**'
+      - 'ProjectSettings/**'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build Windows Client
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Checkout orlo-proto
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/orlo-proto
+          path: orlo-proto
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: StandaloneWindows64
+          buildName: OrloClient
+          buildsPath: build/windows
+          unityVersion: 6000.0.30f1
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: orlo-client-windows
+          path: build/windows
+          retention-days: 30
+
+  build-linux:
+    name: Build Linux Client
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Checkout orlo-proto
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/orlo-proto
+          path: orlo-proto
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: StandaloneLinux64
+          buildName: OrloClient
+          buildsPath: build/linux
+          unityVersion: 6000.0.30f1
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: orlo-client-linux
+          path: build/linux
+          retention-days: 30
