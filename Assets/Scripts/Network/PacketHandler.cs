@@ -146,6 +146,17 @@ namespace Orlo.Network
                     HandleMinimapUpdate(packet.MinimapUpdate);
                     break;
 
+                // Character creation
+                case Packet.PayloadOneofCase.CharacterListResponse:
+                    HandleCharacterList(packet.CharacterListResponse);
+                    break;
+                case Packet.PayloadOneofCase.CharacterCreateResponse:
+                    HandleCharacterCreateResponse(packet.CharacterCreateResponse);
+                    break;
+                case Packet.PayloadOneofCase.CharacterAppearance:
+                    HandleCharacterAppearance(packet.CharacterAppearance);
+                    break;
+
                 default:
                     Debug.LogWarning($"[PacketHandler] Unhandled payload type: {packet.PayloadCase}");
                     break;
@@ -277,6 +288,44 @@ namespace Orlo.Network
         {
             FindFirstObjectByType<MinimapUI>()?.OnMinimapUpdate(
                 map.CellX, map.CellZ, (int)map.Resolution, map.ColorData.ToByteArray());
+        }
+
+        // ─── Character Creation handlers ────────────────────────────────────
+
+        private void HandleCharacterList(Character.CharacterListResponse list)
+        {
+            Debug.Log($"[Character] Received character list: {list.Characters.Count} characters");
+            var bootstrap = FindFirstObjectByType<GameBootstrap>();
+            if (bootstrap == null) return;
+
+            if (list.Characters.Count == 0)
+            {
+                bootstrap.OnCharacterListResponse(0, 0, "", "");
+            }
+            else
+            {
+                var first = list.Characters[0];
+                bootstrap.OnCharacterListResponse(
+                    list.Characters.Count,
+                    first.CharacterId.Id,
+                    first.FirstName,
+                    first.LastName);
+            }
+        }
+
+        private void HandleCharacterCreateResponse(Character.CharacterCreateResponse resp)
+        {
+            var bootstrap = FindFirstObjectByType<GameBootstrap>();
+            bootstrap?.OnCharacterCreateResponse(
+                resp.Success, resp.Error,
+                resp.CharacterId?.Id ?? 0);
+        }
+
+        private void HandleCharacterAppearance(Character.CharacterAppearanceUpdate appearance)
+        {
+            Debug.Log($"[Character] Appearance update for entity {appearance.EntityId.Id}: " +
+                      $"{appearance.FirstName} {appearance.LastName}");
+            // Store appearance data on the networked entity for rendering
         }
     }
 }

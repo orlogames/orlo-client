@@ -23,6 +23,8 @@ namespace Orlo
 
         private ulong _sessionId;
         private ulong _characterEntityId;
+        private CharacterCreationUI _charCreationUI;
+        private bool _characterSpawned = false;
 
         // Ping every 5 seconds for latency tracking
         private float _pingTimer;
@@ -119,10 +121,67 @@ namespace Orlo
         private void OnLoginResponse(Auth.LoginResponse resp)
         {
             _sessionId = resp.SessionId;
-            Debug.Log($"[Orlo] Logged in, session={_sessionId} — selecting character...");
+            Debug.Log($"[Orlo] Logged in, session={_sessionId} — requesting character list...");
 
-            var selectData = PacketBuilder.CharacterSelect(_sessionId, playerName);
-            NetworkManager.Instance.Send(selectData);
+            // Request character list — if empty, show creation screen
+            NetworkManager.Instance.Send(PacketBuilder.CharacterListRequest(_sessionId));
+        }
+
+        /// <summary>
+        /// Called by PacketHandler when character list arrives.
+        /// If no characters exist, show the creation UI.
+        /// If characters exist, auto-select the first one (or show selection UI later).
+        /// </summary>
+        public void OnCharacterListResponse(int characterCount, ulong firstCharacterId, string firstName, string lastName)
+        {
+            if (characterCount == 0)
+            {
+                Debug.Log("[Orlo] No characters found — showing creation screen");
+                ShowCharacterCreation();
+            }
+            else
+            {
+                Debug.Log($"[Orlo] Found {characterCount} character(s) — selecting '{firstName} {lastName}'");
+                playerName = $"{firstName} {lastName}";
+                var selectData = PacketBuilder.CharacterSelect(_sessionId, playerName);
+                NetworkManager.Instance.Send(selectData);
+            }
+        }
+
+        private void ShowCharacterCreation()
+        {
+            if (_charCreationUI == null)
+            {
+                var go = new GameObject("CharacterCreationUI");
+                _charCreationUI = go.AddComponent<CharacterCreationUI>();
+            }
+
+            _charCreationUI.OnCreateConfirmed = (data) =>
+            {
+                Debug.Log($"[Orlo] Creating character: {data.FirstName} {data.LastName}");
+                NetworkManager.Instance.Send(PacketBuilder.CharacterCreate(_sessionId, data));
+                _charCreationUI.Hide();
+            };
+
+            _charCreationUI.Show();
+        }
+
+        /// <summary>
+        /// Called by PacketHandler when character creation succeeds.
+        /// </summary>
+        public void OnCharacterCreateResponse(bool success, string error, ulong characterId)
+        {
+            if (success)
+            {
+                Debug.Log($"[Orlo] Character created (ID {characterId}) — requesting list to spawn...");
+                NetworkManager.Instance.Send(PacketBuilder.CharacterListRequest(_sessionId));
+            }
+            else
+            {
+                Debug.LogError($"[Orlo] Character creation failed: {error}");
+                NotificationUI.Instance?.ShowError("Creation Failed", error);
+                ShowCharacterCreation();
+            }
         }
 
         private void OnCharacterSpawn(Auth.CharacterSpawnResponse spawn)

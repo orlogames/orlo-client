@@ -71,5 +71,47 @@ namespace Orlo.Network
             };
             return pkt.ToByteArray();
         }
+
+        public static byte[] CharacterCreate(ulong sessionId, UI.CharacterCreationData data)
+        {
+            var pkt = NewPacket();
+            pkt.CharacterCreate = new Character.CharacterCreateRequest
+            {
+                SessionId = sessionId,
+                Identity = new Character.CharacterIdentity
+                {
+                    FirstName = data.FirstName,
+                    LastName = data.LastName,
+                    StartingSkillId = (uint)data.StartingSkillId,
+                    Appearance = new Character.CharacterAppearance
+                    {
+                        Gender = (Character.Gender)data.Gender,
+                        Race = (Character.Race)data.Race,
+                        Height = data.Height,
+                        Build = data.Build,
+                        EyeColor = (Character.EyeColor)data.EyeColor,
+                        HairStyle = (Character.HairStyle)data.HairStyle,
+                        HairColor = (Character.HairColor)data.HairColor,
+                        SkinTone = (Character.SkinTone)data.SkinTone,
+                        FaceShape = data.FaceShape,
+                        JawWidth = data.JawWidth,
+                        NoseSize = data.NoseSize,
+                        EarSize = data.EarSize,
+                        FacialMarking = (uint)data.FacialMarking
+                    }
+                }
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] CharacterListRequest(ulong sessionId)
+        {
+            var pkt = NewPacket();
+            pkt.CharacterListRequest = new Character.CharacterListRequest
+            {
+                SessionId = sessionId
+            };
+            return pkt.ToByteArray();
+        }
     }
 }
