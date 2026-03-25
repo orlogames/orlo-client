@@ -13,6 +13,12 @@ namespace Orlo.World
 
         [SerializeField] private GameObject defaultEntityPrefab;
 
+        /// <summary>
+        /// Optional factory delegate for procedural entity creation.
+        /// Set by ProceduralEntityFactory to override prefab-based spawning.
+        /// </summary>
+        public System.Func<uint, string, Vector3, Quaternion, GameObject> EntityFactory;
+
         private readonly Dictionary<ulong, GameObject> _entities = new();
 
         private void Awake()
@@ -30,10 +36,12 @@ namespace Orlo.World
                 return;
             }
 
-            // TODO: Resolve assetId to actual prefab from asset pipeline
-            var go = defaultEntityPrefab != null
-                ? Instantiate(defaultEntityPrefab, position, rotation)
-                : GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            // Use procedural factory if available, otherwise fall back to prefab/primitive
+            var go = EntityFactory != null
+                ? EntityFactory(entityType, assetId, position, rotation)
+                : (defaultEntityPrefab != null
+                    ? Instantiate(defaultEntityPrefab, position, rotation)
+                    : GameObject.CreatePrimitive(PrimitiveType.Capsule));
 
             go.name = $"Entity_{entityId}_{entityType}";
             go.transform.SetPositionAndRotation(position, rotation);
