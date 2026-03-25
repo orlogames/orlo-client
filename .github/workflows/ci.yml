@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     name: Unity Build (StandaloneLinux64)
-    runs-on: [self-hosted, breakglass]
+    runs-on: [self-hosted, windows]
     steps:
       - uses: actions/checkout@v4
         with:

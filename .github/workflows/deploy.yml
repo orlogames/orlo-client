@@ -12,7 +12,7 @@ on:
 jobs:
   build-windows:
     name: Build Windows Client
-    runs-on: [self-hosted, breakglass]
+    runs-on: [self-hosted, windows]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,7 +44,7 @@ jobs:
 
   build-linux:
     name: Build Linux Client
-    runs-on: [self-hosted, breakglass]
+    runs-on: [self-hosted, windows]
     steps:
       - uses: actions/checkout@v4
         with:
