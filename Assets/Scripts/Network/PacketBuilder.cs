@@ -126,5 +126,70 @@ namespace Orlo.Network
             };
             return pkt.ToByteArray();
         }
+
+        // ─── Admin Commands ──────────────────────────────────────────────────
+
+        public static byte[] AdminSetSpeed(float speed)
+        {
+            var pkt = NewPacket();
+            pkt.AdminCommand = new Admin.AdminCommand
+            {
+                SetSpeed = new Admin.SetSpeed { Speed = speed }
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] AdminSetFly(bool enabled)
+        {
+            var pkt = NewPacket();
+            pkt.AdminCommand = new Admin.AdminCommand
+            {
+                SetFly = new Admin.SetFly { Enabled = enabled }
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] AdminSpawnTool(string toolId, uint quantity)
+        {
+            var pkt = NewPacket();
+            pkt.AdminCommand = new Admin.AdminCommand
+            {
+                SpawnTool = new Admin.SpawnTool { ToolId = toolId, Quantity = quantity }
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] AdminSetToolPower(float power)
+        {
+            var pkt = NewPacket();
+            pkt.AdminCommand = new Admin.AdminCommand
+            {
+                SetToolPower = new Admin.SetToolPower { Power = power }
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] AdminTeleport(float x, float y, float z)
+        {
+            var pkt = NewPacket();
+            pkt.AdminCommand = new Admin.AdminCommand
+            {
+                Teleport = new Admin.Teleport
+                {
+                    Position = new Vec3 { X = x, Y = y, Z = z }
+                }
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] AdminGodMode(bool enabled)
+        {
+            var pkt = NewPacket();
+            pkt.AdminCommand = new Admin.AdminCommand
+            {
+                GodMode = new Admin.GodMode { Enabled = enabled }
+            };
+            return pkt.ToByteArray();
+        }
     }
 }

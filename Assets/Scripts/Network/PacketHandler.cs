@@ -150,6 +150,14 @@ namespace Orlo.Network
                     HandleMinimapUpdate(packet.MinimapUpdate);
                     break;
 
+                // Admin
+                case Packet.PayloadOneofCase.AdminResponse:
+                    HandleAdminResponse(packet.AdminResponse);
+                    break;
+                case Packet.PayloadOneofCase.AdminState:
+                    HandleAdminState(packet.AdminState);
+                    break;
+
                 // Character creation
                 case Packet.PayloadOneofCase.CharacterListResponse:
                     HandleCharacterList(packet.CharacterListResponse);
@@ -344,6 +352,41 @@ namespace Orlo.Network
             Debug.Log($"[Character] Appearance update for entity {appearance.EntityId.Id}: " +
                       $"{appearance.FirstName} {appearance.LastName}");
             // Store appearance data on the networked entity for rendering
+        }
+
+        // ─── Admin handlers ─────────────────────────────────────────────────
+
+        private void HandleAdminResponse(Admin.AdminResponse resp)
+        {
+            Debug.Log($"[Admin] {(resp.Success ? "OK" : "FAIL")}: {resp.Message}");
+
+            var panel = FindFirstObjectByType<AdminPanel>();
+            if (panel == null) return;
+
+            panel.SetStatus(resp.Message);
+            if (resp.State != null)
+            {
+                panel.SetAdminState(resp.State.IsAdmin, resp.State.RunSpeed,
+                    resp.State.FlyEnabled, resp.State.ToolPower, resp.State.GodMode);
+            }
+        }
+
+        private void HandleAdminState(Admin.AdminState state)
+        {
+            Debug.Log($"[Admin] State sync — admin={state.IsAdmin} speed={state.RunSpeed} fly={state.FlyEnabled} toolPower={state.ToolPower}");
+
+            // Create AdminPanel if player is admin
+            if (state.IsAdmin)
+            {
+                var panel = FindFirstObjectByType<AdminPanel>();
+                if (panel == null)
+                {
+                    var go = new GameObject("AdminPanel");
+                    panel = go.AddComponent<AdminPanel>();
+                }
+                panel.SetAdminState(state.IsAdmin, state.RunSpeed,
+                    state.FlyEnabled, state.ToolPower, state.GodMode);
+            }
         }
     }
 }

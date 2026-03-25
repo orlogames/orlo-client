@@ -1,0 +1,190 @@
+name: Release — Client Build & Publish
+
+on:
+  push:
+    tags:
+      - 'v*'          # Triggered by version tags (e.g. v0.2.0)
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. 0.2.0) — leave blank for auto from date'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    name: Determine Version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      tag: ${{ steps.ver.outputs.tag }}
+    steps:
+      - id: ver
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TAG="${{ github.ref_name }}"
+            VER="${TAG#v}"
+          elif [[ -n "${{ inputs.version }}" ]]; then
+            VER="${{ inputs.version }}"
+            TAG="v${VER}"
+          else
+            VER="0.0.$(date +%Y%m%d%H%M)"
+            TAG="v${VER}"
+          fi
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Version: ${VER}, Tag: ${TAG}"
+
+  build-windows:
+    name: Build Windows
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Checkout orlo-proto
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/orlo-proto
+          path: orlo-proto
+
+      - name: Write version file
+        run: echo "${{ needs.version.outputs.version }}" > Assets/Resources/version.txt
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-Windows-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-Windows-
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: StandaloneWindows64
+          buildName: OrloClient
+          buildsPath: build
+          unityVersion: 6000.0.30f1
+
+      - name: Create zip
+        run: |
+          cd build/StandaloneWindows64
+          zip -r ../../OrloClient-Windows-${{ needs.version.outputs.version }}.zip .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orlo-client-windows
+          path: OrloClient-Windows-${{ needs.version.outputs.version }}.zip
+          retention-days: 30
+
+  build-linux:
+    name: Build Linux
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Checkout orlo-proto
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/orlo-proto
+          path: orlo-proto
+
+      - name: Write version file
+        run: echo "${{ needs.version.outputs.version }}" > Assets/Resources/version.txt
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-Linux-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-Linux-
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: StandaloneLinux64
+          buildName: OrloClient
+          buildsPath: build
+          unityVersion: 6000.0.30f1
+
+      - name: Create tarball
+        run: |
+          cd build/StandaloneLinux64
+          tar czf ../../OrloClient-Linux-${{ needs.version.outputs.version }}.tar.gz .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orlo-client-linux
+          path: OrloClient-Linux-${{ needs.version.outputs.version }}.tar.gz
+          retention-days: 30
+
+  release:
+    name: Create GitHub Release
+    needs: [version, build-windows, build-linux]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: orlo-client-windows
+          path: dist/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: orlo-client-linux
+          path: dist/
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          {
+            echo "changelog<<CHANGELOG_EOF"
+            echo "## What's Changed"
+            echo ""
+            git log --pretty=format:'- %s (%h)' $(git describe --tags --abbrev=0 2>/dev/null || echo HEAD~10)..HEAD | head -30
+            echo ""
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create tag if not exists
+        run: |
+          TAG="${{ needs.version.outputs.tag }}"
+          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: Orlo Client ${{ needs.version.outputs.tag }}
+          body: |
+            ${{ steps.changelog.outputs.changelog }}
+
+            ## Downloads
+            - **Windows**: `OrloClient-Windows-${{ needs.version.outputs.version }}.zip`
+            - **Linux**: `OrloClient-Linux-${{ needs.version.outputs.version }}.tar.gz`
+
+            ## Auto-update
+            Run `update-client.ps1` in your dev environment to auto-download the latest release.
+          files: |
+            dist/OrloClient-Windows-${{ needs.version.outputs.version }}.zip
+            dist/OrloClient-Linux-${{ needs.version.outputs.version }}.tar.gz
+          draft: false
+          prerelease: false

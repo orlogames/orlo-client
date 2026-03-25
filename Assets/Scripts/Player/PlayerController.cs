@@ -1,5 +1,6 @@
 using UnityEngine;
 using Orlo.Network;
+using Orlo.UI;
 
 namespace Orlo.Player
 {
@@ -67,7 +68,14 @@ namespace Orlo.Player
         private void HandleMovement()
         {
             _isSprinting = Input.GetKey(KeyCode.LeftShift);
-            float speed = _isSprinting ? sprintSpeed : walkSpeed;
+
+            // Admin speed override
+            var admin = AdminPanel.Instance;
+            float speed;
+            if (admin != null && admin.IsAdmin && admin.RunSpeed > 0)
+                speed = admin.RunSpeed;
+            else
+                speed = _isSprinting ? sprintSpeed : walkSpeed;
 
             float h = Input.GetAxisRaw("Horizontal");
             float v = Input.GetAxisRaw("Vertical");
@@ -75,19 +83,33 @@ namespace Orlo.Player
             Vector3 move = transform.right * h + transform.forward * v;
             move = Vector3.ClampMagnitude(move, 1f) * speed;
 
+            // Admin fly mode — Space/Ctrl for vertical, no gravity
+            bool flyMode = admin != null && admin.FlyEnabled;
             _isJumping = false;
-            if (_cc.isGrounded)
-            {
-                _velocity.y = -2f;
-                if (Input.GetButtonDown("Jump"))
-                {
-                    _velocity.y = jumpForce;
-                    _isJumping = true;
-                }
-            }
 
-            _velocity.y += gravity * Time.deltaTime;
-            _cc.Move((move + Vector3.up * _velocity.y) * Time.deltaTime);
+            if (flyMode)
+            {
+                float vertical = 0;
+                if (Input.GetKey(KeyCode.Space)) vertical = speed;
+                if (Input.GetKey(KeyCode.LeftControl)) vertical = -speed;
+                _velocity.y = vertical;
+                _cc.Move((move + Vector3.up * _velocity.y) * Time.deltaTime);
+            }
+            else
+            {
+                if (_cc.isGrounded)
+                {
+                    _velocity.y = -2f;
+                    if (Input.GetButtonDown("Jump"))
+                    {
+                        _velocity.y = jumpForce;
+                        _isJumping = true;
+                    }
+                }
+
+                _velocity.y += gravity * Time.deltaTime;
+                _cc.Move((move + Vector3.up * _velocity.y) * Time.deltaTime);
+            }
         }
 
         private void ApplyServerCorrections()
