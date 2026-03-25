@@ -150,6 +150,28 @@ namespace Orlo.Network
                     HandleMinimapUpdate(packet.MinimapUpdate);
                     break;
 
+                // Economy / NPC / Shop
+                case Packet.PayloadOneofCase.NpcData:
+                    HandleNPCData(packet.NpcData);
+                    break;
+                case Packet.PayloadOneofCase.ShopBuyResponse:
+                    HandleShopBuyResponse(packet.ShopBuyResponse);
+                    break;
+                case Packet.PayloadOneofCase.ShopSellResponse:
+                    HandleShopSellResponse(packet.ShopSellResponse);
+                    break;
+                case Packet.PayloadOneofCase.WalletUpdate:
+                    HandleWalletUpdate(packet.WalletUpdate);
+                    break;
+
+                // Martial Arts
+                case Packet.PayloadOneofCase.MartialMoveResponse:
+                    HandleMartialMoveResponse(packet.MartialMoveResponse);
+                    break;
+                case Packet.PayloadOneofCase.MartialArtsState:
+                    HandleMartialArtsState(packet.MartialArtsState);
+                    break;
+
                 // Admin
                 case Packet.PayloadOneofCase.AdminResponse:
                     HandleAdminResponse(packet.AdminResponse);
@@ -352,6 +374,133 @@ namespace Orlo.Network
             Debug.Log($"[Character] Appearance update for entity {appearance.EntityId.Id}: " +
                       $"{appearance.FirstName} {appearance.LastName}");
             // Store appearance data on the networked entity for rendering
+        }
+
+        // ─── Economy / NPC handlers ─────────────────────────────────────────
+
+        private void HandleNPCData(Economy.NPCData data)
+        {
+            Debug.Log($"[NPC] {data.NpcName}: {data.Dialogue} ({data.ShopItems.Count} items)");
+
+            // If vendor, open shop UI
+            if (data.Role == 0) // Vendor
+            {
+                var shop = FindFirstObjectByType<ShopUI>();
+                if (shop == null)
+                {
+                    var go = new GameObject("ShopUI");
+                    shop = go.AddComponent<ShopUI>();
+                }
+
+                var items = new System.Collections.Generic.List<ShopUI.ShopItemData>();
+                foreach (var item in data.ShopItems)
+                {
+                    items.Add(new ShopUI.ShopItemData
+                    {
+                        ItemId = item.ItemId,
+                        Name = item.ItemName,
+                        Description = item.ItemDescription,
+                        BuyPrice = item.BuyPrice,
+                        SellPrice = item.SellPrice,
+                        Stock = item.Stock,
+                        Category = (int)item.Category,
+                        Rarity = (int)item.Rarity
+                    });
+                }
+                shop.SetItems(items);
+                shop.Show(data.NpcEntityId.Id, data.NpcName, data.Dialogue, 0);
+            }
+        }
+
+        private void HandleShopBuyResponse(Economy.ShopBuyResponse resp)
+        {
+            var shop = FindFirstObjectByType<ShopUI>();
+            if (resp.Success)
+            {
+                shop?.UpdateBalance(resp.NewBalance);
+                shop?.SetStatus("Purchased!");
+            }
+            else
+            {
+                shop?.SetStatus($"Failed: {resp.Error}");
+            }
+        }
+
+        private void HandleShopSellResponse(Economy.ShopSellResponse resp)
+        {
+            var shop = FindFirstObjectByType<ShopUI>();
+            if (resp.Success)
+            {
+                shop?.UpdateBalance(resp.NewBalance);
+                shop?.SetStatus("Sold!");
+            }
+            else
+            {
+                shop?.SetStatus($"Failed: {resp.Error}");
+            }
+        }
+
+        private void HandleWalletUpdate(Economy.WalletUpdate update)
+        {
+            Debug.Log($"[Economy] Wallet: {update.Credits} creds ({(update.Delta >= 0 ? "+" : "")}{update.Delta} — {update.Reason})");
+
+            var shop = FindFirstObjectByType<ShopUI>();
+            shop?.UpdateBalance(update.Credits);
+
+            if (update.Delta != 0)
+            {
+                string sign = update.Delta > 0 ? "+" : "";
+                NotificationUI.Instance?.Show("Credits", $"{sign}{update.Delta} creds ({update.Reason})", 0, 3f);
+            }
+        }
+
+        // ─── Martial Arts handlers ──────────────────────────────────────────
+
+        private void HandleMartialMoveResponse(Economy.MartialMoveResponse resp)
+        {
+            var bar = FindFirstObjectByType<CombatBarUI>();
+            if (resp.Success)
+            {
+                string msg = $"{resp.MoveName}: {resp.Damage:F0} dmg";
+                if (resp.ComboCount > 1) msg += $" (Combo x{resp.ComboCount})";
+                if (!string.IsNullOrEmpty(resp.Effect)) msg += $" [{resp.Effect}]";
+                bar?.ShowMoveResult(msg);
+            }
+            else
+            {
+                bar?.ShowMoveResult(resp.Error);
+            }
+        }
+
+        private void HandleMartialArtsState(Economy.MartialArtsState state)
+        {
+            Debug.Log($"[Martial] Style={state.ActiveStyle} Rank={state.UnarmedRank} Moves={state.AvailableMoves.Count}");
+
+            var bar = FindFirstObjectByType<CombatBarUI>();
+            if (bar == null)
+            {
+                var go = new GameObject("CombatBarUI");
+                bar = go.AddComponent<CombatBarUI>();
+            }
+
+            var moves = new System.Collections.Generic.List<CombatBarUI.MoveSlot>();
+            foreach (var m in state.AvailableMoves)
+            {
+                moves.Add(new CombatBarUI.MoveSlot
+                {
+                    MoveId = m.MoveId,
+                    Name = m.Name,
+                    Description = m.Description,
+                    DamageMultiplier = m.DamageMultiplier,
+                    StaminaCost = m.StaminaCost,
+                    Cooldown = m.Cooldown,
+                    CooldownRemaining = m.CooldownRemaining,
+                    RequiredRank = m.RequiredRank,
+                    IsFinisher = m.IsComboFinisher,
+                    Effect = m.Effect
+                });
+            }
+            bar.SetState(state.ActiveStyle, state.UnarmedRank, state.ComboCount, moves);
         }
 
         // ─── Admin handlers ─────────────────────────────────────────────────

@@ -191,5 +191,54 @@ namespace Orlo.Network
             };
             return pkt.ToByteArray();
         }
+
+        // ─── NPC / Shop ─────────────────────────────────────────────────────
+
+        public static byte[] NPCInteract(ulong npcEntityId)
+        {
+            var pkt = NewPacket();
+            pkt.NpcInteract = new Economy.NPCInteract
+            {
+                NpcEntityId = new EntityId { Id = npcEntityId }
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] ShopBuy(ulong npcEntityId, string itemId, uint quantity)
+        {
+            var pkt = NewPacket();
+            pkt.ShopBuy = new Economy.ShopBuyRequest
+            {
+                NpcEntityId = new EntityId { Id = npcEntityId },
+                ItemId = itemId,
+                Quantity = quantity
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] ShopSell(ulong npcEntityId, string itemId, uint quantity)
+        {
+            var pkt = NewPacket();
+            pkt.ShopSell = new Economy.ShopSellRequest
+            {
+                NpcEntityId = new EntityId { Id = npcEntityId },
+                ItemId = itemId,
+                Quantity = quantity
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Martial Arts ────────────────────────────────────────────────────
+
+        public static byte[] MartialMove(ulong targetEntityId, uint moveId)
+        {
+            var pkt = NewPacket();
+            pkt.MartialMove = new Economy.MartialMoveRequest
+            {
+                Target = new EntityId { Id = targetEntityId },
+                MoveId = moveId
+            };
+            return pkt.ToByteArray();
+        }
     }
 }
