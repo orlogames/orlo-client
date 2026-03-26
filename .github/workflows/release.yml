@@ -84,12 +84,17 @@ jobs:
         shell: pwsh
         run: |
           $unity = "C:\Program Files\Unity\Hub\Editor\6000.4.0f1\Editor\Unity.exe"
-          & $unity -batchmode -nographics -quit -projectPath . `
-            -buildTarget StandaloneWindows64 `
-            -executeMethod BuildScript.Build `
-            -logFile build-log.txt `
-            -buildPath "build/windows/OrloClient.exe"
-          if ($LASTEXITCODE -ne 0) { Get-Content build-log.txt -Tail 50; exit 1 }
+          $proc = Start-Process -FilePath $unity -ArgumentList @(
+            '-batchmode', '-nographics', '-quit', '-projectPath', '.',
+            '-buildTarget', 'StandaloneWindows64',
+            '-executeMethod', 'BuildScript.Build',
+            '-logFile', 'build-log.txt',
+            '-buildPath', 'build/windows/OrloClient.exe'
+          ) -Wait -PassThru -NoNewWindow
+          if ($proc.ExitCode -ne 0) {
+            if (Test-Path build-log.txt) { Get-Content build-log.txt -Tail 50 }
+            exit 1
+          }
 
       - name: Create zip
         shell: bash
@@ -148,12 +153,17 @@ jobs:
         shell: pwsh
         run: |
           $unity = "C:\Program Files\Unity\Hub\Editor\6000.4.0f1\Editor\Unity.exe"
-          & $unity -batchmode -nographics -quit -projectPath . `
-            -buildTarget StandaloneLinux64 `
-            -executeMethod BuildScript.Build `
-            -logFile build-log.txt `
-            -buildPath "build/linux/OrloClient"
-          if ($LASTEXITCODE -ne 0) { Get-Content build-log.txt -Tail 50; exit 1 }
+          $proc = Start-Process -FilePath $unity -ArgumentList @(
+            '-batchmode', '-nographics', '-quit', '-projectPath', '.',
+            '-buildTarget', 'StandaloneLinux64',
+            '-executeMethod', 'BuildScript.Build',
+            '-logFile', 'build-log.txt',
+            '-buildPath', 'build/linux/OrloClient'
+          ) -Wait -PassThru -NoNewWindow
+          if ($proc.ExitCode -ne 0) {
+            if (Test-Path build-log.txt) { Get-Content build-log.txt -Tail 50 }
+            exit 1
+          }
 
       - name: Create tarball
         shell: bash
