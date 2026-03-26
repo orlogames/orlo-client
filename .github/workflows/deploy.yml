@@ -23,6 +23,7 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/orlo-proto
           path: orlo-proto
+          token: ${{ secrets.GH_PAT }}
 
       - uses: game-ci/unity-builder@v4
         env:
@@ -55,6 +56,7 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/orlo-proto
           path: orlo-proto
+          token: ${{ secrets.GH_PAT }}
 
       - uses: game-ci/unity-builder@v4
         env:
