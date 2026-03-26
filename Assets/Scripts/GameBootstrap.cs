@@ -29,6 +29,7 @@ namespace Orlo
         private CharacterCreationUI _charCreationUI;
         private LoginUI _loginUI;
         private bool _characterSpawned = false;
+        private string _launcherToken;
 
         // Ping every 5 seconds for latency tracking
         private float _pingTimer;
@@ -37,6 +38,8 @@ namespace Orlo
         private void Start()
         {
             Debug.Log("[Orlo] Bootstrapping...");
+
+            ParseCommandLineArgs();
 
             // Initialize Phase 3 singleton systems
             InitializeWorldSystems();
@@ -50,6 +53,30 @@ namespace Orlo
             PacketHandler.Instance.OnPong += OnPong;
 
             ShowLoginUI();
+        }
+
+        private void ParseCommandLineArgs()
+        {
+            var args = System.Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length; i++)
+            {
+                switch (args[i])
+                {
+                    case "--server" when i + 1 < args.Length:
+                        var parts = args[++i].Split(':');
+                        serverHost = parts[0];
+                        if (parts.Length > 1 && int.TryParse(parts[1], out int port))
+                            serverPort = port;
+                        Debug.Log($"[Orlo] Server override: {serverHost}:{serverPort}");
+                        break;
+                    case "--token" when i + 1 < args.Length:
+                        _launcherToken = args[++i];
+                        Debug.Log("[Orlo] Launcher token received");
+                        break;
+                }
+            }
+
+            NetworkManager.Instance.SetServer(serverHost, serverPort);
         }
 
         private void InitializeWorldSystems()
@@ -152,6 +179,15 @@ namespace Orlo
                     SendRegister();
             };
 
+            // If launched with a token, auto-connect instead of showing login UI
+            if (!string.IsNullOrEmpty(_launcherToken))
+            {
+                Debug.Log("[Orlo] Launcher token detected — auto-connecting...");
+                _loginUI.Hide();
+                NetworkManager.Instance.Connect();
+                return;
+            }
+
             _loginUI.Show();
         }
 
@@ -159,7 +195,9 @@ namespace Orlo
 
         private void SendLogin()
         {
-            var loginData = PacketBuilder.LoginRequest(_pendingUsername, _pendingPassword);
+            var loginData = !string.IsNullOrEmpty(_launcherToken)
+                ? PacketBuilder.LoginRequest("", "", _launcherToken)
+                : PacketBuilder.LoginRequest(_pendingUsername, _pendingPassword);
             NetworkManager.Instance.Send(loginData);
         }
 

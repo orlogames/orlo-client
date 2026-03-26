@@ -51,6 +51,12 @@ namespace Orlo.Network
             }
         }
 
+        public void SetServer(string host, int port)
+        {
+            serverHost = host;
+            serverPort = port;
+        }
+
         public async void Connect()
         {
             try
