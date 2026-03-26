@@ -32,13 +32,8 @@ jobs:
           $protoDir = "orlo-proto/proto"
           $outDir = "Assets/Scripts/Proto/Generated"
           New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-          protoc `
-            --proto_path="$protoDir" `
-            --csharp_out="$outDir" `
-            "$protoDir/orlo/common.proto" `
-            "$protoDir/orlo/auth.proto" `
-            "$protoDir/orlo/world.proto" `
-            "$protoDir/orlo/packet.proto"
+          $protos = Get-ChildItem "$protoDir/orlo" -Filter "*.proto" | ForEach-Object { $_.FullName }
+          & protoc --proto_path=$protoDir --csharp_out=$outDir @protos
           Write-Host "Generated C# files:"
           Get-ChildItem $outDir
 

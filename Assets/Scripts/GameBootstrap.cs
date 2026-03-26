@@ -14,7 +14,7 @@ namespace Orlo
     public class GameBootstrap : MonoBehaviour
     {
         [Header("Server")]
-        [SerializeField] private string serverHost = "127.0.0.1";
+        [SerializeField] private string serverHost = "play.orlo.games";
         [SerializeField] private int serverPort = 7777;
 
         [Header("Player")]

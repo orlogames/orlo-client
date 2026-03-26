@@ -16,7 +16,7 @@ namespace Orlo.Network
         public static NetworkManager Instance { get; private set; }
 
         [Header("Server Connection")]
-        [SerializeField] private string serverHost = "127.0.0.1";
+        [SerializeField] private string serverHost = "play.orlo.games";
         [SerializeField] private int serverPort = 7777;
 
         public event Action OnConnected;
