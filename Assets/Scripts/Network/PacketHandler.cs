@@ -6,12 +6,12 @@ using Orlo.Audio;
 using Orlo.UI;
 using Orlo.World;
 using Orlo.Proto;
-using Auth = Orlo.Proto.Auth;
-using World = Orlo.Proto.World;
-using Character = Orlo.Proto.Character;
-using Admin = Orlo.Proto.Admin;
-using Economy = Orlo.Proto.Economy;
-using Environment = Orlo.Proto.Environment;
+using ProtoAuth = Orlo.Proto.Auth;
+using ProtoWorld = Orlo.Proto.World;
+using ProtoCharacter = Orlo.Proto.Character;
+using ProtoAdmin = Orlo.Proto.Admin;
+using ProtoEconomy = Orlo.Proto.Economy;
+using ProtoEnv = Orlo.Proto.Environment;
 
 namespace Orlo.Network
 {
@@ -22,10 +22,10 @@ namespace Orlo.Network
     {
         public static PacketHandler Instance { get; private set; }
 
-        public event Action<Auth.LoginResponse> OnLoginResponse;
-        public event Action<Auth.RegisterResponse> OnRegisterResponse;
-        public event Action<Auth.CharacterSpawnResponse> OnCharacterSpawn;
-        public event Action<Auth.Pong> OnPong;
+        public event Action<ProtoAuth.LoginResponse> OnLoginResponse;
+        public event Action<ProtoAuth.RegisterResponse> OnRegisterResponse;
+        public event Action<ProtoAuth.CharacterSpawnResponse> OnCharacterSpawn;
+        public event Action<ProtoAuth.Pong> OnPong;
 
         private void Awake()
         {
@@ -203,7 +203,7 @@ namespace Orlo.Network
             }
         }
 
-        private void HandleLoginResponse(Auth.LoginResponse resp)
+        private void HandleLoginResponse(ProtoAuth.LoginResponse resp)
         {
             if (resp.Success)
             {
@@ -217,7 +217,7 @@ namespace Orlo.Network
             }
         }
 
-        private void HandleRegisterResponse(Auth.RegisterResponse resp)
+        private void HandleRegisterResponse(ProtoAuth.RegisterResponse resp)
         {
             if (resp.Success)
             {
@@ -230,14 +230,14 @@ namespace Orlo.Network
             OnRegisterResponse?.Invoke(resp);
         }
 
-        private void HandleCharacterSpawn(Auth.CharacterSpawnResponse spawn)
+        private void HandleCharacterSpawn(ProtoAuth.CharacterSpawnResponse spawn)
         {
             Debug.Log($"[Auth] Character spawned — entity {spawn.EntityId.Id} at " +
                       $"({spawn.Transform.Position.X}, {spawn.Transform.Position.Y}, {spawn.Transform.Position.Z})");
             OnCharacterSpawn?.Invoke(spawn);
         }
 
-        private void HandleEntitySpawn(World.EntitySpawn spawn)
+        private void HandleEntitySpawn(ProtoWorld.EntitySpawn spawn)
         {
             var pos = new Vector3(spawn.Transform.Position.X, spawn.Transform.Position.Y, spawn.Transform.Position.Z);
             var rot = new Quaternion(spawn.Transform.Rotation.X, spawn.Transform.Rotation.Y,
@@ -245,12 +245,12 @@ namespace Orlo.Network
             EntityManager.Instance.SpawnEntity(spawn.EntityId.Id, spawn.EntityType, spawn.AssetId, pos, rot);
         }
 
-        private void HandleEntityDespawn(World.EntityDespawn despawn)
+        private void HandleEntityDespawn(ProtoWorld.EntityDespawn despawn)
         {
             EntityManager.Instance.DespawnEntity(despawn.EntityId.Id);
         }
 
-        private void HandleEntityMove(World.EntityMove move)
+        private void HandleEntityMove(ProtoWorld.EntityMove move)
         {
             var pos = new Vector3(move.Position.X, move.Position.Y, move.Position.Z);
             var rot = new Quaternion(move.Rotation.X, move.Rotation.Y, move.Rotation.Z, move.Rotation.W);
@@ -258,14 +258,14 @@ namespace Orlo.Network
             EntityManager.Instance.MoveEntity(move.EntityId.Id, pos, rot, vel);
         }
 
-        private void HandleTerrainChunk(World.TerrainChunk chunk)
+        private void HandleTerrainChunk(ProtoWorld.TerrainChunk chunk)
         {
             var coord = new Vector2Int(chunk.ChunkX, chunk.ChunkZ);
             FindObjectOfType<TerrainManager>()?.ApplyTerrainChunk(
                 coord, (int)chunk.Resolution, chunk.Heightmap.ToByteArray(), chunk.Seed);
         }
 
-        private void HandleContentReveal(World.ContentReveal reveal)
+        private void HandleContentReveal(ProtoWorld.ContentReveal reveal)
         {
             Debug.Log($"[World] Content revealed: '{reveal.ContentId}' ({reveal.ContentType}) at " +
                       $"({reveal.Location.Position.X}, {reveal.Location.Position.Y}, {reveal.Location.Position.Z})");
@@ -300,7 +300,7 @@ namespace Orlo.Network
         }
 
         // Phase 3 — Environment handlers
-        private void HandleEnvironmentUpdate(Environment.EnvironmentUpdate env)
+        private void HandleEnvironmentUpdate(ProtoEnv.EnvironmentUpdate env)
         {
             FindFirstObjectByType<SkyboxController>()?.OnEnvironmentUpdate(
                 env.TimeOfDay, env.SunR, env.SunG, env.SunB,
@@ -315,30 +315,30 @@ namespace Orlo.Network
             FindFirstObjectByType<WaterPlane>()?.OnWindUpdate(env.WindDirection, env.WindSpeed);
         }
 
-        private void HandleAudioZoneEnter(Environment.AudioZoneEnter zone)
+        private void HandleAudioZoneEnter(ProtoEnv.AudioZoneEnter zone)
         {
             AudioManager.Instance?.OnAudioZoneEnter(
                 zone.ZoneId, zone.MusicTrack, zone.AmbientTrack,
                 zone.MusicVolume, zone.AmbientVolume);
         }
 
-        private void HandleAudioZoneLeave(Environment.AudioZoneLeave zone)
+        private void HandleAudioZoneLeave(ProtoEnv.AudioZoneLeave zone)
         {
             AudioManager.Instance?.OnAudioZoneLeave(zone.ZoneId);
         }
 
-        private void HandleSoundEvent(Environment.SoundEvent snd)
+        private void HandleSoundEvent(ProtoEnv.SoundEvent snd)
         {
             var pos = new Vector3(snd.Position.X, snd.Position.Y, snd.Position.Z);
             AudioManager.Instance?.PlaySoundAt(snd.SoundId, pos, snd.Volume, snd.Radius);
         }
 
-        private void HandleNotification(Environment.Notification notif)
+        private void HandleNotification(ProtoEnv.Notification notif)
         {
             NotificationUI.Instance?.Show(notif.Title, notif.Message, (int)notif.Type, notif.Duration);
         }
 
-        private void HandleMinimapUpdate(Environment.MinimapUpdate map)
+        private void HandleMinimapUpdate(ProtoEnv.MinimapUpdate map)
         {
             FindFirstObjectByType<MinimapUI>()?.OnMinimapUpdate(
                 map.CellX, map.CellZ, (int)map.Resolution, map.ColorData.ToByteArray());
@@ -346,7 +346,7 @@ namespace Orlo.Network
 
         // ─── Character Creation handlers ────────────────────────────────────
 
-        private void HandleCharacterList(Character.CharacterListResponse list)
+        private void HandleCharacterList(ProtoCharacter.CharacterListResponse list)
         {
             Debug.Log($"[Character] Received character list: {list.Characters.Count} characters");
             var bootstrap = FindFirstObjectByType<GameBootstrap>();
@@ -367,7 +367,7 @@ namespace Orlo.Network
             }
         }
 
-        private void HandleCharacterCreateResponse(Character.CharacterCreateResponse resp)
+        private void HandleCharacterCreateResponse(ProtoCharacter.CharacterCreateResponse resp)
         {
             var bootstrap = FindFirstObjectByType<GameBootstrap>();
             bootstrap?.OnCharacterCreateResponse(
@@ -375,7 +375,7 @@ namespace Orlo.Network
                 resp.CharacterId?.Id ?? 0);
         }
 
-        private void HandleCharacterAppearance(Character.CharacterAppearanceUpdate appearance)
+        private void HandleCharacterAppearance(ProtoCharacter.CharacterAppearanceUpdate appearance)
         {
             Debug.Log($"[Character] Appearance update for entity {appearance.EntityId.Id}: " +
                       $"{appearance.FirstName} {appearance.LastName}");
@@ -384,7 +384,7 @@ namespace Orlo.Network
 
         // ─── Economy / NPC handlers ─────────────────────────────────────────
 
-        private void HandleNPCData(Economy.NPCData data)
+        private void HandleNPCData(ProtoEconomy.NPCData data)
         {
             Debug.Log($"[NPC] {data.NpcName}: {data.Dialogue} ({data.ShopItems.Count} items)");
 
@@ -418,7 +418,7 @@ namespace Orlo.Network
             }
         }
 
-        private void HandleShopBuyResponse(Economy.ShopBuyResponse resp)
+        private void HandleShopBuyResponse(ProtoEconomy.ShopBuyResponse resp)
         {
             var shop = FindFirstObjectByType<ShopUI>();
             if (resp.Success)
@@ -432,7 +432,7 @@ namespace Orlo.Network
             }
         }
 
-        private void HandleShopSellResponse(Economy.ShopSellResponse resp)
+        private void HandleShopSellResponse(ProtoEconomy.ShopSellResponse resp)
         {
             var shop = FindFirstObjectByType<ShopUI>();
             if (resp.Success)
@@ -446,7 +446,7 @@ namespace Orlo.Network
             }
         }
 
-        private void HandleWalletUpdate(Economy.WalletUpdate update)
+        private void HandleWalletUpdate(ProtoEconomy.WalletUpdate update)
         {
             Debug.Log($"[Economy] Wallet: {update.Credits} creds ({(update.Delta >= 0 ? "+" : "")}{update.Delta} — {update.Reason})");
 
@@ -462,7 +462,7 @@ namespace Orlo.Network
 
         // ─── Martial Arts handlers ──────────────────────────────────────────
 
-        private void HandleMartialMoveResponse(Economy.MartialMoveResponse resp)
+        private void HandleMartialMoveResponse(ProtoEconomy.MartialMoveResponse resp)
         {
             var bar = FindFirstObjectByType<CombatBarUI>();
             if (resp.Success)
@@ -478,7 +478,7 @@ namespace Orlo.Network
             }
         }
 
-        private void HandleMartialArtsState(Economy.MartialArtsState state)
+        private void HandleMartialArtsState(ProtoEconomy.MartialArtsState state)
         {
             Debug.Log($"[Martial] Style={state.ActiveStyle} Rank={state.UnarmedRank} Moves={state.AvailableMoves.Count}");
 
@@ -511,7 +511,7 @@ namespace Orlo.Network
 
         // ─── Admin handlers ─────────────────────────────────────────────────
 
-        private void HandleAdminResponse(Admin.AdminResponse resp)
+        private void HandleAdminResponse(ProtoAdmin.AdminResponse resp)
         {
             Debug.Log($"[Admin] {(resp.Success ? "OK" : "FAIL")}: {resp.Message}");
 
@@ -526,7 +526,7 @@ namespace Orlo.Network
             }
         }
 
-        private void HandleAdminState(Admin.AdminState state)
+        private void HandleAdminState(ProtoAdmin.AdminState state)
         {
             Debug.Log($"[Admin] State sync — admin={state.IsAdmin} speed={state.RunSpeed} fly={state.FlyEnabled} toolPower={state.ToolPower}");
 

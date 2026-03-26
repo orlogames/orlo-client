@@ -5,7 +5,7 @@ using Orlo.World;
 using Orlo.Audio;
 using Orlo.UI;
 using Orlo.Proto;
-using Auth = Orlo.Proto.Auth;
+using ProtoAuth = Orlo.Proto.Auth;
 
 namespace Orlo
 {
@@ -183,7 +183,7 @@ namespace Orlo
             }
         }
 
-        private void OnRegisterResponse(Auth.RegisterResponse resp)
+        private void OnRegisterResponse(ProtoAuth.RegisterResponse resp)
         {
             if (resp.Success)
             {
@@ -198,7 +198,7 @@ namespace Orlo
             }
         }
 
-        private void OnLoginResponse(Auth.LoginResponse resp)
+        private void OnLoginResponse(ProtoAuth.LoginResponse resp)
         {
             if (!resp.Success)
             {
@@ -274,7 +274,7 @@ namespace Orlo
             }
         }
 
-        private void OnCharacterSpawn(Auth.CharacterSpawnResponse spawn)
+        private void OnCharacterSpawn(ProtoAuth.CharacterSpawnResponse spawn)
         {
             _characterEntityId = spawn.EntityId.Id;
             var pos = new Vector3(
@@ -327,7 +327,7 @@ namespace Orlo
             FindFirstObjectByType<WaterPlane>()?.SetPlayerTransform(playerT);
         }
 
-        private void OnPong(Auth.Pong pong)
+        private void OnPong(ProtoAuth.Pong pong)
         {
             float rtt = (float)(Time.realtimeSinceStartup * 1000 - pong.ClientTime.Ms);
             Debug.Log($"[Network] RTT: {rtt:F1}ms");
