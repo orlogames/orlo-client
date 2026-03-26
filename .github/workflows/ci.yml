@@ -15,20 +15,18 @@ jobs:
         with:
           lfs: true
 
-      - name: Checkout orlo-proto (sibling)
+      - name: Checkout orlo-proto
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/orlo-proto
-          path: ../orlo-proto
+          path: orlo-proto
 
       - name: Install protoc
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
+        run: choco install protobuf --yes
 
       - name: Generate C# proto sources
         run: |
-          PROTO_DIR="../orlo-proto/proto"
+          PROTO_DIR="orlo-proto/proto"
           OUT_DIR="Assets/Scripts/Proto/Generated"
           mkdir -p "$OUT_DIR"
           protoc \
