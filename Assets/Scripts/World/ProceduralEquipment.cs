@@ -391,7 +391,7 @@ namespace Orlo.World
                     0.5f + Mathf.Asin(n.y) / Mathf.PI);
             }
 
-            var mesh = new Mesh { name = "Icosahedron", isReadable = true };
+            var mesh = new Mesh { name = "Icosahedron" };
             mesh.vertices = vertices;
             mesh.normals = normals;
             mesh.uv = uvs;
