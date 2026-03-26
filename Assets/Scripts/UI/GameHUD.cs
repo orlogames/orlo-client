@@ -1,6 +1,6 @@
 using UnityEngine;
 using Orlo.Network;
-using Auth = Orlo.Proto.Auth;
+using ProtoAuth = Orlo.Proto.Auth;
 
 namespace Orlo.UI
 {
@@ -32,7 +32,7 @@ namespace Orlo.UI
                 _notificationTimer -= Time.deltaTime;
         }
 
-        private void OnPong(Auth.Pong pong)
+        private void OnPong(ProtoAuth.Pong pong)
         {
             _rtt = (float)(Time.realtimeSinceStartup * 1000 - pong.ClientTime.Ms);
         }

@@ -1,11 +1,11 @@
 using Google.Protobuf;
 using UnityEngine;
 using Orlo.Proto;
-using Auth = Orlo.Proto.Auth;
-using World = Orlo.Proto.World;
-using Character = Orlo.Proto.Character;
-using Admin = Orlo.Proto.Admin;
-using Economy = Orlo.Proto.Economy;
+using ProtoAuth = Orlo.Proto.Auth;
+using ProtoWorld = Orlo.Proto.World;
+using ProtoCharacter = Orlo.Proto.Character;
+using ProtoAdmin = Orlo.Proto.Admin;
+using ProtoEconomy = Orlo.Proto.Economy;
 
 namespace Orlo.Network
 {
@@ -31,7 +31,7 @@ namespace Orlo.Network
         public static byte[] LoginRequest(string username, string password, string token = "", uint protocolVersion = 1)
         {
             var pkt = NewPacket();
-            pkt.LoginRequest = new Auth.LoginRequest
+            pkt.LoginRequest = new ProtoAuth.LoginRequest
             {
                 Username = username,
                 Password = password,
@@ -44,7 +44,7 @@ namespace Orlo.Network
         public static byte[] RegisterRequest(string username, string password, string email)
         {
             var pkt = NewPacket();
-            pkt.RegisterRequest = new Auth.RegisterRequest
+            pkt.RegisterRequest = new ProtoAuth.RegisterRequest
             {
                 Username = username,
                 Password = password,
@@ -56,7 +56,7 @@ namespace Orlo.Network
         public static byte[] CharacterSelect(ulong sessionId, string characterName)
         {
             var pkt = NewPacket();
-            pkt.CharacterSelect = new Auth.CharacterSelectRequest
+            pkt.CharacterSelect = new ProtoAuth.CharacterSelectRequest
             {
                 SessionId = sessionId,
                 CharacterName = characterName
@@ -68,7 +68,7 @@ namespace Orlo.Network
             bool jumping, bool sprinting)
         {
             var pkt = NewPacket();
-            pkt.PlayerMove = new World.PlayerMoveInput
+            pkt.PlayerMove = new ProtoWorld.PlayerMoveInput
             {
                 Position = new Vec3 { X = position.x, Y = position.y, Z = position.z },
                 Rotation = new Quat { X = rotation.x, Y = rotation.y, Z = rotation.z, W = rotation.w },
@@ -83,7 +83,7 @@ namespace Orlo.Network
         public static byte[] Ping()
         {
             var pkt = NewPacket();
-            pkt.Ping = new Auth.Ping
+            pkt.Ping = new ProtoAuth.Ping
             {
                 ClientTime = new Timestamp { Ms = (ulong)(Time.realtimeSinceStartup * 1000) }
             };
@@ -93,24 +93,24 @@ namespace Orlo.Network
         public static byte[] CharacterCreate(ulong sessionId, UI.CharacterCreationData data)
         {
             var pkt = NewPacket();
-            pkt.CharacterCreate = new Character.CharacterCreateRequest
+            pkt.CharacterCreate = new ProtoCharacter.CharacterCreateRequest
             {
                 SessionId = sessionId,
-                Identity = new Character.CharacterIdentity
+                Identity = new ProtoCharacter.CharacterIdentity
                 {
                     FirstName = data.FirstName,
                     LastName = data.LastName,
                     StartingSkillId = (uint)data.StartingSkillId,
-                    Appearance = new Character.CharacterAppearance
+                    Appearance = new ProtoCharacter.CharacterAppearance
                     {
-                        Gender = (Character.Gender)data.Gender,
-                        Race = (Character.Race)data.Race,
+                        Gender = (ProtoCharacter.Gender)data.Gender,
+                        Race = (ProtoCharacter.Race)data.Race,
                         Height = data.Height,
                         Build = data.Build,
-                        EyeColor = (Character.EyeColor)data.EyeColor,
-                        HairStyle = (Character.HairStyle)data.HairStyle,
-                        HairColor = (Character.HairColor)data.HairColor,
-                        SkinTone = (Character.SkinTone)data.SkinTone,
+                        EyeColor = (ProtoCharacter.EyeColor)data.EyeColor,
+                        HairStyle = (ProtoCharacter.HairStyle)data.HairStyle,
+                        HairColor = (ProtoCharacter.HairColor)data.HairColor,
+                        SkinTone = (ProtoCharacter.SkinTone)data.SkinTone,
                         FaceShape = data.FaceShape,
                         JawWidth = data.JawWidth,
                         NoseSize = data.NoseSize,
@@ -125,7 +125,7 @@ namespace Orlo.Network
         public static byte[] CharacterListRequest(ulong sessionId)
         {
             var pkt = NewPacket();
-            pkt.CharacterListRequest = new Character.CharacterListRequest
+            pkt.CharacterListRequest = new ProtoCharacter.CharacterListRequest
             {
                 SessionId = sessionId
             };
@@ -137,9 +137,9 @@ namespace Orlo.Network
         public static byte[] AdminSetSpeed(float speed)
         {
             var pkt = NewPacket();
-            pkt.AdminCommand = new Admin.AdminCommand
+            pkt.AdminCommand = new ProtoAdmin.AdminCommand
             {
-                SetSpeed = new Admin.SetSpeed { Speed = speed }
+                SetSpeed = new ProtoAdmin.SetSpeed { Speed = speed }
             };
             return pkt.ToByteArray();
         }
@@ -147,9 +147,9 @@ namespace Orlo.Network
         public static byte[] AdminSetFly(bool enabled)
         {
             var pkt = NewPacket();
-            pkt.AdminCommand = new Admin.AdminCommand
+            pkt.AdminCommand = new ProtoAdmin.AdminCommand
             {
-                SetFly = new Admin.SetFly { Enabled = enabled }
+                SetFly = new ProtoAdmin.SetFly { Enabled = enabled }
             };
             return pkt.ToByteArray();
         }
@@ -157,9 +157,9 @@ namespace Orlo.Network
         public static byte[] AdminSpawnTool(string toolId, uint quantity)
         {
             var pkt = NewPacket();
-            pkt.AdminCommand = new Admin.AdminCommand
+            pkt.AdminCommand = new ProtoAdmin.AdminCommand
             {
-                SpawnTool = new Admin.SpawnTool { ToolId = toolId, Quantity = quantity }
+                SpawnTool = new ProtoAdmin.SpawnTool { ToolId = toolId, Quantity = quantity }
             };
             return pkt.ToByteArray();
         }
@@ -167,9 +167,9 @@ namespace Orlo.Network
         public static byte[] AdminSetToolPower(float power)
         {
             var pkt = NewPacket();
-            pkt.AdminCommand = new Admin.AdminCommand
+            pkt.AdminCommand = new ProtoAdmin.AdminCommand
             {
-                SetToolPower = new Admin.SetToolPower { Power = power }
+                SetToolPower = new ProtoAdmin.SetToolPower { Power = power }
             };
             return pkt.ToByteArray();
         }
@@ -177,9 +177,9 @@ namespace Orlo.Network
         public static byte[] AdminTeleport(float x, float y, float z)
         {
             var pkt = NewPacket();
-            pkt.AdminCommand = new Admin.AdminCommand
+            pkt.AdminCommand = new ProtoAdmin.AdminCommand
             {
-                Teleport = new Admin.Teleport
+                Teleport = new ProtoAdmin.Teleport
                 {
                     Position = new Vec3 { X = x, Y = y, Z = z }
                 }
@@ -190,9 +190,9 @@ namespace Orlo.Network
         public static byte[] AdminGodMode(bool enabled)
         {
             var pkt = NewPacket();
-            pkt.AdminCommand = new Admin.AdminCommand
+            pkt.AdminCommand = new ProtoAdmin.AdminCommand
             {
-                GodMode = new Admin.GodMode { Enabled = enabled }
+                GodMode = new ProtoAdmin.GodMode { Enabled = enabled }
             };
             return pkt.ToByteArray();
         }
@@ -202,7 +202,7 @@ namespace Orlo.Network
         public static byte[] NPCInteract(ulong npcEntityId)
         {
             var pkt = NewPacket();
-            pkt.NpcInteract = new Economy.NPCInteract
+            pkt.NpcInteract = new ProtoEconomy.NPCInteract
             {
                 NpcEntityId = new EntityId { Id = npcEntityId }
             };
@@ -212,7 +212,7 @@ namespace Orlo.Network
         public static byte[] ShopBuy(ulong npcEntityId, string itemId, uint quantity)
         {
             var pkt = NewPacket();
-            pkt.ShopBuy = new Economy.ShopBuyRequest
+            pkt.ShopBuy = new ProtoEconomy.ShopBuyRequest
             {
                 NpcEntityId = new EntityId { Id = npcEntityId },
                 ItemId = itemId,
@@ -224,7 +224,7 @@ namespace Orlo.Network
         public static byte[] ShopSell(ulong npcEntityId, string itemId, uint quantity)
         {
             var pkt = NewPacket();
-            pkt.ShopSell = new Economy.ShopSellRequest
+            pkt.ShopSell = new ProtoEconomy.ShopSellRequest
             {
                 NpcEntityId = new EntityId { Id = npcEntityId },
                 ItemId = itemId,
@@ -238,7 +238,7 @@ namespace Orlo.Network
         public static byte[] MartialMove(ulong targetEntityId, uint moveId)
         {
             var pkt = NewPacket();
-            pkt.MartialMove = new Economy.MartialMoveRequest
+            pkt.MartialMove = new ProtoEconomy.MartialMoveRequest
             {
                 Target = new EntityId { Id = targetEntityId },
                 MoveId = moveId
