@@ -56,6 +56,20 @@ public class BuildScript
                 .ToArray();
         }
 
+        if (scenes.Length == 0)
+        {
+            Debug.LogWarning("[BuildScript] No scene files found, creating Boot scene");
+            CreateBootScene.Create();
+            scenes = new[] { "Assets/Scenes/Boot.unity" };
+        }
+
+        // Ensure correct extension for target platform
+        if (target == BuildTarget.StandaloneWindows64 || target == BuildTarget.StandaloneWindows)
+        {
+            if (!buildPath.EndsWith(".exe"))
+                buildPath += ".exe";
+        }
+
         Debug.Log($"[BuildScript] Building {target} to {buildPath} with {scenes.Length} scenes");
 
         var options = new BuildPlayerOptions
