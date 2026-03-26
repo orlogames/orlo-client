@@ -239,3 +239,118 @@ jobs:
             dist/OrloClient-Linux-${{ needs.version.outputs.version }}.tar.gz
           draft: false
           prerelease: false
+
+  publish-cdn:
+    name: Publish to CDN (Cloudflare R2)
+    needs: [version, build-windows, build-linux, release]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: orlo-client-windows
+          path: dist/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: orlo-client-linux
+          path: dist/
+
+      - name: Compute SHA-256 hashes and file sizes
+        id: meta
+        run: |
+          WIN_FILE="dist/OrloClient-Windows-${VERSION}.zip"
+          LIN_FILE="dist/OrloClient-Linux-${VERSION}.tar.gz"
+
+          WIN_SHA256=$(sha256sum "$WIN_FILE" | awk '{print $1}')
+          LIN_SHA256=$(sha256sum "$LIN_FILE" | awk '{print $1}')
+
+          WIN_SIZE=$(stat --format=%s "$WIN_FILE")
+          LIN_SIZE=$(stat --format=%s "$LIN_FILE")
+
+          echo "win_sha256=$WIN_SHA256" >> "$GITHUB_OUTPUT"
+          echo "lin_sha256=$LIN_SHA256" >> "$GITHUB_OUTPUT"
+          echo "win_size=$WIN_SIZE" >> "$GITHUB_OUTPUT"
+          echo "lin_size=$LIN_SIZE" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes from changelog
+        id: notes
+        run: |
+          # Fetch release notes from the GitHub release we just created
+          NOTES=$(gh release view "v${VERSION}" --repo "${{ github.repository }}" --json body -q '.body' 2>/dev/null || echo "Release ${VERSION}")
+          # Escape for JSON embedding
+          NOTES_ESCAPED=$(echo "$NOTES" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
+          echo "release_notes=$NOTES_ESCAPED" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate manifest.json
+        run: |
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat > manifest.json << MANIFEST_EOF
+          {
+            "latest": "${VERSION}",
+            "channels": {
+              "stable": {
+                "version": "${VERSION}",
+                "platforms": {
+                  "windows": {
+                    "url": "https://cdn.orlo.games/client/releases/${VERSION}/OrloClient-Windows-${VERSION}.zip",
+                    "sha256": "${{ steps.meta.outputs.win_sha256 }}",
+                    "size": ${{ steps.meta.outputs.win_size }},
+                    "filename": "OrloClient-Windows-${VERSION}.zip"
+                  },
+                  "linux": {
+                    "url": "https://cdn.orlo.games/client/releases/${VERSION}/OrloClient-Linux-${VERSION}.tar.gz",
+                    "sha256": "${{ steps.meta.outputs.lin_sha256 }}",
+                    "size": ${{ steps.meta.outputs.lin_size }},
+                    "filename": "OrloClient-Linux-${VERSION}.tar.gz"
+                  }
+                },
+                "release_notes": ${{ steps.notes.outputs.release_notes }},
+                "released_at": "${TIMESTAMP}",
+                "min_launcher_version": "0.0.1"
+              }
+            }
+          }
+          MANIFEST_EOF
+
+          # Trim leading whitespace from heredoc indentation
+          python3 -c "
+          import json
+          with open('manifest.json') as f:
+              data = json.load(f)
+          with open('manifest.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          "
+
+          echo "Generated manifest.json:"
+          cat manifest.json
+
+      - name: Install wrangler
+        run: npm install -g wrangler
+
+      - name: Upload Windows build to R2
+        run: |
+          wrangler r2 object put "orlo-cdn/client/releases/${VERSION}/OrloClient-Windows-${VERSION}.zip" \
+            --file="dist/OrloClient-Windows-${VERSION}.zip"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Upload Linux build to R2
+        run: |
+          wrangler r2 object put "orlo-cdn/client/releases/${VERSION}/OrloClient-Linux-${VERSION}.tar.gz" \
+            --file="dist/OrloClient-Linux-${VERSION}.tar.gz"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Upload manifest.json to R2
+        run: |
+          wrangler r2 object put "orlo-cdn/client/manifest.json" \
+            --file="manifest.json"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

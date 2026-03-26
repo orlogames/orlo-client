@@ -4,6 +4,7 @@ using Orlo.Player;
 using Orlo.World;
 using Orlo.Audio;
 using Orlo.UI;
+using Orlo.UI.CharacterCreation;
 using Orlo.Proto;
 using ProtoAuth = Orlo.Proto.Auth;
 
@@ -26,7 +27,7 @@ namespace Orlo
         private ulong _sessionId;
         private ulong _accountId;
         private ulong _characterEntityId;
-        private CharacterCreationUI _charCreationUI;
+        private CharacterCreationManager _charCreationManager;
         private LoginUI _loginUI;
         private bool _characterSpawned = false;
         private string _launcherToken;
@@ -278,20 +279,20 @@ namespace Orlo
 
         private void ShowCharacterCreation()
         {
-            if (_charCreationUI == null)
+            if (_charCreationManager == null)
             {
-                var go = new GameObject("CharacterCreationUI");
-                _charCreationUI = go.AddComponent<CharacterCreationUI>();
+                var go = new GameObject("CharacterCreationManager");
+                _charCreationManager = go.AddComponent<CharacterCreationManager>();
             }
 
-            _charCreationUI.OnCreateConfirmed = (data) =>
+            _charCreationManager.OnCreateConfirmed = (data) =>
             {
                 Debug.Log($"[Orlo] Creating character: {data.FirstName} {data.LastName}");
                 NetworkManager.Instance.Send(PacketBuilder.CharacterCreate(_sessionId, data));
-                _charCreationUI.Hide();
+                _charCreationManager.Hide();
             };
 
-            _charCreationUI.Show();
+            _charCreationManager.Show();
         }
 
         /// <summary>
@@ -315,6 +316,7 @@ namespace Orlo
         private void OnCharacterSpawn(ProtoAuth.CharacterSpawnResponse spawn)
         {
             _characterEntityId = spawn.EntityId.Id;
+            _characterSpawned = true;
             var pos = new Vector3(
                 spawn.Transform.Position.X,
                 spawn.Transform.Position.Y,
@@ -332,6 +334,15 @@ namespace Orlo
             }
 
             Debug.Log($"[Orlo] Character spawned at {pos} — creating player object");
+
+            // Show loading screen while terrain loads
+            if (LoadingScreenUI.Instance == null)
+            {
+                var go = new GameObject("LoadingScreenUI");
+                go.AddComponent<LoadingScreenUI>();
+            }
+            LoadingScreenUI.Instance.Show(16); // expect ~16 terrain chunks
+            // Loading screen will be hidden by TerrainManager when enough chunks arrive
 
             // Instantiate player
             GameObject player;
@@ -369,6 +380,15 @@ namespace Orlo
         {
             float rtt = (float)(Time.realtimeSinceStartup * 1000 - pong.ClientTime.Ms);
             Debug.Log($"[Network] RTT: {rtt:F1}ms");
+        }
+
+        public void ShowLoginAfterLogout()
+        {
+            _sessionId = 0;
+            _accountId = 0;
+            _characterSpawned = false;
+            _launcherToken = null;
+            ShowLoginUI();
         }
 
         private void OnDisconnected()

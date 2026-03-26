@@ -274,7 +274,7 @@ namespace Orlo.Network
                 $"Found: {reveal.ContentId} ({reveal.ContentType})");
 
             var pos = new Vector3(reveal.Location.Position.X, reveal.Location.Position.Y, reveal.Location.Position.Z);
-            FindFirstObjectByType<MinimapUI>()?.AddMarker(pos, "poi", reveal.ContentId, new Color(0.3f, 0.9f, 0.9f));
+            FindFirstObjectByType<MinimapUI>()?.AddMarker(pos, "poi", reveal.ContentId, new UnityEngine.Color(0.3f, 0.9f, 0.9f));
         }
 
         // Phase 2 stub handlers — route to UI managers

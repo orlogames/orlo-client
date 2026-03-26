@@ -123,6 +123,38 @@ namespace Orlo.Network
             return pkt.ToByteArray();
         }
 
+        /// <summary>
+        /// Build a CharacterCreate packet from the new deep AppearanceData.
+        /// Populates all expanded proto fields (FaceBlendShapes, BodyMorphs, SkinDetail, etc.).
+        /// </summary>
+        public static byte[] CharacterCreate(ulong sessionId, UI.CharacterCreation.AppearanceData data)
+        {
+            var pkt = NewPacket();
+            var appearance = data.ToProto();
+
+            int startingSkillId = 0;
+            if (data.SelectedSkill >= 0)
+            {
+                // Map skill index to skill ID (matches StarterSkills in CharacterCreationManager)
+                int[] skillIds = { 1, 4, 7, 10, 13, 16 };
+                if (data.SelectedSkill < skillIds.Length)
+                    startingSkillId = skillIds[data.SelectedSkill];
+            }
+
+            pkt.CharacterCreate = new ProtoCharacter.CharacterCreateRequest
+            {
+                SessionId = sessionId,
+                Identity = new ProtoCharacter.CharacterIdentity
+                {
+                    FirstName = data.FirstName ?? "",
+                    LastName = data.LastName ?? "",
+                    StartingSkillId = (uint)startingSkillId,
+                    Appearance = appearance
+                }
+            };
+            return pkt.ToByteArray();
+        }
+
         public static byte[] CharacterListRequest(ulong sessionId)
         {
             var pkt = NewPacket();

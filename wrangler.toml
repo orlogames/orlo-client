@@ -1,0 +1,9 @@
+# Wrangler configuration for Cloudflare R2 CDN uploads
+# Used by the release workflow to publish client builds
+
+name = "orlo-client-cdn"
+compatibility_date = "2024-12-01"
+
+[[r2_buckets]]
+binding = "CDN"
+bucket_name = "orlo-cdn"
