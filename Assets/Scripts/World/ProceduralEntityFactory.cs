@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Orlo.VFX;
 
 namespace Orlo.World
 {
@@ -23,6 +24,12 @@ namespace Orlo.World
         // Object pool
         private readonly Dictionary<string, Queue<GameObject>> _pool = new();
         [SerializeField] private int maxPoolSizePerType = 20;
+
+        [Header("Microparticle Assembly")]
+        [Tooltip("Enable particle assembly effect when spawning entities.")]
+        [SerializeField] private bool enableAssemblyEffect = true;
+        [Tooltip("Compute shader for microparticle simulation.")]
+        [SerializeField] private ComputeShader microparticleCompute;
 
         private void Awake()
         {
@@ -367,7 +374,7 @@ namespace Orlo.World
         }
 
         /// <summary>
-        /// Build a player character entity.
+        /// Build a player character entity with microparticle assembly effect.
         /// </summary>
         public GameObject BuildPlayer(string assetId, Vector3 position, Quaternion rotation)
         {
@@ -392,7 +399,44 @@ namespace Orlo.World
             cc.radius = spec.BodyWidth * 0.5f;
             cc.center = new Vector3(0, spec.Height * 0.5f, 0);
 
+            // Attach microparticle assembly effect
+            if (enableAssemblyEffect)
+            {
+                AttachMicroparticleEffect(go);
+            }
+
             return go;
+        }
+
+        /// <summary>
+        /// Build an Aether being — permanently particle-based entity that never fully solidifies.
+        /// </summary>
+        public GameObject BuildAetherBeing(string assetId, Vector3 position, Quaternion rotation)
+        {
+            var go = BuildHumanoidNPC(assetId, position, rotation);
+
+            // Attach microparticle system in Aether mode
+            var mps = go.AddComponent<MicroparticleSystem>();
+            // Set Aether-specific properties via serialized field reflection
+            // (isAetherBeing = true causes permanent shimmer loop)
+            var fields = typeof(MicroparticleSystem).GetField("isAetherBeing",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (fields != null) fields.SetValue(mps, true);
+
+            mps.Initialize(microparticleCompute);
+            mps.Assemble();
+
+            return go;
+        }
+
+        /// <summary>
+        /// Attach a MicroparticleSystem to a GameObject and trigger assembly.
+        /// </summary>
+        private void AttachMicroparticleEffect(GameObject go)
+        {
+            var mps = go.AddComponent<MicroparticleSystem>();
+            mps.Initialize(microparticleCompute);
+            mps.Assemble();
         }
 
         private GameObject BuildFallback(Vector3 position, Quaternion rotation)

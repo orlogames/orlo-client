@@ -1,0 +1,206 @@
+// Microparticle GPU simulation — drives assembly/disassembly of particle clouds.
+//
+// Each particle has a scattered origin, a target position on the mesh surface,
+// and a phase controlling its behavior:
+//   0 = Scatter  (ambient drift, random brownian motion)
+//   1 = Converge (spiral toward target with curl noise)
+//   2 = Solidify (lock to target, increase alpha)
+//   3 = Dissolve (reverse — scatter away from target)
+
+#pragma kernel Simulate
+#pragma kernel Initialize
+
+struct Particle
+{
+    float3 position;
+    float3 target;
+    float3 velocity;
+    float4 color;       // xyz = rgb, w = alpha
+    float  life;        // 0..1 normalized lifetime within current phase
+    float  phase;       // 0=scatter, 1=converge, 2=solidify, 3=dissolve
+    float  seed;        // Per-particle random seed
+    float  size;        // Particle display size
+};
+
+RWStructuredBuffer<Particle> _Particles;
+
+// Uniforms set from C#
+float  _DeltaTime;
+float  _Time;
+float  _Phase;          // Global phase: 0=scatter, 1=converge, 2=solidify, 3=dissolve
+float  _PhaseProgress;  // 0..1 progress through current phase transition
+float  _ConvergeSpeed;  // How fast particles approach targets
+float  _NoiseScale;     // Curl noise spatial frequency
+float  _NoiseStrength;  // Curl noise amplitude
+float  _DampingFactor;  // Velocity damping (0.95 = gradual stop)
+float  _ScatterRadius;  // Max distance for scatter phase
+float3 _Center;         // World-space center of the effect
+uint   _ParticleCount;
+
+// Simple 3D hash for pseudo-random
+float hash(float3 p)
+{
+    p = frac(p * float3(443.897, 441.423, 437.195));
+    p += dot(p, p.yzx + 19.19);
+    return frac((p.x + p.y) * p.z);
+}
+
+// Curl noise approximation for organic swirling motion
+float3 curlNoise(float3 p, float scale)
+{
+    float3 eps = float3(0.01, 0.0, 0.0);
+    float3 curl;
+
+    // Approximate partial derivatives using hash-based noise
+    float n1 = hash(p * scale + eps.xyy);
+    float n2 = hash(p * scale - eps.xyy);
+    float n3 = hash(p * scale + eps.yxy);
+    float n4 = hash(p * scale - eps.yxy);
+    float n5 = hash(p * scale + eps.yyx);
+    float n6 = hash(p * scale - eps.yyx);
+
+    curl.x = (n3 - n4) - (n5 - n6);
+    curl.y = (n5 - n6) - (n1 - n2);
+    curl.z = (n1 - n2) - (n3 - n4);
+
+    return normalize(curl + 0.001);
+}
+
+[numthreads(256, 1, 1)]
+void Initialize(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _ParticleCount) return;
+
+    Particle p = _Particles[id.x];
+
+    // Initialize scattered position around center
+    float seed = p.seed;
+    float theta = seed * 6.283185;
+    float phi = hash(float3(seed, seed * 2.0, seed * 3.0)) * 3.141592;
+    float r = hash(float3(seed * 4.0, seed * 5.0, seed * 6.0)) * _ScatterRadius;
+
+    float3 scattered = _Center + float3(
+        sin(phi) * cos(theta) * r,
+        sin(phi) * sin(theta) * r + hash(float3(seed, 0, 0)) * _ScatterRadius * 0.5,
+        cos(phi) * r
+    );
+
+    p.position = scattered;
+    p.velocity = float3(0, 0, 0);
+    p.life = 0;
+    p.phase = 0;
+    p.size = 0.01 + hash(float3(seed * 7.0, 0, 0)) * 0.02;
+
+    _Particles[id.x] = p;
+}
+
+[numthreads(256, 1, 1)]
+void Simulate(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _ParticleCount) return;
+
+    Particle p = _Particles[id.x];
+    float dt = _DeltaTime;
+    float seed = p.seed;
+
+    // Phase transition — particles transition individually with slight delay
+    // based on their seed for a staggered/organic look
+    float particleDelay = seed * 0.3; // 0..0.3s stagger
+    float effectiveProgress = saturate((_PhaseProgress - particleDelay) / (1.0 - particleDelay * 0.5));
+
+    float3 toTarget = p.target - p.position;
+    float distToTarget = length(toTarget);
+    float3 dirToTarget = distToTarget > 0.001 ? toTarget / distToTarget : float3(0, 0, 0);
+
+    // === SCATTER PHASE ===
+    if (_Phase < 0.5)
+    {
+        // Gentle brownian drift
+        float3 noise = curlNoise(p.position + _Time * 0.3, 2.0) * 0.5;
+        p.velocity += noise * dt;
+
+        // Keep particles within scatter radius
+        float3 toCenter = _Center - p.position;
+        float dist = length(toCenter);
+        if (dist > _ScatterRadius)
+        {
+            p.velocity += normalize(toCenter) * dt * 2.0;
+        }
+
+        p.color.w = 0.15 + hash(float3(seed, _Time * 0.1, 0)) * 0.15; // Faint shimmer
+        p.size = 0.005 + hash(float3(seed * 7.0, 0, 0)) * 0.01;
+    }
+    // === CONVERGE PHASE ===
+    else if (_Phase < 1.5)
+    {
+        // Spring force toward target
+        float springForce = _ConvergeSpeed * effectiveProgress * effectiveProgress;
+        p.velocity += dirToTarget * springForce * dt;
+
+        // Curl noise for swirling approach (stronger when far, weaker when close)
+        float swirl = saturate(distToTarget / (_ScatterRadius * 0.5));
+        float3 curl = curlNoise(p.position + _Time * 0.5, _NoiseScale);
+        p.velocity += curl * _NoiseStrength * swirl * dt;
+
+        // Vortex component — spiral around the approach axis
+        float3 tangent = cross(dirToTarget, float3(0, 1, 0));
+        if (length(tangent) < 0.01) tangent = cross(dirToTarget, float3(1, 0, 0));
+        tangent = normalize(tangent);
+        float vortexStrength = swirl * _NoiseStrength * 0.5 * sin(_Time * 3.0 + seed * 6.28);
+        p.velocity += tangent * vortexStrength * dt;
+
+        // Alpha increases as particles approach target
+        p.color.w = lerp(0.2, 0.9, effectiveProgress);
+        p.size = lerp(0.005, 0.015, effectiveProgress);
+    }
+    // === SOLIDIFY PHASE ===
+    else if (_Phase < 2.5)
+    {
+        // Snap to target with strong spring
+        p.velocity += dirToTarget * 50.0 * dt;
+        p.velocity *= 0.85; // Heavy damping
+
+        // Lock when very close
+        if (distToTarget < 0.01)
+        {
+            p.position = p.target;
+            p.velocity = float3(0, 0, 0);
+        }
+
+        p.color.w = lerp(0.9, 1.0, effectiveProgress);
+        p.size = lerp(0.015, 0.02, effectiveProgress);
+    }
+    // === DISSOLVE PHASE ===
+    else
+    {
+        // Reverse — push away from target
+        float3 awayDir = -dirToTarget;
+        if (distToTarget < 0.01)
+        {
+            awayDir = normalize(float3(
+                hash(float3(seed, 1, 0)) - 0.5,
+                hash(float3(seed, 2, 0)) - 0.5,
+                hash(float3(seed, 3, 0)) - 0.5
+            ));
+        }
+
+        float pushForce = _ConvergeSpeed * effectiveProgress;
+        p.velocity += awayDir * pushForce * dt;
+
+        // Add curl noise for organic scatter
+        float3 curl = curlNoise(p.position + _Time * 0.8, _NoiseScale * 0.5);
+        p.velocity += curl * _NoiseStrength * 2.0 * dt;
+
+        p.color.w = lerp(0.9, 0.0, effectiveProgress);
+        p.size = lerp(0.02, 0.005, effectiveProgress);
+    }
+
+    // Apply velocity with damping
+    p.velocity *= _DampingFactor;
+    p.position += p.velocity * dt;
+
+    // Update life
+    p.life = saturate(p.life + dt);
+
+    _Particles[id.x] = p;
+}
