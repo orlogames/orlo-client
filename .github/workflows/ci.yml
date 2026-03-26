@@ -26,6 +26,7 @@ jobs:
         run: choco install protoc --yes
 
       - name: Generate C# proto sources
+        shell: bash
         run: |
           PROTO_DIR="orlo-proto/proto"
           OUT_DIR="Assets/Scripts/Proto/Generated"
