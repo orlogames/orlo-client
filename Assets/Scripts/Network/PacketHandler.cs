@@ -1,14 +1,6 @@
 using System;
 using UnityEngine;
 using Google.Protobuf;
-using Orlo.Auth;
-using Orlo.Common;
-using Orlo.Packet;
-using Orlo.Character;
-using Orlo.Economy;
-using Orlo.Admin;
-using Orlo.Environment;
-using Orlo.World;
 using Orlo.Player;
 using Orlo.Audio;
 using Orlo.UI;
