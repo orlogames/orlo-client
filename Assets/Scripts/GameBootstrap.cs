@@ -4,7 +4,8 @@ using Orlo.Player;
 using Orlo.World;
 using Orlo.Audio;
 using Orlo.UI;
-using Transform = UnityEngine.Transform;
+using Orlo.Proto;
+using Auth = Orlo.Proto.Auth;
 
 namespace Orlo
 {

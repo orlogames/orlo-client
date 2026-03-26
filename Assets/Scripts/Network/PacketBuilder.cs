@@ -1,5 +1,11 @@
 using Google.Protobuf;
 using UnityEngine;
+using Orlo.Proto;
+using Auth = Orlo.Proto.Auth;
+using World = Orlo.Proto.World;
+using Character = Orlo.Proto.Character;
+using Admin = Orlo.Proto.Admin;
+using Economy = Orlo.Proto.Economy;
 
 namespace Orlo.Network
 {

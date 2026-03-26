@@ -1,6 +1,5 @@
 using UnityEngine;
 using Orlo.World;
-using AnimationState = Orlo.World.AnimationState;
 
 namespace Orlo.AI
 {

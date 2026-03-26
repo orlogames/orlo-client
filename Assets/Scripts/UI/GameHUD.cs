@@ -1,5 +1,6 @@
 using UnityEngine;
 using Orlo.Network;
+using Auth = Orlo.Proto.Auth;
 
 namespace Orlo.UI
 {

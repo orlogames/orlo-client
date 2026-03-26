@@ -4,6 +4,14 @@ using Google.Protobuf;
 using Orlo.Player;
 using Orlo.Audio;
 using Orlo.UI;
+using Orlo.World;
+using Orlo.Proto;
+using Auth = Orlo.Proto.Auth;
+using World = Orlo.Proto.World;
+using Character = Orlo.Proto.Character;
+using Admin = Orlo.Proto.Admin;
+using Economy = Orlo.Proto.Economy;
+using Environment = Orlo.Proto.Environment;
 
 namespace Orlo.Network
 {

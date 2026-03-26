@@ -93,7 +93,7 @@ namespace Orlo.UI
             {
                 // Close context menu if clicking outside it
                 Rect cmRect = new Rect(_contextMenuPos.x, _contextMenuPos.y, 120, ContextOptions.Length * 24);
-                if (!cmRect.Contains(Event.current != null ? Event.current.mousePosition : Input.mousePosition))
+                if (!cmRect.Contains(Event.current != null ? Event.current.mousePosition : (Vector2)Input.mousePosition))
                     _contextMenuOpen = false;
             }
         }
