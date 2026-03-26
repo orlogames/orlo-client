@@ -23,7 +23,7 @@ jobs:
           token: ${{ secrets.GH_PAT }}
 
       - name: Install protoc
-        run: choco install protobuf --yes
+        run: choco install protoc --yes
 
       - name: Generate C# proto sources
         run: |
