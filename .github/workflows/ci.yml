@@ -32,7 +32,7 @@ jobs:
           $protoDir = "orlo-proto/proto"
           $outDir = "Assets/Scripts/Proto/Generated"
           New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-          $protos = Get-ChildItem "$protoDir/orlo" -Filter "*.proto" | ForEach-Object { $_.FullName }
+          $protos = Get-ChildItem "$protoDir/orlo" -Filter "*.proto" | ForEach-Object { "orlo/$($_.Name)" }
           & protoc --proto_path=$protoDir --csharp_out=$outDir @protos
           Write-Host "Generated C# files:"
           Get-ChildItem $outDir
