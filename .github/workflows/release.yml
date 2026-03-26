@@ -23,21 +23,21 @@ jobs:
       tag: ${{ steps.ver.outputs.tag }}
     steps:
       - id: ver
-        shell: bash
+        shell: powershell
         run: |
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            TAG="${{ github.ref_name }}"
-            VER="${TAG#v}"
-          elif [[ -n "${{ inputs.version }}" ]]; then
-            VER="${{ inputs.version }}"
-            TAG="v${VER}"
-          else
-            VER="0.0.$(date +%Y%m%d%H%M)"
-            TAG="v${VER}"
-          fi
-          echo "version=${VER}" >> "$GITHUB_OUTPUT"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "Version: ${VER}, Tag: ${TAG}"
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $TAG = "${{ github.ref_name }}"
+            $VER = $TAG -replace '^v', ''
+          } elseif ("${{ inputs.version }}" -ne "") {
+            $VER = "${{ inputs.version }}"
+            $TAG = "v$VER"
+          } else {
+            $VER = "0.0.$(Get-Date -Format 'yyyyMMddHHmm')"
+            $TAG = "v$VER"
+          }
+          echo "version=$VER" >> $env:GITHUB_OUTPUT
+          echo "tag=$TAG" >> $env:GITHUB_OUTPUT
+          Write-Host "Version: $VER, Tag: $TAG"
 
   build-windows:
     name: Build Windows
@@ -71,8 +71,8 @@ jobs:
           Get-ChildItem $outDir
 
       - name: Write version file
-        shell: bash
-        run: echo "${{ needs.version.outputs.version }}" > Assets/Resources/version.txt
+        shell: powershell
+        run: "${{ needs.version.outputs.version }}" | Out-File -FilePath Assets/Resources/version.txt -Encoding utf8
 
       - name: Cache Unity Library
         uses: actions/cache@v4
@@ -98,10 +98,9 @@ jobs:
           }
 
       - name: Create zip
-        shell: bash
+        shell: powershell
         run: |
-          cd build/windows
-          zip -r ../../OrloClient-Windows-${{ needs.version.outputs.version }}.zip .
+          Compress-Archive -Path build/windows/* -DestinationPath "OrloClient-Windows-${{ needs.version.outputs.version }}.zip"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -141,8 +140,8 @@ jobs:
           Get-ChildItem $outDir
 
       - name: Write version file
-        shell: bash
-        run: echo "${{ needs.version.outputs.version }}" > Assets/Resources/version.txt
+        shell: powershell
+        run: "${{ needs.version.outputs.version }}" | Out-File -FilePath Assets/Resources/version.txt -Encoding utf8
 
       - name: Cache Unity Library
         uses: actions/cache@v4
@@ -168,10 +167,9 @@ jobs:
           }
 
       - name: Create tarball
-        shell: bash
+        shell: powershell
         run: |
-          cd build/linux
-          tar czf ../../OrloClient-Linux-${{ needs.version.outputs.version }}.tar.gz .
+          tar czf "OrloClient-Linux-${{ needs.version.outputs.version }}.tar.gz" -C build/linux .
 
       - uses: actions/upload-artifact@v4
         with:
@@ -198,25 +196,25 @@ jobs:
 
       - name: Generate changelog
         id: changelog
-        shell: bash
+        shell: powershell
         run: |
-          {
-            echo "changelog<<CHANGELOG_EOF"
-            echo "## What's Changed"
-            echo ""
-            git log --pretty=format:'- %s (%h)' $(git describe --tags --abbrev=0 2>/dev/null || echo HEAD~10)..HEAD | head -30
-            echo ""
-            echo "CHANGELOG_EOF"
-          } >> "$GITHUB_OUTPUT"
+          $prevTag = git describe --tags --abbrev=0 2>$null
+          if (-not $prevTag) { $prevTag = "HEAD~10" }
+          $log = git log --pretty=format:'- %s (%h)' "$prevTag..HEAD" | Select-Object -First 30
+          $body = "## What's Changed`n`n$($log -join "`n")"
+          echo "changelog<<CHANGELOG_EOF" >> $env:GITHUB_OUTPUT
+          echo $body >> $env:GITHUB_OUTPUT
+          echo "CHANGELOG_EOF" >> $env:GITHUB_OUTPUT
 
       - name: Create tag if not exists
-        shell: bash
+        shell: powershell
         run: |
-          TAG="${{ needs.version.outputs.tag }}"
-          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
-            git tag "$TAG"
-            git push origin "$TAG"
-          fi
+          $TAG = "${{ needs.version.outputs.tag }}"
+          $exists = git rev-parse $TAG 2>$null
+          if (-not $exists) {
+            git tag $TAG
+            git push origin $TAG
+          }
 
       - name: Create release
         uses: softprops/action-gh-release@v2
