@@ -2,12 +2,15 @@ name: Release — Client Build & Publish
 
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'          # Triggered by version tags (e.g. v0.2.0)
+  repository_dispatch:
+    types: [proto-updated]
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g. 0.2.0) — leave blank for auto from date'
+        description: 'Version tag (e.g. 0.2.0) — leave blank for auto from run_number'
         required: false
         type: string
 
@@ -32,7 +35,7 @@ jobs:
             $VER = "${{ inputs.version }}"
             $TAG = "v$VER"
           } else {
-            $VER = "0.0.$(Get-Date -Format 'yyyyMMddHHmm')"
+            $VER = "0.0.${{ github.run_number }}"
             $TAG = "v$VER"
           }
           echo "version=$VER" >> $env:GITHUB_OUTPUT
