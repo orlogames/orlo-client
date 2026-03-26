@@ -28,7 +28,7 @@ jobs:
       - name: Build with Unity
         shell: pwsh
         run: |
-          $unity = "C:\Program Files\Unity\Hub\Editor\6000.0.71f1\Editor\Unity.exe"
+          $unity = "C:\Program Files\Unity\Hub\Editor\6000.4.0f1\Editor\Unity.exe"
           & $unity -batchmode -nographics -quit -projectPath . `
             -buildTarget StandaloneWindows64 `
             -executeMethod BuildScript.Build `
@@ -61,7 +61,7 @@ jobs:
       - name: Build with Unity
         shell: pwsh
         run: |
-          $unity = "C:\Program Files\Unity\Hub\Editor\6000.0.71f1\Editor\Unity.exe"
+          $unity = "C:\Program Files\Unity\Hub\Editor\6000.4.0f1\Editor\Unity.exe"
           & $unity -batchmode -nographics -quit -projectPath . `
             -buildTarget StandaloneLinux64 `
             -executeMethod BuildScript.Build `

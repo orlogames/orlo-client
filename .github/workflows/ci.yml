@@ -56,7 +56,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "C:\WINDOWS\system32\config\systemprofile\AppData\Local\Unity\Caches" | Out-Null
-          $unity = "C:\Program Files\Unity\Hub\Editor\6000.0.71f1\Editor\Unity.exe"
+          $unity = "C:\Program Files\Unity\Hub\Editor\6000.4.0f1\Editor\Unity.exe"
           & $unity -batchmode -nographics -quit -projectPath . `
             -buildTarget StandaloneLinux64 `
             -executeMethod BuildScript.Build `
