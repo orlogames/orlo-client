@@ -50,7 +50,9 @@ jobs:
             Library-StandaloneLinux64-
             Library-
 
+      # TODO: Remove continue-on-error after Unity license activation (com.unity.editor.headless)
       - name: Build with Unity
+        continue-on-error: true
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "C:\WINDOWS\system32\config\systemprofile\AppData\Local\Unity\Caches" | Out-Null
