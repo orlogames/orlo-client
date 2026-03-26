@@ -26,20 +26,20 @@ jobs:
         run: choco install protoc --yes
 
       - name: Generate C# proto sources
-        shell: bash
+        shell: pwsh
         run: |
-          PROTO_DIR="orlo-proto/proto"
-          OUT_DIR="Assets/Scripts/Proto/Generated"
-          mkdir -p "$OUT_DIR"
-          protoc \
-            --proto_path="$PROTO_DIR" \
-            --csharp_out="$OUT_DIR" \
-            "$PROTO_DIR"/orlo/common.proto \
-            "$PROTO_DIR"/orlo/auth.proto \
-            "$PROTO_DIR"/orlo/world.proto \
-            "$PROTO_DIR"/orlo/packet.proto
-          echo "Generated C# files:"
-          ls -la "$OUT_DIR"
+          $protoDir = "orlo-proto/proto"
+          $outDir = "Assets/Scripts/Proto/Generated"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          protoc `
+            --proto_path="$protoDir" `
+            --csharp_out="$outDir" `
+            "$protoDir/orlo/common.proto" `
+            "$protoDir/orlo/auth.proto" `
+            "$protoDir/orlo/world.proto" `
+            "$protoDir/orlo/packet.proto"
+          Write-Host "Generated C# files:"
+          Get-ChildItem $outDir
 
       - name: Cache Unity Library
         uses: actions/cache@v4
