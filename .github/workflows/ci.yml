@@ -53,13 +53,14 @@ jobs:
       - name: Build with Unity
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path "C:\WINDOWS\system32\config\systemprofile\AppData\Local\Unity\Caches" | Out-Null
           $unity = "C:\Program Files\Unity\Hub\Editor\6000.0.71f1\Editor\Unity.exe"
           & $unity -batchmode -nographics -quit -projectPath . `
             -buildTarget StandaloneLinux64 `
             -executeMethod BuildScript.Build `
-            -logFile build-log.txt `
+            -logFile - `
             -buildPath "build/linux/OrloClient"
-          if ($LASTEXITCODE -ne 0) { Get-Content build-log.txt -Tail 50; exit 1 }
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
