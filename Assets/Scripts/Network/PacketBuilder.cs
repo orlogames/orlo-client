@@ -1,6 +1,7 @@
 using Google.Protobuf;
 using UnityEngine;
 using Orlo.Proto;
+using EntityId = Orlo.Proto.EntityId;
 using ProtoAuth = Orlo.Proto.Auth;
 using ProtoWorld = Orlo.Proto.World;
 using ProtoCharacter = Orlo.Proto.Character;

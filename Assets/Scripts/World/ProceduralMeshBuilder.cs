@@ -73,7 +73,6 @@ namespace Orlo.World
             var mesh = new Mesh { name = "TerrainChunk" };
             if (vertCount > 65535)
                 mesh.indexFormat = IndexFormat.UInt32;
-            mesh.isReadable  = true;
             mesh.vertices    = vertices;
             mesh.normals     = normals;
             mesh.uv          = uvs;
@@ -169,7 +168,7 @@ namespace Orlo.World
                 triangles.Add(topRingStart + i + 1);
             }
 
-            var mesh = new Mesh { name = "Cylinder", isReadable = true };
+            var mesh = new Mesh { name = "Cylinder" };
             mesh.SetVertices(vertices);
             mesh.SetNormals(normals);
             mesh.SetUVs(0, uvs);
@@ -230,7 +229,7 @@ namespace Orlo.World
                 }
             }
 
-            var mesh = new Mesh { name = "Sphere", isReadable = true };
+            var mesh = new Mesh { name = "Sphere" };
             mesh.SetVertices(vertices);
             mesh.SetNormals(normals);
             mesh.SetUVs(0, uvs);
@@ -268,7 +267,7 @@ namespace Orlo.World
 
             var triangles = new int[] { 0, 2, 1,  1, 2, 3 };
 
-            var mesh = new Mesh { name = "Quad", isReadable = true };
+            var mesh = new Mesh { name = "Quad" };
             mesh.vertices  = vertices;
             mesh.normals   = normals;
             mesh.uv        = uvs;
@@ -343,7 +342,7 @@ namespace Orlo.World
                 triangles[b + 3] = o + 0; triangles[b + 4] = o + 3; triangles[b + 5] = o + 2;
             }
 
-            var mesh = new Mesh { name = "Box", isReadable = true };
+            var mesh = new Mesh { name = "Box" };
             mesh.vertices  = vertices;
             mesh.normals   = normals;
             mesh.uv        = uv;
@@ -413,7 +412,7 @@ namespace Orlo.World
                 }
             }
 
-            var mesh = new Mesh { name = "Torus", isReadable = true };
+            var mesh = new Mesh { name = "Torus" };
             mesh.SetVertices(vertices);
             mesh.SetNormals(normals);
             mesh.SetUVs(0, uvs);
@@ -461,7 +460,7 @@ namespace Orlo.World
                 vertexOffset += srcVerts.Length;
             }
 
-            var mesh = new Mesh { name = "MergedMesh", isReadable = true };
+            var mesh = new Mesh { name = "MergedMesh" };
             if (allVertices.Count > 65535)
                 mesh.indexFormat = IndexFormat.UInt32;
 
