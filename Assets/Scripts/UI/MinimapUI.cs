@@ -9,7 +9,7 @@ namespace Orlo.UI
     /// </summary>
     public class MinimapUI : MonoBehaviour
     {
-        private struct Marker
+        public struct Marker
         {
             public Vector3 worldPos;
             public string type;

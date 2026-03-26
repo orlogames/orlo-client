@@ -1,5 +1,10 @@
 using Google.Protobuf;
-using Orlo.Proto;
+using Orlo.Auth;
+using Orlo.Common;
+using Orlo.Packet;
+using Orlo.Character;
+using Orlo.Economy;
+using Orlo.Admin;
 using UnityEngine;
 
 namespace Orlo.Network
@@ -63,7 +68,7 @@ namespace Orlo.Network
             bool jumping, bool sprinting)
         {
             var pkt = NewPacket();
-            pkt.PlayerMove = new World.Proto.PlayerMoveInput
+            pkt.PlayerMove = new World.PlayerMoveInput
             {
                 Position = new Vec3 { X = position.x, Y = position.y, Z = position.z },
                 Rotation = new Quat { X = rotation.x, Y = rotation.y, Z = rotation.z, W = rotation.w },

@@ -1,7 +1,13 @@
 using System;
 using UnityEngine;
 using Google.Protobuf;
-using Orlo.Proto;
+using Orlo.Auth;
+using Orlo.Common;
+using Orlo.Packet;
+using Orlo.Character;
+using Orlo.Economy;
+using Orlo.Admin;
+using Orlo.Environment;
 using Orlo.World;
 using Orlo.Player;
 using Orlo.Audio;
@@ -231,7 +237,7 @@ namespace Orlo.Network
             OnCharacterSpawn?.Invoke(spawn);
         }
 
-        private void HandleEntitySpawn(World.Proto.EntitySpawn spawn)
+        private void HandleEntitySpawn(World.EntitySpawn spawn)
         {
             var pos = new Vector3(spawn.Transform.Position.X, spawn.Transform.Position.Y, spawn.Transform.Position.Z);
             var rot = new Quaternion(spawn.Transform.Rotation.X, spawn.Transform.Rotation.Y,
@@ -239,12 +245,12 @@ namespace Orlo.Network
             EntityManager.Instance.SpawnEntity(spawn.EntityId.Id, spawn.EntityType, spawn.AssetId, pos, rot);
         }
 
-        private void HandleEntityDespawn(World.Proto.EntityDespawn despawn)
+        private void HandleEntityDespawn(World.EntityDespawn despawn)
         {
             EntityManager.Instance.DespawnEntity(despawn.EntityId.Id);
         }
 
-        private void HandleEntityMove(World.Proto.EntityMove move)
+        private void HandleEntityMove(World.EntityMove move)
         {
             var pos = new Vector3(move.Position.X, move.Position.Y, move.Position.Z);
             var rot = new Quaternion(move.Rotation.X, move.Rotation.Y, move.Rotation.Z, move.Rotation.W);
@@ -252,14 +258,14 @@ namespace Orlo.Network
             EntityManager.Instance.MoveEntity(move.EntityId.Id, pos, rot, vel);
         }
 
-        private void HandleTerrainChunk(World.Proto.TerrainChunk chunk)
+        private void HandleTerrainChunk(World.TerrainChunk chunk)
         {
             var coord = new Vector2Int(chunk.ChunkX, chunk.ChunkZ);
             FindObjectOfType<TerrainManager>()?.ApplyTerrainChunk(
                 coord, (int)chunk.Resolution, chunk.Heightmap.ToByteArray(), chunk.Seed);
         }
 
-        private void HandleContentReveal(World.Proto.ContentReveal reveal)
+        private void HandleContentReveal(World.ContentReveal reveal)
         {
             Debug.Log($"[World] Content revealed: '{reveal.ContentId}' ({reveal.ContentType}) at " +
                       $"({reveal.Location.Position.X}, {reveal.Location.Position.Y}, {reveal.Location.Position.Z})");
@@ -294,7 +300,7 @@ namespace Orlo.Network
         }
 
         // Phase 3 — Environment handlers
-        private void HandleEnvironmentUpdate(Environment.Proto.EnvironmentUpdate env)
+        private void HandleEnvironmentUpdate(Environment.EnvironmentUpdate env)
         {
             FindFirstObjectByType<SkyboxController>()?.OnEnvironmentUpdate(
                 env.TimeOfDay, env.SunR, env.SunG, env.SunB,
@@ -309,30 +315,30 @@ namespace Orlo.Network
             FindFirstObjectByType<WaterPlane>()?.OnWindUpdate(env.WindDirection, env.WindSpeed);
         }
 
-        private void HandleAudioZoneEnter(Environment.Proto.AudioZoneEnter zone)
+        private void HandleAudioZoneEnter(Environment.AudioZoneEnter zone)
         {
             AudioManager.Instance?.OnAudioZoneEnter(
                 zone.ZoneId, zone.MusicTrack, zone.AmbientTrack,
                 zone.MusicVolume, zone.AmbientVolume);
         }
 
-        private void HandleAudioZoneLeave(Environment.Proto.AudioZoneLeave zone)
+        private void HandleAudioZoneLeave(Environment.AudioZoneLeave zone)
         {
             AudioManager.Instance?.OnAudioZoneLeave(zone.ZoneId);
         }
 
-        private void HandleSoundEvent(Environment.Proto.SoundEvent snd)
+        private void HandleSoundEvent(Environment.SoundEvent snd)
         {
             var pos = new Vector3(snd.Position.X, snd.Position.Y, snd.Position.Z);
             AudioManager.Instance?.PlaySoundAt(snd.SoundId, pos, snd.Volume, snd.Radius);
         }
 
-        private void HandleNotification(Environment.Proto.Notification notif)
+        private void HandleNotification(Environment.Notification notif)
         {
             NotificationUI.Instance?.Show(notif.Title, notif.Message, (int)notif.Type, notif.Duration);
         }
 
-        private void HandleMinimapUpdate(Environment.Proto.MinimapUpdate map)
+        private void HandleMinimapUpdate(Environment.MinimapUpdate map)
         {
             FindFirstObjectByType<MinimapUI>()?.OnMinimapUpdate(
                 map.CellX, map.CellZ, (int)map.Resolution, map.ColorData.ToByteArray());
