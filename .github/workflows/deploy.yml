@@ -25,16 +25,16 @@ jobs:
           path: orlo-proto
           token: ${{ secrets.GH_PAT }}
 
-      - uses: game-ci/unity-builder@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          targetPlatform: StandaloneWindows64
-          buildName: OrloClient
-          buildsPath: build/windows
-          unityVersion: 6000.0.30f1
+      - name: Build with Unity
+        shell: pwsh
+        run: |
+          $unity = "C:\Program Files\Unity\Hub\Editor\6000.0.71f1\Editor\Unity.exe"
+          & $unity -batchmode -nographics -quit -projectPath . `
+            -buildTarget StandaloneWindows64 `
+            -executeMethod BuildScript.Build `
+            -logFile build-log.txt `
+            -buildPath "build/windows/OrloClient.exe"
+          if ($LASTEXITCODE -ne 0) { Get-Content build-log.txt -Tail 50; exit 1 }
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -58,16 +58,16 @@ jobs:
           path: orlo-proto
           token: ${{ secrets.GH_PAT }}
 
-      - uses: game-ci/unity-builder@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          targetPlatform: StandaloneLinux64
-          buildName: OrloClient
-          buildsPath: build/linux
-          unityVersion: 6000.0.30f1
+      - name: Build with Unity
+        shell: pwsh
+        run: |
+          $unity = "C:\Program Files\Unity\Hub\Editor\6000.0.71f1\Editor\Unity.exe"
+          & $unity -batchmode -nographics -quit -projectPath . `
+            -buildTarget StandaloneLinux64 `
+            -executeMethod BuildScript.Build `
+            -logFile build-log.txt `
+            -buildPath "build/linux/OrloClient"
+          if ($LASTEXITCODE -ne 0) { Get-Content build-log.txt -Tail 50; exit 1 }
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

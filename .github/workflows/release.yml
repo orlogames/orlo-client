@@ -64,20 +64,20 @@ jobs:
           key: Library-Windows-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: Library-Windows-
 
-      - uses: game-ci/unity-builder@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          targetPlatform: StandaloneWindows64
-          buildName: OrloClient
-          buildsPath: build
-          unityVersion: 6000.0.30f1
+      - name: Build with Unity
+        shell: pwsh
+        run: |
+          $unity = "C:\Program Files\Unity\Hub\Editor\6000.0.71f1\Editor\Unity.exe"
+          & $unity -batchmode -nographics -quit -projectPath . `
+            -buildTarget StandaloneWindows64 `
+            -executeMethod BuildScript.Build `
+            -logFile build-log.txt `
+            -buildPath "build/windows/OrloClient.exe"
+          if ($LASTEXITCODE -ne 0) { Get-Content build-log.txt -Tail 50; exit 1 }
 
       - name: Create zip
         run: |
-          cd build/StandaloneWindows64
+          cd build/windows
           zip -r ../../OrloClient-Windows-${{ needs.version.outputs.version }}.zip .
 
       - uses: actions/upload-artifact@v4
@@ -112,20 +112,20 @@ jobs:
           key: Library-Linux-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: Library-Linux-
 
-      - uses: game-ci/unity-builder@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          targetPlatform: StandaloneLinux64
-          buildName: OrloClient
-          buildsPath: build
-          unityVersion: 6000.0.30f1
+      - name: Build with Unity
+        shell: pwsh
+        run: |
+          $unity = "C:\Program Files\Unity\Hub\Editor\6000.0.71f1\Editor\Unity.exe"
+          & $unity -batchmode -nographics -quit -projectPath . `
+            -buildTarget StandaloneLinux64 `
+            -executeMethod BuildScript.Build `
+            -logFile build-log.txt `
+            -buildPath "build/linux/OrloClient"
+          if ($LASTEXITCODE -ne 0) { Get-Content build-log.txt -Tail 50; exit 1 }
 
       - name: Create tarball
         run: |
-          cd build/StandaloneLinux64
+          cd build/linux
           tar czf ../../OrloClient-Linux-${{ needs.version.outputs.version }}.tar.gz .
 
       - uses: actions/upload-artifact@v4

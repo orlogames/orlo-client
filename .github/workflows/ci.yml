@@ -40,8 +40,6 @@ jobs:
           echo "Generated C# files:"
           ls -la "$OUT_DIR"
 
-      # Unity requires a valid license. Set UNITY_LICENSE secret in repo settings.
-      # For personal license: base64 encode your .ulf file and store as UNITY_LICENSE.
       - name: Cache Unity Library
         uses: actions/cache@v4
         with:
@@ -51,20 +49,20 @@ jobs:
             Library-StandaloneLinux64-
             Library-
 
-      - name: Build Unity project
-        uses: game-ci/unity-builder@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          targetPlatform: StandaloneLinux64
-          unityVersion: auto
-          buildMethod: ""
+      - name: Build with Unity
+        shell: pwsh
+        run: |
+          $unity = "C:\Program Files\Unity\Hub\Editor\6000.0.71f1\Editor\Unity.exe"
+          & $unity -batchmode -nographics -quit -projectPath . `
+            -buildTarget StandaloneLinux64 `
+            -executeMethod BuildScript.Build `
+            -logFile build-log.txt `
+            -buildPath "build/linux/OrloClient"
+          if ($LASTEXITCODE -ne 0) { Get-Content build-log.txt -Tail 50; exit 1 }
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: StandaloneLinux64
-          path: build/StandaloneLinux64
+          path: build/linux
           retention-days: 7
