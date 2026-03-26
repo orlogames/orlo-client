@@ -20,27 +20,26 @@ permissions:
 jobs:
   version:
     name: Determine Version
-    runs-on: [self-hosted, windows]
+    runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.ver.outputs.version }}
       tag: ${{ steps.ver.outputs.tag }}
     steps:
       - id: ver
-        shell: powershell
         run: |
-          if ("${{ github.ref_type }}" -eq "tag") {
-            $TAG = "${{ github.ref_name }}"
-            $VER = $TAG -replace '^v', ''
-          } elseif ("${{ inputs.version }}" -ne "") {
-            $VER = "${{ inputs.version }}"
-            $TAG = "v$VER"
-          } else {
-            $VER = "0.0.${{ github.run_number }}"
-            $TAG = "v$VER"
-          }
-          echo "version=$VER" >> $env:GITHUB_OUTPUT
-          echo "tag=$TAG" >> $env:GITHUB_OUTPUT
-          Write-Host "Version: $VER, Tag: $TAG"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+            VER="${TAG#v}"
+          elif [ -n "${{ inputs.version }}" ]; then
+            VER="${{ inputs.version }}"
+            TAG="v$VER"
+          else
+            VER="0.0.${{ github.run_number }}"
+            TAG="v$VER"
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Version: $VER, Tag: $TAG"
 
   build-windows:
     name: Build Windows
@@ -187,7 +186,7 @@ jobs:
   release:
     name: Create GitHub Release
     needs: [version, build-windows, build-linux]
-    runs-on: [self-hosted, windows]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -203,25 +202,24 @@ jobs:
 
       - name: Generate changelog
         id: changelog
-        shell: powershell
         run: |
-          $prevTag = git describe --tags --abbrev=0 2>$null
-          if (-not $prevTag) { $prevTag = "HEAD~10" }
-          $log = git log --pretty=format:'- %s (%h)' "$prevTag..HEAD" | Select-Object -First 30
-          $body = "## What's Changed`n`n$($log -join "`n")"
-          echo "changelog<<CHANGELOG_EOF" >> $env:GITHUB_OUTPUT
-          echo $body >> $env:GITHUB_OUTPUT
-          echo "CHANGELOG_EOF" >> $env:GITHUB_OUTPUT
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~10")
+          LOG=$(git log --pretty=format:'- %s (%h)' "$PREV_TAG..HEAD" | head -30)
+          {
+            echo "changelog<<CHANGELOG_EOF"
+            echo "## What's Changed"
+            echo ""
+            echo "$LOG"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create tag if not exists
-        shell: powershell
         run: |
-          $TAG = "${{ needs.version.outputs.tag }}"
-          $exists = git rev-parse $TAG 2>$null
-          if (-not $exists) {
-            git tag $TAG
-            git push origin $TAG
-          }
+          TAG="${{ needs.version.outputs.tag }}"
+          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
 
       - name: Create release
         uses: softprops/action-gh-release@v2
