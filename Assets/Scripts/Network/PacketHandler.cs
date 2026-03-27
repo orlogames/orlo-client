@@ -7,6 +7,7 @@ using Orlo.UI;
 using Orlo.World;
 using Orlo.Proto;
 using ProtoAuth = Orlo.Proto.Auth;
+using Color = UnityEngine.Color;
 using ProtoWorld = Orlo.Proto.World;
 using ProtoCharacter = Orlo.Proto.Character;
 using ProtoAdmin = Orlo.Proto.Admin;
@@ -274,7 +275,7 @@ namespace Orlo.Network
                 $"Found: {reveal.ContentId} ({reveal.ContentType})");
 
             var pos = new Vector3(reveal.Location.Position.X, reveal.Location.Position.Y, reveal.Location.Position.Z);
-            FindFirstObjectByType<MinimapUI>()?.AddMarker(pos, "poi", reveal.ContentId, new UnityEngine.Color(0.3f, 0.9f, 0.9f));
+            FindFirstObjectByType<MinimapUI>()?.AddMarker(pos, "poi", reveal.ContentId, new Color(0.3f, 0.9f, 0.9f));
         }
 
         // Phase 2 stub handlers — route to UI managers

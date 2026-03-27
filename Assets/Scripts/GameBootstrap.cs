@@ -7,6 +7,7 @@ using Orlo.UI;
 using Orlo.UI.CharacterCreation;
 using Orlo.Proto;
 using ProtoAuth = Orlo.Proto.Auth;
+using Color = UnityEngine.Color;
 
 namespace Orlo
 {
@@ -378,7 +379,7 @@ namespace Orlo
                 cam.transform.localPosition = new Vector3(0, 2f, -5f);
                 cam.transform.localRotation = Quaternion.Euler(15f, 0, 0);
                 cam.clearFlags = CameraClearFlags.SolidColor;
-                cam.backgroundColor = new UnityEngine.Color(0.45f, 0.65f, 0.85f); // sky blue
+                cam.backgroundColor = new Color(0.45f, 0.65f, 0.85f); // sky blue
             }
 
             // Wire Phase 3 systems to player
@@ -420,7 +421,7 @@ namespace Orlo
                 var sunGo = new GameObject("Sun");
                 var sun = sunGo.AddComponent<Light>();
                 sun.type = LightType.Directional;
-                sun.color = new UnityEngine.Color(1.0f, 0.95f, 0.85f); // warm sunlight
+                sun.color = new Color(1.0f, 0.95f, 0.85f); // warm sunlight
                 sun.intensity = 1.2f;
                 sun.shadows = LightShadows.Soft;
                 sunGo.transform.rotation = Quaternion.Euler(50f, -30f, 0);
@@ -438,16 +439,16 @@ namespace Orlo
                 if (renderer != null)
                 {
                     var mat = new Material(Shader.Find("Standard"));
-                    mat.color = new UnityEngine.Color(0.35f, 0.55f, 0.25f); // earthy green
+                    mat.color = new Color(0.35f, 0.55f, 0.25f); // earthy green
                     renderer.material = mat;
                 }
             }
 
             // Ambient lighting
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new UnityEngine.Color(0.5f, 0.55f, 0.6f);
+            RenderSettings.ambientLight = new Color(0.5f, 0.55f, 0.6f);
             RenderSettings.fog = true;
-            RenderSettings.fogColor = new UnityEngine.Color(0.6f, 0.7f, 0.85f);
+            RenderSettings.fogColor = new Color(0.6f, 0.7f, 0.85f);
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogStartDistance = 80f;
             RenderSettings.fogEndDistance = 300f;
