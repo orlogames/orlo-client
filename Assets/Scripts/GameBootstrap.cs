@@ -70,6 +70,11 @@ namespace Orlo
                             serverPort = port;
                         Debug.Log($"[Orlo] Server override: {serverHost}:{serverPort}");
                         break;
+                    case "--port" when i + 1 < args.Length:
+                        if (int.TryParse(args[++i], out int explicitPort))
+                            serverPort = explicitPort;
+                        Debug.Log($"[Orlo] Port override: {serverPort}");
+                        break;
                     case "--token" when i + 1 < args.Length:
                         _launcherToken = args[++i];
                         Debug.Log("[Orlo] Launcher token received");
@@ -361,6 +366,10 @@ namespace Orlo
             player.tag = "Player";
             player.name = $"Player_{playerName}";
 
+            // --- Fallback starter environment ---
+            // Creates visible ground + lighting while server terrain streams in
+            EnsureStarterEnvironment();
+
             // Set up camera to follow
             var cam = Camera.main;
             if (cam != null)
@@ -368,6 +377,8 @@ namespace Orlo
                 cam.transform.SetParent(player.transform);
                 cam.transform.localPosition = new Vector3(0, 2f, -5f);
                 cam.transform.localRotation = Quaternion.Euler(15f, 0, 0);
+                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.backgroundColor = new Color(0.45f, 0.65f, 0.85f); // sky blue
             }
 
             // Wire Phase 3 systems to player
@@ -394,6 +405,54 @@ namespace Orlo
         private void OnDisconnected()
         {
             Debug.Log("[Orlo] Disconnected from server");
+        }
+
+        /// <summary>
+        /// Creates a fallback visible environment (ground plane, sun, skybox)
+        /// so the player has something to stand on while server terrain streams in.
+        /// Server-streamed terrain chunks will replace this once they arrive.
+        /// </summary>
+        private void EnsureStarterEnvironment()
+        {
+            // Sun / directional light
+            if (FindFirstObjectByType<Light>() == null)
+            {
+                var sunGo = new GameObject("Sun");
+                var sun = sunGo.AddComponent<Light>();
+                sun.type = LightType.Directional;
+                sun.color = new Color(1.0f, 0.95f, 0.85f); // warm sunlight
+                sun.intensity = 1.2f;
+                sun.shadows = LightShadows.Soft;
+                sunGo.transform.rotation = Quaternion.Euler(50f, -30f, 0);
+            }
+
+            // Ground plane (200x200 flat green surface)
+            if (GameObject.Find("FallbackGround") == null)
+            {
+                var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+                ground.name = "FallbackGround";
+                ground.transform.position = Vector3.zero;
+                ground.transform.localScale = new Vector3(20f, 1f, 20f); // 200x200m
+
+                var renderer = ground.GetComponent<Renderer>();
+                if (renderer != null)
+                {
+                    var mat = new Material(Shader.Find("Standard"));
+                    mat.color = new Color(0.35f, 0.55f, 0.25f); // earthy green
+                    renderer.material = mat;
+                }
+            }
+
+            // Ambient lighting
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.5f, 0.55f, 0.6f);
+            RenderSettings.fog = true;
+            RenderSettings.fogColor = new Color(0.6f, 0.7f, 0.85f);
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogStartDistance = 80f;
+            RenderSettings.fogEndDistance = 300f;
+
+            Debug.Log("[Orlo] Fallback starter environment created");
         }
 
         private void OnDestroy()

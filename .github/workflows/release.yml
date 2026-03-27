@@ -65,7 +65,7 @@ jobs:
         shell: pwsh
         run: |
           $protoDir = "orlo-proto/proto"
-          $outDir = "Assets/Scripts/Proto/Generated"
+          $outDir = "Assets/Scripts/Proto"
           New-Item -ItemType Directory -Force -Path $outDir | Out-Null
           $protos = Get-ChildItem "$protoDir/orlo" -Filter "*.proto" | ForEach-Object { "orlo/$($_.Name)" }
           & protoc --proto_path=$protoDir --csharp_out=$outDir @protos
@@ -136,7 +136,7 @@ jobs:
         shell: pwsh
         run: |
           $protoDir = "orlo-proto/proto"
-          $outDir = "Assets/Scripts/Proto/Generated"
+          $outDir = "Assets/Scripts/Proto"
           New-Item -ItemType Directory -Force -Path $outDir | Out-Null
           $protos = Get-ChildItem "$protoDir/orlo" -Filter "*.proto" | ForEach-Object { "orlo/$($_.Name)" }
           & protoc --proto_path=$protoDir --csharp_out=$outDir @protos
