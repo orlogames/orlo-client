@@ -33,6 +33,7 @@ namespace Orlo
         public ulong PlayerEntityId => _characterEntityId;
         private CharacterCreationManager _charCreationManager;
         private LoginUI _loginUI;
+        private ConnectionStatusUI _connectionUI;
         private bool _characterSpawned = false;
         private string _launcherToken;
 
@@ -49,6 +50,17 @@ namespace Orlo
             // Initialize Phase 3 singleton systems
             InitializeWorldSystems();
 
+            // Create connection status overlay
+            if (ConnectionStatusUI.Instance == null)
+            {
+                var go = new GameObject("ConnectionStatusUI");
+                _connectionUI = go.AddComponent<ConnectionStatusUI>();
+            }
+            else
+            {
+                _connectionUI = ConnectionStatusUI.Instance;
+            }
+
             NetworkManager.Instance.OnConnected += OnConnected;
             NetworkManager.Instance.OnDisconnected += OnDisconnected;
 
@@ -57,7 +69,18 @@ namespace Orlo
             PacketHandler.Instance.OnCharacterSpawn += OnCharacterSpawn;
             PacketHandler.Instance.OnPong += OnPong;
 
-            ShowLoginUI();
+            // If launched with a token, show status overlay and auto-connect
+            if (!string.IsNullOrEmpty(_launcherToken))
+            {
+                Debug.Log("[Orlo] Launcher token detected — auto-connecting...");
+                _connectionUI.Show("Connecting to server");
+                _connectionUI.OnRetry = () => NetworkManager.Instance.Connect();
+                NetworkManager.Instance.Connect();
+            }
+            else
+            {
+                ShowLoginUI();
+            }
         }
 
         private void ParseCommandLineArgs()
@@ -201,15 +224,6 @@ namespace Orlo
                     SendRegister();
             };
 
-            // If launched with a token, auto-connect instead of showing login UI
-            if (!string.IsNullOrEmpty(_launcherToken))
-            {
-                Debug.Log("[Orlo] Launcher token detected — auto-connecting...");
-                _loginUI.Hide();
-                NetworkManager.Instance.Connect();
-                return;
-            }
-
             _loginUI.Show();
         }
 
@@ -217,6 +231,7 @@ namespace Orlo
 
         private void SendLogin()
         {
+            _connectionUI?.SetStatus("Authenticating");
             var loginData = !string.IsNullOrEmpty(_launcherToken)
                 ? PacketBuilder.LoginRequest("", "", _launcherToken)
                 : PacketBuilder.LoginRequest(_pendingUsername, _pendingPassword);
@@ -232,6 +247,8 @@ namespace Orlo
         private void OnConnected()
         {
             Debug.Log("[Orlo] Connected to server");
+            _connectionUI?.SetStatus("Connected — logging in");
+
             if (_pendingRegister)
             {
                 _pendingRegister = false;
@@ -249,7 +266,8 @@ namespace Orlo
             else
             {
                 Debug.LogWarning("[Orlo] Connected but no credentials or token — showing login UI");
-                _loginUI?.Show();
+                _connectionUI?.Hide();
+                ShowLoginUI();
             }
         }
 
@@ -273,6 +291,9 @@ namespace Orlo
             if (!resp.Success)
             {
                 Debug.LogError($"[Orlo] Login failed: {resp.Error}");
+                // Show error on connection overlay (visible in token mode)
+                _connectionUI?.ShowError($"Login failed: {resp.Error}");
+                // Also show on login UI if visible
                 _loginUI?.SetError($"Login failed: {resp.Error}");
                 return;
             }
@@ -281,6 +302,7 @@ namespace Orlo
             _accountId = resp.AccountId;
             Debug.Log($"[Orlo] Logged in, session={_sessionId}, account={_accountId} — requesting character list...");
 
+            _connectionUI?.SetStatus("Loading characters");
             _loginUI?.Hide();
 
             // Request character list — if empty, show creation screen
@@ -294,6 +316,9 @@ namespace Orlo
         /// </summary>
         public void OnCharacterListResponse(int characterCount, ulong firstCharacterId, string firstName, string lastName)
         {
+            // Hide connection overlay — we're past auth
+            _connectionUI?.Hide();
+
             if (characterCount == 0)
             {
                 Debug.Log("[Orlo] No characters found — showing creation screen");
@@ -319,6 +344,7 @@ namespace Orlo
             _charCreationManager.OnCreateConfirmed = (data) =>
             {
                 Debug.Log($"[Orlo] Creating character: {data.FirstName} {data.LastName}");
+                _connectionUI?.Show("Creating character");
                 NetworkManager.Instance.Send(PacketBuilder.CharacterCreate(_sessionId, data));
                 _charCreationManager.Hide();
             };
@@ -334,11 +360,13 @@ namespace Orlo
             if (success)
             {
                 Debug.Log($"[Orlo] Character created (ID {characterId}) — requesting list to spawn...");
+                _connectionUI?.SetStatus("Entering world");
                 NetworkManager.Instance.Send(PacketBuilder.CharacterListRequest(_sessionId));
             }
             else
             {
                 Debug.LogError($"[Orlo] Character creation failed: {error}");
+                _connectionUI?.Hide();
                 NotificationUI.Instance?.ShowError("Creation Failed", error);
                 ShowCharacterCreation();
             }
@@ -346,6 +374,7 @@ namespace Orlo
 
         private void OnCharacterSpawn(ProtoAuth.CharacterSpawnResponse spawn)
         {
+            _connectionUI?.Hide();
             _characterEntityId = spawn.EntityId.Id;
             _characterSpawned = true;
             var pos = new Vector3(
@@ -431,6 +460,12 @@ namespace Orlo
         private void OnDisconnected()
         {
             Debug.Log("[Orlo] Disconnected from server");
+            if (!_characterSpawned)
+            {
+                // Show error on connection overlay if we haven't spawned yet
+                _connectionUI?.Show("Disconnected");
+                _connectionUI?.ShowError("Lost connection to the game server.");
+            }
         }
 
         /// <summary>

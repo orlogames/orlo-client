@@ -24,6 +24,7 @@ namespace Orlo.Network
         public event Action<byte[]> OnPacketReceived;
 
         public bool IsConnected => _client?.Connected ?? false;
+        public string ServerHost => $"{serverHost}:{serverPort}";
 
         private TcpClient _client;
         private NetworkStream _stream;
