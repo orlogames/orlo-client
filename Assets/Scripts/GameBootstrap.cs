@@ -237,9 +237,19 @@ namespace Orlo
                 _pendingRegister = false;
                 SendRegister();
             }
+            else if (!string.IsNullOrEmpty(_launcherToken))
+            {
+                Debug.Log("[Orlo] Sending token-based login...");
+                SendLogin();
+            }
             else if (!string.IsNullOrEmpty(_pendingUsername))
             {
                 SendLogin();
+            }
+            else
+            {
+                Debug.LogWarning("[Orlo] Connected but no credentials or token — showing login UI");
+                _loginUI?.Show();
             }
         }
 
