@@ -20,6 +20,7 @@ namespace Orlo.World
         public System.Func<uint, string, Vector3, Quaternion, GameObject> EntityFactory;
 
         private readonly Dictionary<ulong, GameObject> _entities = new();
+        private readonly Dictionary<ulong, (float current, float max)> _entityHealth = new();
 
         private void Awake()
         {
@@ -50,6 +51,7 @@ namespace Orlo.World
 
         public void DespawnEntity(ulong entityId)
         {
+            _entityHealth.Remove(entityId);
             if (_entities.TryGetValue(entityId, out var go))
             {
                 Destroy(go);
@@ -70,6 +72,24 @@ namespace Orlo.World
         {
             _entities.TryGetValue(entityId, out var go);
             return go;
+        }
+
+        public void UpdateEntityHealth(ulong entityId, float current, float max)
+        {
+            if (max > 0)
+                _entityHealth[entityId] = (current, max);
+        }
+
+        public bool TryGetEntityHealth(ulong entityId, out float current, out float max)
+        {
+            if (_entityHealth.TryGetValue(entityId, out var hp))
+            {
+                current = hp.current;
+                max = hp.max;
+                return true;
+            }
+            current = 0; max = 0;
+            return false;
         }
     }
 }

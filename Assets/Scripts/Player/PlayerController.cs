@@ -29,6 +29,8 @@ namespace Orlo.Player
         private float _cameraPitch;
         private bool _isSprinting;
         private bool _isJumping;
+        private bool _rmbHeld;   // right mouse button held — enables mouselook
+        private bool _lmbHeld;   // left mouse button held (LMB+RMB = auto-forward)
 
         // Send rate: 10 times per second
         private float _sendTimer;
@@ -41,19 +43,44 @@ namespace Orlo.Player
         private void Start()
         {
             _cc = GetComponent<CharacterController>();
-            Cursor.lockState = CursorLockMode.Locked;
+            // Start with cursor visible — mouselook only activates on RMB hold
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
         }
 
         private void Update()
         {
+            HandleMouseButtons();
             HandleMouseLook();
             HandleMovement();
             ApplyServerCorrections();
             SendMovementInput();
         }
 
+        private void HandleMouseButtons()
+        {
+            // Track RMB/LMB state and manage cursor accordingly
+            bool wasRmb = _rmbHeld;
+            _rmbHeld = Input.GetMouseButton(1);
+            _lmbHeld = Input.GetMouseButton(0);
+
+            if (_rmbHeld && !wasRmb)
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
+            else if (!_rmbHeld && wasRmb)
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
+        }
+
         private void HandleMouseLook()
         {
+            // Mouselook only active while RMB is held
+            if (!_rmbHeld) return;
+
             float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
             float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
 
@@ -79,6 +106,10 @@ namespace Orlo.Player
 
             float h = Input.GetAxisRaw("Horizontal");
             float v = Input.GetAxisRaw("Vertical");
+
+            // LMB + RMB held = auto-run forward (WoW/SWG style)
+            if (_lmbHeld && _rmbHeld && v == 0)
+                v = 1f;
 
             Vector3 move = transform.right * h + transform.forward * v;
             move = Vector3.ClampMagnitude(move, 1f) * speed;

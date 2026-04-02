@@ -7,7 +7,7 @@ namespace Orlo.UI
     /// <summary>
     /// Combat action bar for martial arts moves.
     /// Shows available moves, cooldowns, combo counter, and stance info.
-    /// Mapped to number keys 1-5.
+    /// Mapped to number keys 1-0 (10 slots).
     /// </summary>
     public class CombatBarUI : MonoBehaviour
     {
@@ -55,10 +55,11 @@ namespace Orlo.UI
         {
             if (_resultTimer > 0) _resultTimer -= Time.deltaTime;
 
-            // Number keys 1-5 trigger moves
-            for (int i = 0; i < Mathf.Min(_moves.Count, 5); i++)
+            // Number keys 1-9 and 0 trigger move slots 0-9
+            for (int i = 0; i < Mathf.Min(_moves.Count, 10); i++)
             {
-                if (Input.GetKeyDown(KeyCode.Alpha1 + i))
+                KeyCode key = i < 9 ? KeyCode.Alpha1 + i : KeyCode.Alpha0;
+                if (Input.GetKeyDown(key))
                 {
                     ExecuteMove(_moves[i].MoveId);
                 }
@@ -77,8 +78,9 @@ namespace Orlo.UI
         {
             if (_moves.Count == 0) return;
 
-            // Combat bar at bottom center of screen
-            float barWidth = Mathf.Min(_moves.Count, 5) * 75 + 10;
+            // Combat bar at bottom center of screen — up to 10 slots
+            int slotCount = Mathf.Min(_moves.Count, 10);
+            float barWidth = slotCount * 72 + 10;
             float barHeight = 80;
             float barX = (Screen.width - barWidth) / 2;
             float barY = Screen.height - barHeight - 10;
@@ -92,17 +94,18 @@ namespace Orlo.UI
                 (_comboCount > 1 ? $"  COMBO x{_comboCount}!" : ""));
 
             // Move buttons
-            for (int i = 0; i < Mathf.Min(_moves.Count, 5); i++)
+            for (int i = 0; i < slotCount; i++)
             {
                 var move = _moves[i];
-                float bx = barX + i * 75;
-                var btnRect = new Rect(bx, barY, 70, 55);
+                float bx = barX + i * 72;
+                var btnRect = new Rect(bx, barY, 68, 55);
 
                 bool onCooldown = move.CooldownRemaining > 0;
                 GUI.enabled = !onCooldown;
 
-                // Button with move name and key binding
-                string label = $"[{i + 1}]\n{move.Name}";
+                // Key label: 1-9 then 0 for slot 10
+                string keyLabel = i < 9 ? (i + 1).ToString() : "0";
+                string label = $"[{keyLabel}]\n{move.Name}";
                 if (onCooldown)
                     label += $"\n{move.CooldownRemaining:F1}s";
 
@@ -113,7 +116,7 @@ namespace Orlo.UI
                 GUI.enabled = true;
 
                 // Stamina cost below
-                GUI.Label(new Rect(bx, barY + 57, 70, 16),
+                GUI.Label(new Rect(bx, barY + 57, 68, 16),
                     $"{move.StaminaCost:F0} stam");
 
                 // Finisher indicator
@@ -121,7 +124,7 @@ namespace Orlo.UI
                 {
                     var oldColor = GUI.color;
                     GUI.color = Color.yellow;
-                    GUI.Label(new Rect(bx + 50, barY - 2, 20, 16), "F");
+                    GUI.Label(new Rect(bx + 48, barY - 2, 20, 16), "F");
                     GUI.color = oldColor;
                 }
             }

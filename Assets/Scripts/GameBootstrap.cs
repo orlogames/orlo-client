@@ -28,6 +28,9 @@ namespace Orlo
         private ulong _sessionId;
         private ulong _accountId;
         private ulong _characterEntityId;
+
+        /// <summary>The entity ID of the local player — used by combat handlers to identify owner events.</summary>
+        public ulong PlayerEntityId => _characterEntityId;
         private CharacterCreationManager _charCreationManager;
         private LoginUI _loginUI;
         private bool _characterSpawned = false;
@@ -133,6 +136,18 @@ namespace Orlo
             {
                 var go = new GameObject("MinimapUI");
                 go.AddComponent<MinimapUI>();
+            }
+
+            if (CombatHUD.Instance == null)
+            {
+                var go = new GameObject("CombatHUD");
+                go.AddComponent<CombatHUD>();
+            }
+
+            if (CombatFeedback.Instance == null)
+            {
+                var go = new GameObject("CombatFeedback");
+                go.AddComponent<CombatFeedback>();
             }
 
             Debug.Log("[Orlo] Phase 3 world systems initialized");

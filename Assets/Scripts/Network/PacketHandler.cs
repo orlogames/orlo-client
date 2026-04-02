@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using Google.Protobuf;
 using Orlo.Player;
@@ -13,6 +14,8 @@ using ProtoCharacter = Orlo.Proto.Character;
 using ProtoAdmin = Orlo.Proto.Admin;
 using ProtoEconomy = Orlo.Proto.Economy;
 using ProtoEnv = Orlo.Proto.Environment;
+using ProtoCombat = Orlo.Proto.Combat;
+using ProtoInventory = Orlo.Proto.Inventory;
 
 namespace Orlo.Network
 {
@@ -278,12 +281,114 @@ namespace Orlo.Network
             FindFirstObjectByType<MinimapUI>()?.AddMarker(pos, "poi", reveal.ContentId, new Color(0.3f, 0.9f, 0.9f));
         }
 
-        // Phase 2 stub handlers — route to UI managers
+        // ─── Combat handlers ────────────────────────────────────────────────
+
         private void HandleCombatPacket(Packet packet)
         {
-            // Routed to combat UI when implemented
-            Debug.Log($"[Combat] Received: {packet.PayloadCase}");
+            switch (packet.PayloadCase)
+            {
+                case Packet.PayloadOneofCase.DamageEvent:
+                    HandleDamageEvent(packet.DamageEvent);
+                    break;
+                case Packet.PayloadOneofCase.HealthUpdate:
+                    HandleHealthUpdate(packet.HealthUpdate);
+                    break;
+                case Packet.PayloadOneofCase.EntityDeath:
+                    HandleEntityDeath(packet.EntityDeath);
+                    break;
+                case Packet.PayloadOneofCase.CombatAction:
+                    // Visual feedback only — no additional handling needed
+                    break;
+                case Packet.PayloadOneofCase.LootDrop:
+                    HandleLootDrop(packet.LootDrop);
+                    break;
+                default:
+                    Debug.Log($"[Combat] Unhandled sub-type: {packet.PayloadCase}");
+                    break;
+            }
         }
+
+        private void HandleDamageEvent(ProtoCombat.DamageEvent dmg)
+        {
+            // Show floating damage number on the target entity
+            var targetGo = EntityManager.Instance?.GetEntity(dmg.TargetEntityId);
+            if (targetGo != null)
+            {
+                // Consider high combo or bonus as a "crit" for visual purposes
+                bool isBig = dmg.ComboBonus > 0.3f || dmg.ComboCount >= 5;
+                string text = isBig ? $"CRIT {dmg.FinalDamage:F0}!" : $"{dmg.FinalDamage:F0}";
+                var color = isBig ? Color.yellow : Color.red;
+                CombatFeedback.Instance?.ShowFloatingText(targetGo.transform.position, text, color);
+            }
+
+            // Trigger damage flash if local player was hit
+            var bootstrap = FindFirstObjectByType<GameBootstrap>();
+            if (bootstrap != null && dmg.TargetEntityId == bootstrap.PlayerEntityId)
+            {
+                CombatHUD.Instance?.TakeDamage(dmg.FinalDamage, dmg.PoolHit.ToString());
+            }
+        }
+
+        private void HandleHealthUpdate(ProtoCombat.HealthUpdate update)
+        {
+            var bootstrap = FindFirstObjectByType<GameBootstrap>();
+            if (bootstrap != null && update.EntityId == bootstrap.PlayerEntityId)
+            {
+                // Local player health update — refresh all three pools
+                CombatHUD.Instance?.UpdatePools(
+                    update.Vitality, update.MaxVitality,
+                    update.Stamina,  update.MaxStamina,
+                    update.Focus,    update.MaxFocus);
+            }
+            else
+            {
+                // Remote entity health — track for potential health bar display
+                EntityManager.Instance?.UpdateEntityHealth(
+                    update.EntityId,
+                    update.Vitality, update.MaxVitality);
+            }
+        }
+
+        private void HandleEntityDeath(ProtoCombat.EntityDeath death)
+        {
+            Debug.Log($"[Combat] Entity {death.EntityId} died (killed by {death.KillerEntityId})");
+
+            // Show death text above the dying entity
+            var go = EntityManager.Instance?.GetEntity(death.EntityId);
+            if (go != null)
+            {
+                CombatFeedback.Instance?.ShowFloatingText(go.transform.position, "DEAD", Color.gray);
+            }
+
+            // Despawn after brief pause so the player sees the death
+            StartCoroutine(DespawnAfterDelay(death.EntityId, 2f));
+
+            // Notify player if they made the kill
+            var bootstrap = FindFirstObjectByType<GameBootstrap>();
+            if (bootstrap != null && death.KillerEntityId == bootstrap.PlayerEntityId)
+            {
+                NotificationUI.Instance?.Show("Kill", "Target eliminated", 0, 3f);
+            }
+        }
+
+        private System.Collections.IEnumerator DespawnAfterDelay(ulong entityId, float delay)
+        {
+            yield return new UnityEngine.WaitForSeconds(delay);
+            EntityManager.Instance?.DespawnEntity(entityId);
+        }
+
+        private void HandleLootDrop(ProtoCombat.LootDrop loot)
+        {
+            // LootDrop spawns a world loot entity — show a pickup prompt
+            Debug.Log($"[Combat] Loot dropped at entity {loot.LootEntityId} (table {loot.LootTableId})");
+
+            var pos = new Vector3(loot.Position.X, loot.Position.Y, loot.Position.Z);
+            FindFirstObjectByType<MinimapUI>()?.AddMarker(pos, "loot", "Loot", Color.yellow);
+
+            NotificationUI.Instance?.Show("Loot", "Loot dropped nearby — walk over to collect", 0, 5f);
+        }
+
+        // ─── Inventory / Social / Progression stub handlers ─────────────────
 
         private void HandleInventoryPacket(Packet packet)
         {
