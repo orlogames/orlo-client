@@ -26,10 +26,16 @@ jobs:
           token: ${{ secrets.GH_PAT }}
 
       - name: Install protoc
-        run: choco install protoc --yes
+        shell: powershell
+        run: |
+          $version = "29.3"
+          $url = "https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-win64.zip"
+          Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\protoc.zip"
+          Expand-Archive -Path "$env:TEMP\protoc.zip" -DestinationPath "$env:TEMP\protoc" -Force
+          echo "$env:TEMP\protoc\bin" >> $env:GITHUB_PATH
 
       - name: Generate C# proto sources
-        shell: pwsh
+        shell: powershell
         run: |
           $protoDir = "orlo-proto/proto"
           $outDir = "Assets/Scripts/Proto"
@@ -39,10 +45,29 @@ jobs:
           Write-Host "Generated C# files:"
           Get-ChildItem $outDir
 
-      - name: Build with Unity
-        shell: pwsh
+      - name: Find Unity installation
+        id: unity
+        shell: powershell
         run: |
-          $unity = "F:\Unity\6000.0.5f1\Editor\Unity.exe"
+          $searchPaths = @(
+            "F:\Unity\6000.0.5f1\Editor\Unity.exe",
+            "C:\Program Files\Unity\Hub\Editor\6000.0.5f1\Editor\Unity.exe",
+            "C:\Program Files\Unity\Hub\Editor\6000.*\Editor\Unity.exe",
+            "F:\Unity\6000.*\Editor\Unity.exe"
+          )
+          $unity = $null
+          foreach ($p in $searchPaths) {
+            $found = Get-Item $p -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($found) { $unity = $found.FullName; break }
+          }
+          if (-not $unity) { throw "Unity not found in any search path" }
+          Write-Host "Found Unity at: $unity"
+          echo "path=$unity" >> $env:GITHUB_OUTPUT
+
+      - name: Build with Unity
+        shell: powershell
+        run: |
+          $unity = "${{ steps.unity.outputs.path }}"
           $proc = Start-Process -FilePath $unity -ArgumentList @(
             '-batchmode', '-nographics', '-quit', '-projectPath', '.',
             '-buildTarget', 'StandaloneWindows64',
@@ -78,10 +103,16 @@ jobs:
           token: ${{ secrets.GH_PAT }}
 
       - name: Install protoc
-        run: choco install protoc --yes
+        shell: powershell
+        run: |
+          $version = "29.3"
+          $url = "https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-win64.zip"
+          Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\protoc.zip"
+          Expand-Archive -Path "$env:TEMP\protoc.zip" -DestinationPath "$env:TEMP\protoc" -Force
+          echo "$env:TEMP\protoc\bin" >> $env:GITHUB_PATH
 
       - name: Generate C# proto sources
-        shell: pwsh
+        shell: powershell
         run: |
           $protoDir = "orlo-proto/proto"
           $outDir = "Assets/Scripts/Proto"
@@ -91,10 +122,29 @@ jobs:
           Write-Host "Generated C# files:"
           Get-ChildItem $outDir
 
-      - name: Build with Unity
-        shell: pwsh
+      - name: Find Unity installation
+        id: unity
+        shell: powershell
         run: |
-          $unity = "F:\Unity\6000.0.5f1\Editor\Unity.exe"
+          $searchPaths = @(
+            "F:\Unity\6000.0.5f1\Editor\Unity.exe",
+            "C:\Program Files\Unity\Hub\Editor\6000.0.5f1\Editor\Unity.exe",
+            "C:\Program Files\Unity\Hub\Editor\6000.*\Editor\Unity.exe",
+            "F:\Unity\6000.*\Editor\Unity.exe"
+          )
+          $unity = $null
+          foreach ($p in $searchPaths) {
+            $found = Get-Item $p -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($found) { $unity = $found.FullName; break }
+          }
+          if (-not $unity) { throw "Unity not found in any search path" }
+          Write-Host "Found Unity at: $unity"
+          echo "path=$unity" >> $env:GITHUB_OUTPUT
+
+      - name: Build with Unity
+        shell: powershell
+        run: |
+          $unity = "${{ steps.unity.outputs.path }}"
           $proc = Start-Process -FilePath $unity -ArgumentList @(
             '-batchmode', '-nographics', '-quit', '-projectPath', '.',
             '-buildTarget', 'StandaloneLinux64',
