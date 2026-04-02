@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     name: Unity Build (StandaloneLinux64)
-    runs-on: [self-hosted, windows]
+    runs-on: [self-hosted, windows, unity]
     steps:
       - uses: actions/checkout@v4
         with:
