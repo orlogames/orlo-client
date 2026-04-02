@@ -93,7 +93,7 @@ jobs:
       - name: Build with Unity
         shell: powershell
         run: |
-          $unity = "C:\Program Files\Unity\Hub\Editor\6000.0.71f1\Editor\Unity.exe"
+          $unity = "F:\Unity\6000.0.5f1\Editor\Unity.exe"
           $proc = Start-Process -FilePath $unity -ArgumentList @(
             '-batchmode', '-nographics', '-quit', '-projectPath', '.',
             '-buildTarget', 'StandaloneWindows64',
