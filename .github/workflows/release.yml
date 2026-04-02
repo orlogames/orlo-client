@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     tags:
-      - 'v*'          # Triggered by version tags (e.g. v0.2.0)
+      - 'v*'
   repository_dispatch:
     types: [proto-updated]
   workflow_dispatch:
@@ -106,7 +106,15 @@ jobs:
             exit 1
           }
 
-      - name: Create zip
+      - name: Generate file manifest
+        shell: powershell
+        run: |
+          python scripts/generate_manifest.py `
+            --build-dir build/windows `
+            --version "${{ needs.version.outputs.version }}" `
+            --output build/manifest.json
+
+      - name: Create zip (fallback)
         shell: powershell
         run: |
           Compress-Archive -Path build/windows/* -DestinationPath "OrloClient-Windows-${{ needs.version.outputs.version }}.zip"
@@ -115,6 +123,18 @@ jobs:
         with:
           name: orlo-client-windows
           path: OrloClient-Windows-${{ needs.version.outputs.version }}.zip
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orlo-client-files
+          path: build/windows/
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orlo-client-manifest
+          path: build/manifest.json
           retention-days: 30
 
   release:
@@ -160,9 +180,6 @@ jobs:
 
             ## Downloads
             - **Windows**: `OrloClient-Windows-${{ needs.version.outputs.version }}.zip`
-
-            ## Auto-update
-            Run `update-client.ps1` in your dev environment to auto-download the latest release.
           files: |
             dist/OrloClient-Windows-${{ needs.version.outputs.version }}.zip
           draft: false
@@ -178,67 +195,41 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          name: orlo-client-files
+          path: build-files/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: orlo-client-manifest
+          path: .
+
+      - uses: actions/download-artifact@v4
+        with:
           name: orlo-client-windows
           path: dist/
-
-      - name: Compute SHA-256 hash and file size
-        id: meta
-        run: |
-          WIN_FILE="dist/OrloClient-Windows-${VERSION}.zip"
-          WIN_SHA256=$(sha256sum "$WIN_FILE" | awk '{print $1}')
-          WIN_SIZE=$(stat --format=%s "$WIN_FILE")
-          echo "win_sha256=$WIN_SHA256" >> "$GITHUB_OUTPUT"
-          echo "win_size=$WIN_SIZE" >> "$GITHUB_OUTPUT"
-
-      - name: Generate release notes from changelog
-        id: notes
-        run: |
-          NOTES=$(gh release view "v${VERSION}" --repo "${{ github.repository }}" --json body -q '.body' 2>/dev/null || echo "Release ${VERSION}")
-          NOTES_ESCAPED=$(echo "$NOTES" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
-          echo "release_notes=$NOTES_ESCAPED" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate manifest.json
-        run: |
-          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          cat > manifest.json << MANIFEST_EOF
-          {
-            "latest": "${VERSION}",
-            "channels": {
-              "stable": {
-                "version": "${VERSION}",
-                "platforms": {
-                  "windows": {
-                    "url": "https://cdn.orlo.games/client/releases/${VERSION}/OrloClient-Windows-${VERSION}.zip",
-                    "sha256": "${{ steps.meta.outputs.win_sha256 }}",
-                    "size": ${{ steps.meta.outputs.win_size }},
-                    "filename": "OrloClient-Windows-${VERSION}.zip"
-                  }
-                },
-                "release_notes": ${{ steps.notes.outputs.release_notes }},
-                "released_at": "${TIMESTAMP}",
-                "min_launcher_version": "0.0.1"
-              }
-            }
-          }
-          MANIFEST_EOF
-
-          python3 -c "
-          import json
-          with open('manifest.json') as f:
-              data = json.load(f)
-          with open('manifest.json', 'w') as f:
-              json.dump(data, f, indent=2)
-          "
-
-          echo "Generated manifest.json:"
-          cat manifest.json
 
       - name: Install wrangler
         run: npm install -g wrangler
 
-      - name: Upload Windows build to R2
+      - name: Upload individual files to R2
+        run: |
+          echo "Uploading individual files for version ${VERSION}..."
+          cd build-files
+          FILE_COUNT=0
+          find . -type f | while IFS= read -r file; do
+            REL="${file#./}"
+            echo "  uploading: ${REL}"
+            wrangler r2 object put "orlo-cdn/client/files/${VERSION}/${REL}" \
+              --file="${file}" 2>/dev/null
+            FILE_COUNT=$((FILE_COUNT + 1))
+          done
+          cd ..
+          echo "Uploaded files for version ${VERSION}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Upload zip fallback to R2
         run: |
           wrangler r2 object put "orlo-cdn/client/releases/${VERSION}/OrloClient-Windows-${VERSION}.zip" \
             --file="dist/OrloClient-Windows-${VERSION}.zip"
@@ -246,8 +237,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Upload manifest.json to R2
+      - name: Upload manifest to R2 (last — files must exist first)
         run: |
+          echo "Uploading v2 manifest..."
+          cat manifest.json
           wrangler r2 object put "orlo-cdn/client/manifest.json" \
             --file="manifest.json"
         env:
