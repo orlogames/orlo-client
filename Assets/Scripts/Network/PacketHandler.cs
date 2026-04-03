@@ -24,7 +24,23 @@ namespace Orlo.Network
     /// </summary>
     public class PacketHandler : MonoBehaviour
     {
-        public static PacketHandler Instance { get; private set; }
+        private static PacketHandler _instance;
+        public static PacketHandler Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    _instance = FindFirstObjectByType<PacketHandler>();
+                    if (_instance == null)
+                    {
+                        var go = new GameObject("PacketHandler");
+                        _instance = go.AddComponent<PacketHandler>();
+                    }
+                }
+                return _instance;
+            }
+        }
 
         public event Action<ProtoAuth.LoginResponse> OnLoginResponse;
         public event Action<ProtoAuth.RegisterResponse> OnRegisterResponse;
@@ -33,8 +49,8 @@ namespace Orlo.Network
 
         private void Awake()
         {
-            if (Instance != null) { Destroy(gameObject); return; }
-            Instance = this;
+            if (_instance != null && _instance != this) { Destroy(gameObject); return; }
+            _instance = this;
         }
 
         private void OnEnable()

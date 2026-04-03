@@ -13,7 +13,23 @@ namespace Orlo.Network
     /// </summary>
     public class NetworkManager : MonoBehaviour
     {
-        public static NetworkManager Instance { get; private set; }
+        private static NetworkManager _instance;
+        public static NetworkManager Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    _instance = FindFirstObjectByType<NetworkManager>();
+                    if (_instance == null)
+                    {
+                        var go = new GameObject("NetworkManager");
+                        _instance = go.AddComponent<NetworkManager>();
+                    }
+                }
+                return _instance;
+            }
+        }
 
         [Header("Server Connection")]
         [SerializeField] private string serverHost = "play.orlo.games";
@@ -34,12 +50,12 @@ namespace Orlo.Network
 
         private void Awake()
         {
-            if (Instance != null)
+            if (_instance != null && _instance != this)
             {
                 Destroy(gameObject);
                 return;
             }
-            Instance = this;
+            _instance = this;
             DontDestroyOnLoad(gameObject);
         }
 
