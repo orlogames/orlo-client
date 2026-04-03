@@ -65,17 +65,17 @@ namespace Orlo.UI.CharacterCreation
 
         private static readonly SkillOption[] StarterSkills =
         {
-            new() { id = 1, name = "Swordsmanship", category = "Combat",
+            new() { id = 100, name = "Swordsmanship", category = "Combat",
                     description = "Master of bladed weapons. Increases melee damage with swords." },
-            new() { id = 4, name = "Marksmanship", category = "Combat",
+            new() { id = 101, name = "Marksmanship", category = "Combat",
                     description = "Precision with ranged weapons. Increases ranged hit chance." },
-            new() { id = 7, name = "Herbalism", category = "Survival",
+            new() { id = 203, name = "Herbalism", category = "Survival",
                     description = "Knowledge of plants and potions. Gather herbs and craft remedies." },
-            new() { id = 10, name = "Mining", category = "Survival",
+            new() { id = 204, name = "Mining", category = "Survival",
                     description = "Extract ore and stone from the earth. Gather minerals faster." },
-            new() { id = 13, name = "Pathfinding", category = "Exploration",
+            new() { id = 300, name = "Pathfinding", category = "Exploration",
                     description = "Navigate the wilderness with ease. Increased movement speed." },
-            new() { id = 16, name = "Cartography", category = "Exploration",
+            new() { id = 303, name = "Cartography", category = "Exploration",
                     description = "Map the unknown. Reveals more of the minimap as you explore." },
         };
 

@@ -135,8 +135,8 @@ namespace Orlo.Network
             int startingSkillId = 0;
             if (data.SelectedSkill >= 0)
             {
-                // Map skill index to skill ID (matches StarterSkills in CharacterCreationManager)
-                int[] skillIds = { 1, 4, 7, 10, 13, 16 };
+                // Map skill index to server skill ID (matches SkillRegistry on server)
+                int[] skillIds = { 100, 101, 203, 204, 300, 303 };
                 if (data.SelectedSkill < skillIds.Length)
                     startingSkillId = skillIds[data.SelectedSkill];
             }
