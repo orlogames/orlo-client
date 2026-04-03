@@ -96,6 +96,12 @@ namespace Orlo.World
         }
 
         /// <summary>
+        /// Check if we already have server heightmap data for a chunk.
+        /// Used by ChunkStreamer to avoid re-requesting chunks.
+        /// </summary>
+        public bool HasChunkData(Vector2Int coord) => _chunks.ContainsKey(coord);
+
+        /// <summary>
         /// Called when server sends terrain heightmap + splatmap data.
         /// </summary>
         public void ApplyTerrainChunk(Vector2Int coord, int resolution, byte[] heightmapBytes, byte[] splatmapBytes, ulong seed)
@@ -120,6 +126,9 @@ namespace Orlo.World
 
             Debug.Log($"[Terrain] Chunk {coord}: {resolution}x{resolution}, " +
                       $"splatmap={splatmapBytes?.Length ?? 0}B, seed={seed:X}");
+
+            // Notify ChunkStreamer so it can trigger detail generation
+            ChunkStreamer.Instance?.OnChunkDataReceived(coord, heightmap, resolution, seed);
 
             // Update loading screen progress
             UI.LoadingScreenUI.Instance?.UpdateProgress(_chunks.Count);

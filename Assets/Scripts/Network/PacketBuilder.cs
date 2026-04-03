@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Google.Protobuf;
 using UnityEngine;
 using Orlo.Proto;
@@ -162,6 +163,32 @@ namespace Orlo.Network
             {
                 SessionId = sessionId
             };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Terrain Streaming ──────────────────────────────────────────────
+
+        public static byte[] ChunkRequest(List<Vector2Int> chunks)
+        {
+            var pkt = NewPacket();
+            var req = new ProtoWorld.ChunkRequest();
+            foreach (var c in chunks)
+            {
+                req.Chunks.Add(new ProtoWorld.ChunkCoord { ChunkX = c.x, ChunkZ = c.y });
+            }
+            pkt.ChunkRequest = req;
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] ChunkUnload(List<Vector2Int> chunks)
+        {
+            var pkt = NewPacket();
+            var unload = new ProtoWorld.ChunkUnload();
+            foreach (var c in chunks)
+            {
+                unload.Chunks.Add(new ProtoWorld.ChunkCoord { ChunkX = c.x, ChunkZ = c.y });
+            }
+            pkt.ChunkUnload = unload;
             return pkt.ToByteArray();
         }
 

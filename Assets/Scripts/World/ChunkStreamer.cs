@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Orlo.Network;
 
 namespace Orlo.World
 {
@@ -8,6 +9,8 @@ namespace Orlo.World
     /// Background terrain chunk loading/unloading.
     /// Works alongside TerrainManager to process chunk load queues via coroutine
     /// and trigger TerrainDetailGenerator for surface detail.
+    /// Sends ChunkRequest/ChunkUnload packets to the server for chunks outside
+    /// the initial spawn batch.
     /// </summary>
     public class ChunkStreamer : MonoBehaviour
     {
@@ -19,14 +22,26 @@ namespace Orlo.World
         [SerializeField] private int chunksPerFrame = 2;
         [SerializeField] private float unloadDelay = 2f;
 
+        [Header("Network")]
+        [SerializeField] private float requestInterval = 0.5f;
+        [SerializeField] private int maxChunksPerRequest = 16;
+
         private readonly HashSet<Vector2Int> _loadedChunks = new();
         private readonly Queue<Vector2Int> _loadQueue = new();
         private readonly Queue<(Vector2Int coord, float time)> _unloadQueue = new();
         private readonly HashSet<Vector2Int> _pendingLoad = new();
 
+        // Tracks chunks we have already requested from the server (awaiting response)
+        private readonly HashSet<Vector2Int> _requestedFromServer = new();
+
+        // Batched outgoing requests, flushed on interval
+        private readonly List<Vector2Int> _pendingRequests = new();
+        private readonly List<Vector2Int> _pendingUnloads = new();
+
         private Vector2Int _lastPlayerChunk;
         private Transform _playerTransform;
         private Coroutine _loadCoroutine;
+        private float _lastRequestTime;
 
         private void Awake()
         {
@@ -61,6 +76,9 @@ namespace Orlo.World
                 _lastPlayerChunk = currentChunk;
                 UpdateChunkQueues(currentChunk);
             }
+
+            // Flush batched network requests on interval
+            FlushNetworkRequests();
         }
 
         private void UpdateChunkQueues(Vector2Int center)
@@ -162,16 +180,24 @@ namespace Orlo.World
 
         private void LoadChunk(Vector2Int coord)
         {
-            // TerrainManager handles mesh creation; we trigger detail generation
+            // Check if the server already sent this chunk (e.g. spawn batch)
             var terrainManager = FindFirstObjectByType<TerrainManager>();
-            if (terrainManager == null) return;
+            bool hasData = terrainManager != null && terrainManager.HasChunkData(coord);
 
-            // Request server data for chunk if not already cached
-            // The TerrainManager already creates placeholder chunks
-            // We trigger detail generation once the chunk has heightmap data
-            TriggerDetailGeneration(coord);
+            if (!hasData && !_requestedFromServer.Contains(coord))
+            {
+                // Queue a server request for this chunk
+                _pendingRequests.Add(coord);
+                _requestedFromServer.Add(coord);
+            }
 
-            Debug.Log($"[ChunkStreamer] Loaded chunk {coord}");
+            // Trigger detail generation for chunks that already have data
+            if (hasData)
+            {
+                TriggerDetailGeneration(coord);
+            }
+
+            Debug.Log($"[ChunkStreamer] Loaded chunk {coord} (hasData={hasData})");
         }
 
         private void UnloadChunk(Vector2Int coord)
@@ -186,7 +212,50 @@ namespace Orlo.World
             if (vegetation != null)
                 vegetation.UnregisterChunk(coord);
 
+            // Notify server we no longer need this chunk
+            _pendingUnloads.Add(coord);
+            _requestedFromServer.Remove(coord);
+
             Debug.Log($"[ChunkStreamer] Unloaded chunk {coord}");
+        }
+
+        /// <summary>
+        /// Flush batched chunk requests and unloads to the server, throttled by requestInterval.
+        /// </summary>
+        private void FlushNetworkRequests()
+        {
+            if (Time.time - _lastRequestTime < requestInterval)
+                return;
+
+            if (_pendingRequests.Count == 0 && _pendingUnloads.Count == 0)
+                return;
+
+            var net = NetworkManager.Instance;
+            if (net == null || !net.IsConnected)
+                return;
+
+            // Send chunk requests in batches
+            if (_pendingRequests.Count > 0)
+            {
+                // Cap batch size to avoid oversized packets
+                int count = Mathf.Min(_pendingRequests.Count, maxChunksPerRequest);
+                var batch = _pendingRequests.GetRange(0, count);
+                net.Send(PacketBuilder.ChunkRequest(batch));
+                _pendingRequests.RemoveRange(0, count);
+                Debug.Log($"[ChunkStreamer] Requested {count} chunks from server");
+            }
+
+            // Send unload notifications
+            if (_pendingUnloads.Count > 0)
+            {
+                int count = Mathf.Min(_pendingUnloads.Count, maxChunksPerRequest);
+                var batch = _pendingUnloads.GetRange(0, count);
+                net.Send(PacketBuilder.ChunkUnload(batch));
+                _pendingUnloads.RemoveRange(0, count);
+                Debug.Log($"[ChunkStreamer] Notified server: unloaded {count} chunks");
+            }
+
+            _lastRequestTime = Time.time;
         }
 
         /// <summary>
