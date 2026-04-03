@@ -98,7 +98,7 @@ namespace Orlo.World
             if (_instancedMaterials == null || _instancedMaterials.Length == 0) return;
 
             Color skinColor = data.SkinColor != default ? data.SkinColor : new Color(0.76f, 0.59f, 0.42f);
-            Color hairColor = data.HairPrimaryColor != default ? data.HairPrimaryColor : new Color(0.2f, 0.15f, 0.1f);
+            Color hairColor = data.HairColor != default ? data.HairColor : new Color(0.2f, 0.15f, 0.1f);
             Color eyeColor = data.LeftEyeColor != default ? data.LeftEyeColor : new Color(0.3f, 0.5f, 0.3f);
 
             // Apply skin tint to all materials (Phase 0 — single material model)
