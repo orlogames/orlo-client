@@ -485,7 +485,7 @@ namespace Orlo.Network
                     lastName = ch.LastName,
                     level = (int)ch.Level,
                     zoneName = ch.ZoneName,
-                    race = ch.Appearance?.Race ?? 0
+                    race = (int)(ch.Appearance?.Race ?? 0)
                 });
             }
 
