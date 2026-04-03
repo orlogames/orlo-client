@@ -309,28 +309,58 @@ namespace Orlo
             NetworkManager.Instance.Send(PacketBuilder.CharacterListRequest(_sessionId));
         }
 
-        /// <summary>
-        /// Called by PacketHandler when character list arrives.
-        /// If no characters exist, show the creation UI.
-        /// If characters exist, auto-select the first one (or show selection UI later).
-        /// </summary>
-        public void OnCharacterListResponse(int characterCount, ulong firstCharacterId, string firstName, string lastName)
-        {
-            // Hide connection overlay — we're past auth
-            _connectionUI?.Hide();
+        private CharacterSelectUI _charSelectUI;
 
-            if (characterCount == 0)
+        /// <summary>
+        /// Called by PacketHandler when character list arrives (full list version).
+        /// Shows the character select lobby screen.
+        /// </summary>
+        public void OnCharacterListReceived(System.Collections.Generic.List<CharacterSelectUI.CharacterEntry> characters, int maxSlots)
+        {
+            _connectionUI?.Hide();
+            Debug.Log($"[Orlo] Received {characters.Count} character(s), max={maxSlots}");
+
+            if (characters.Count == 0)
             {
-                Debug.Log("[Orlo] No characters found — showing creation screen");
+                // No characters — go straight to creation
                 ShowCharacterCreation();
             }
             else
             {
-                Debug.Log($"[Orlo] Found {characterCount} character(s) — selecting '{firstName} {lastName}'");
-                playerName = $"{firstName} {lastName}";
+                // Show character select / lobby screen
+                ShowCharacterSelect(characters, maxSlots);
+            }
+        }
+
+        private void ShowCharacterSelect(System.Collections.Generic.List<CharacterSelectUI.CharacterEntry> characters, int maxSlots)
+        {
+            // Hide other UIs
+            _loginUI?.Hide();
+            _charCreationManager?.Hide();
+
+            if (_charSelectUI == null)
+            {
+                var go = new GameObject("CharacterSelectUI");
+                _charSelectUI = go.AddComponent<CharacterSelectUI>();
+            }
+
+            _charSelectUI.SetCharacters(characters, maxSlots);
+
+            _charSelectUI.OnCharacterSelected = (charId, fullName) =>
+            {
+                Debug.Log($"[Orlo] Selected character: {fullName} (ID {charId})");
+                playerName = fullName;
+                _connectionUI?.Show("Entering world");
                 var selectData = PacketBuilder.CharacterSelect(_sessionId, playerName);
                 NetworkManager.Instance.Send(selectData);
-            }
+            };
+
+            _charSelectUI.OnCreateNew = () =>
+            {
+                ShowCharacterCreation();
+            };
+
+            _charSelectUI.Show();
         }
 
         private void ShowCharacterCreation()
@@ -375,8 +405,17 @@ namespace Orlo
         private void OnCharacterSpawn(ProtoAuth.CharacterSpawnResponse spawn)
         {
             _connectionUI?.Hide();
+            _charSelectUI?.Hide(); // Hide lobby if still visible
             _characterEntityId = spawn.EntityId.Id;
             _characterSpawned = true;
+
+            // Ensure TerrainManager exists to receive terrain chunks from server
+            if (FindFirstObjectByType<TerrainManager>() == null)
+            {
+                var tmGo = new GameObject("TerrainManager");
+                tmGo.AddComponent<TerrainManager>();
+                Debug.Log("[Orlo] TerrainManager created");
+            }
             var pos = new Vector3(
                 spawn.Transform.Position.X,
                 spawn.Transform.Position.Y,

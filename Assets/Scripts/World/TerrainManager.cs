@@ -112,6 +112,9 @@ namespace Orlo.World
             }
 
             Debug.Log($"[Terrain] Applied chunk {coord} ({resolution}x{resolution}, seed={seed:X})");
+
+            // Update loading screen progress
+            UI.LoadingScreenUI.Instance?.UpdateProgress(_chunks.Count);
         }
 
         private GameObject BuildTerrainMesh(Vector2Int coord, TerrainChunkData data)

@@ -281,7 +281,7 @@ namespace Orlo.Network
         private void HandleTerrainChunk(ProtoWorld.TerrainChunk chunk)
         {
             var coord = new Vector2Int(chunk.ChunkX, chunk.ChunkZ);
-            FindObjectOfType<TerrainManager>()?.ApplyTerrainChunk(
+            FindFirstObjectByType<TerrainManager>()?.ApplyTerrainChunk(
                 coord, (int)chunk.Resolution, chunk.Heightmap.ToByteArray(), chunk.Seed);
         }
 
@@ -470,23 +470,26 @@ namespace Orlo.Network
 
         private void HandleCharacterList(ProtoCharacter.CharacterListResponse list)
         {
-            Debug.Log($"[Character] Received character list: {list.Characters.Count} characters");
+            Debug.Log($"[Character] Received character list: {list.Characters.Count} characters, max={list.MaxCharacters}");
             var bootstrap = FindFirstObjectByType<GameBootstrap>();
             if (bootstrap == null) return;
 
-            if (list.Characters.Count == 0)
+            // Build full character list for the select screen
+            var characters = new System.Collections.Generic.List<CharacterSelectUI.CharacterEntry>();
+            foreach (var ch in list.Characters)
             {
-                bootstrap.OnCharacterListResponse(0, 0, "", "");
+                characters.Add(new CharacterSelectUI.CharacterEntry
+                {
+                    id = ch.CharacterId?.Id ?? 0,
+                    firstName = ch.FirstName,
+                    lastName = ch.LastName,
+                    level = (int)ch.Level,
+                    zoneName = ch.ZoneName,
+                    race = ch.Appearance?.Race ?? 0
+                });
             }
-            else
-            {
-                var first = list.Characters[0];
-                bootstrap.OnCharacterListResponse(
-                    list.Characters.Count,
-                    first.CharacterId.Id,
-                    first.FirstName,
-                    first.LastName);
-            }
+
+            bootstrap.OnCharacterListReceived(characters, (int)list.MaxCharacters);
         }
 
         private void HandleCharacterCreateResponse(ProtoCharacter.CharacterCreateResponse resp)

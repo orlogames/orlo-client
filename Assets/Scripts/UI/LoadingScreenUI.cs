@@ -61,6 +61,13 @@ namespace Orlo.UI
             _chunksLoaded = chunksLoaded;
             _progress = _chunksTotal > 0 ? (float)chunksLoaded / _chunksTotal : 0;
             if (status != null) _statusText = status;
+
+            // Auto-hide when enough terrain has loaded
+            if (_chunksLoaded >= _chunksTotal && _chunksTotal > 0)
+            {
+                Debug.Log($"[Loading] Terrain loaded ({_chunksLoaded}/{_chunksTotal}), entering world");
+                Hide();
+            }
         }
 
         public void Hide()
