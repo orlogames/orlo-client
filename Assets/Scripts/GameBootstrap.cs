@@ -417,7 +417,7 @@ namespace Orlo
 
                 // Load the 3D character model
                 var modelChar = player.AddComponent<ModelCharacter>();
-                _ = modelChar.LoadModel("human_male_base.glb");
+                modelChar.LoadModel("human_male_base.glb");
 
                 // Add controller components
                 var cc = player.AddComponent<CharacterController>();

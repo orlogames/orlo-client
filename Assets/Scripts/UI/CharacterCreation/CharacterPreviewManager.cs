@@ -237,7 +237,7 @@ namespace Orlo.UI.CharacterCreation
             return light;
         }
 
-        private async void CreateCharacter()
+        private void CreateCharacter()
         {
             _characterGO = new GameObject("PreviewCharacter");
             _characterGO.transform.SetParent(transform);
@@ -246,7 +246,7 @@ namespace Orlo.UI.CharacterCreation
 
             // Try loading real model first
             _modelCharacter = _characterGO.AddComponent<ModelCharacter>();
-            await _modelCharacter.LoadModel("human_male_base.glb");
+            _modelCharacter.LoadModel("human_male_base.glb");
 
             if (_modelCharacter.IsLoaded)
             {
