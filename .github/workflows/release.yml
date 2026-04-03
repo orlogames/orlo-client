@@ -44,7 +44,7 @@ jobs:
   build-windows:
     name: Build Windows
     needs: version
-    runs-on: [self-hosted, windows, unity]
+    runs-on: [self-hosted, windows]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -95,10 +95,9 @@ jobs:
         shell: powershell
         run: |
           $searchPaths = @(
-            "F:\Unity\6000.0.5f1\Editor\Unity.exe",
-            "C:\Program Files\Unity\Hub\Editor\6000.0.5f1\Editor\Unity.exe",
             "C:\Program Files\Unity\Hub\Editor\6000.*\Editor\Unity.exe",
-            "F:\Unity\6000.*\Editor\Unity.exe"
+            "F:\Unity\6000.*\Editor\Unity.exe",
+            "D:\Unity\6000.*\Editor\Unity.exe"
           )
           $unity = $null
           foreach ($p in $searchPaths) {
