@@ -439,7 +439,99 @@ namespace Orlo.Network
 
         private void HandleInventoryPacket(Packet packet)
         {
-            Debug.Log($"[Inventory] Received: {packet.PayloadCase}");
+            switch (packet.PayloadCase)
+            {
+                case Packet.PayloadOneofCase.CraftProgress:
+                    HandleCraftProgress(packet.CraftProgress);
+                    break;
+                case Packet.PayloadOneofCase.CraftComplete:
+                    HandleCraftComplete(packet.CraftComplete);
+                    break;
+                case Packet.PayloadOneofCase.RecipeDiscovered:
+                    HandleRecipeDiscovered(packet.RecipeDiscovered);
+                    break;
+                case Packet.PayloadOneofCase.GatherProgress:
+                    HandleGatherProgress(packet.GatherProgress);
+                    break;
+                case Packet.PayloadOneofCase.GatherComplete:
+                    HandleGatherComplete(packet.GatherComplete);
+                    break;
+                default:
+                    Debug.Log($"[Inventory] Received: {packet.PayloadCase}");
+                    break;
+            }
+        }
+
+        private void HandleCraftProgress(ProtoInventory.CraftProgress progress)
+        {
+            Debug.Log($"[Crafting] Progress: recipe={progress.RecipeId} {progress.Progress:P0}");
+            CraftingUI.Instance?.OnCraftProgress(progress.RecipeId, progress.Progress);
+        }
+
+        private void HandleCraftComplete(ProtoInventory.CraftComplete complete)
+        {
+            Debug.Log($"[Crafting] Complete: recipe={complete.RecipeId} success={complete.Success}");
+
+            var crafting = CraftingUI.Instance;
+            if (crafting == null) return;
+
+            if (complete.Result != null && complete.Result.Metadata != null && complete.Result.Metadata.Count > 0)
+            {
+                // Build a detailed result from the proto item metadata
+                var stats = new Dictionary<string, float>();
+                foreach (var kvp in complete.Result.Metadata)
+                {
+                    if (float.TryParse(kvp.Value, System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out float val))
+                        stats[kvp.Key] = val;
+                }
+
+                var result = new CraftingUI.CraftResultData
+                {
+                    ItemName = complete.Result.Metadata.ContainsKey("name")
+                        ? complete.Result.Metadata["name"]
+                        : $"Item #{complete.Result.ItemId}",
+                    CraftedBy = complete.Result.CraftedBy ?? "",
+                    AssemblyTier = complete.Result.Metadata.ContainsKey("tier")
+                        ? complete.Result.Metadata["tier"]
+                        : "Good",
+                    Stats = stats,
+                    Condition = complete.Result.Condition > 0 ? complete.Result.Condition : 1.0f
+                };
+                crafting.OnCraftComplete(result);
+            }
+            else
+            {
+                // Simple path -- no detailed result data
+                crafting.OnSimpleCraftComplete(complete.Success, $"Recipe #{complete.RecipeId}");
+            }
+
+            if (complete.Success)
+            {
+                NotificationUI.Instance?.Show("Crafting", "Item crafted successfully!", 0, 3f);
+            }
+        }
+
+        private void HandleRecipeDiscovered(ProtoInventory.RecipeDiscovered recipe)
+        {
+            Debug.Log($"[Crafting] New recipe discovered: {recipe.RecipeName} (id={recipe.RecipeId})");
+            NotificationUI.Instance?.Show("Recipe Discovered", recipe.RecipeName, 0, 5f);
+        }
+
+        private void HandleGatherProgress(ProtoInventory.GatherProgress progress)
+        {
+            Debug.Log($"[Gather] Progress: {progress.Progress:P0} ({progress.TotalTime:F1}s)");
+        }
+
+        private void HandleGatherComplete(ProtoInventory.GatherComplete complete)
+        {
+            Debug.Log($"[Gather] Complete: {complete.ItemsReceived.Count} items, " +
+                      $"tier={complete.QualityTier}, remaining={complete.NodeRemaining}");
+            foreach (var item in complete.ItemsReceived)
+            {
+                NotificationUI.Instance?.Show("Gathered",
+                    $"Received x{item.Quantity} (item #{item.ItemId})", 0, 3f);
+            }
         }
 
         private void HandleSocialPacket(Packet packet)
