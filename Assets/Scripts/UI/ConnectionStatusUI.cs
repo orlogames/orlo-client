@@ -18,6 +18,8 @@ namespace Orlo.UI
         private int _dotCount;
 
         public System.Action OnRetry;
+        public System.Action OnQuit;
+        private bool _showQuit;
 
         private void Awake()
         {
@@ -40,10 +42,11 @@ namespace Orlo.UI
             _showRetry = false;
         }
 
-        public void ShowError(string error)
+        public void ShowError(string error, bool showQuit = false)
         {
             _error = error;
             _showRetry = true;
+            _showQuit = showQuit;
         }
 
         public void Hide()
@@ -110,7 +113,7 @@ namespace Orlo.UI
                 GUI.Label(new Rect(cx - 300, cy, 600, 50), _error, errorStyle);
             }
 
-            // Retry button
+            // Retry and Quit buttons
             if (_showRetry)
             {
                 var btnStyle = new GUIStyle(GUI.skin.button)
@@ -118,12 +121,39 @@ namespace Orlo.UI
                     fontSize = 16,
                     fontStyle = FontStyle.Bold
                 };
-                if (GUI.Button(new Rect(cx - 80, cy + 60, 160, 40), "Retry", btnStyle))
+
+                if (_showQuit)
                 {
-                    _error = null;
-                    _showRetry = false;
-                    _status = "Connecting";
-                    OnRetry?.Invoke();
+                    // Two buttons side-by-side: Retry + Quit
+                    float btnW = 140;
+                    float gap = 20;
+                    float startBtnX = cx - (btnW * 2 + gap) / 2f;
+
+                    if (GUI.Button(new Rect(startBtnX, cy + 60, btnW, 40), "Retry", btnStyle))
+                    {
+                        _error = null;
+                        _showRetry = false;
+                        _status = "Connecting";
+                        OnRetry?.Invoke();
+                    }
+
+                    GUI.backgroundColor = new Color(0.6f, 0.2f, 0.2f);
+                    if (GUI.Button(new Rect(startBtnX + btnW + gap, cy + 60, btnW, 40), "Quit", btnStyle))
+                    {
+                        OnQuit?.Invoke();
+                    }
+                    GUI.backgroundColor = Color.white;
+                }
+                else
+                {
+                    // Single retry button
+                    if (GUI.Button(new Rect(cx - 80, cy + 60, 160, 40), "Retry", btnStyle))
+                    {
+                        _error = null;
+                        _showRetry = false;
+                        _status = "Connecting";
+                        OnRetry?.Invoke();
+                    }
                 }
             }
 

@@ -74,7 +74,19 @@ namespace Orlo
             {
                 Debug.Log("[Orlo] Launcher token detected — auto-connecting...");
                 _connectionUI.Show("Connecting to server");
-                _connectionUI.OnRetry = () => NetworkManager.Instance.Connect();
+                _connectionUI.OnRetry = () =>
+                {
+                    _connectionUI.Show("Connecting to server");
+                    NetworkManager.Instance.Connect();
+                };
+                _connectionUI.OnQuit = () =>
+                {
+                    Debug.Log("[Orlo] User chose to quit — returning to launcher");
+                    Application.Quit();
+#if UNITY_EDITOR
+                    UnityEditor.EditorApplication.isPlaying = false;
+#endif
+                };
                 NetworkManager.Instance.Connect();
             }
             else
@@ -291,10 +303,20 @@ namespace Orlo
             if (!resp.Success)
             {
                 Debug.LogError($"[Orlo] Login failed: {resp.Error}");
-                // Show error on connection overlay (visible in token mode)
-                _connectionUI?.ShowError($"Login failed: {resp.Error}");
-                // Also show on login UI if visible
-                _loginUI?.SetError($"Login failed: {resp.Error}");
+
+                bool isTokenMode = !string.IsNullOrEmpty(_launcherToken);
+                if (isTokenMode)
+                {
+                    // Token mode — show error with Quit button since manual login is not possible
+                    _connectionUI?.Show("Authentication Failed");
+                    _connectionUI?.ShowError($"Login failed: {resp.Error}\nPlease restart from the launcher.", showQuit: true);
+                }
+                else
+                {
+                    // Manual login mode — show error on login UI so user can retry with different credentials
+                    _connectionUI?.Hide();
+                    _loginUI?.SetError($"Login failed: {resp.Error}");
+                }
                 return;
             }
 
@@ -325,9 +347,20 @@ namespace Orlo
                 // No characters — go straight to creation
                 ShowCharacterCreation();
             }
+            else if (characters.Count == 1)
+            {
+                // Single character — auto-select and enter world immediately
+                var ch = characters[0];
+                string fullName = $"{ch.firstName} {ch.lastName}";
+                Debug.Log($"[Orlo] Single character detected — auto-selecting: {fullName} (ID {ch.id})");
+                playerName = fullName;
+                _connectionUI?.Show("Entering world");
+                var selectData = PacketBuilder.CharacterSelect(_sessionId, playerName);
+                NetworkManager.Instance.Send(selectData);
+            }
             else
             {
-                // Show character select / lobby screen
+                // Multiple characters — show character select / lobby screen
                 ShowCharacterSelect(characters, maxSlots);
             }
         }
@@ -518,9 +551,15 @@ namespace Orlo
             Debug.Log("[Orlo] Disconnected from server");
             if (!_characterSpawned)
             {
-                // Show error on connection overlay if we haven't spawned yet
+                bool isTokenMode = !string.IsNullOrEmpty(_launcherToken);
                 _connectionUI?.Show("Disconnected");
-                _connectionUI?.ShowError("Lost connection to the game server.");
+                _connectionUI?.ShowError("Lost connection to the game server.", showQuit: isTokenMode);
+
+                if (!isTokenMode)
+                {
+                    // In manual mode, also show login UI so user can reconnect
+                    ShowLoginUI();
+                }
             }
         }
 
