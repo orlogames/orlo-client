@@ -10,7 +10,7 @@ namespace Orlo.UI.Settings
     /// </summary>
     public class SettingsUI : MonoBehaviour
     {
-        private enum Tab { Graphics, Audio, Network, Social, Controls }
+        private enum Tab { Graphics, Audio, Network, Social, Controls, Gameplay }
 
         private bool _visible;
         private Tab _activeTab = Tab.Graphics;
@@ -156,6 +156,7 @@ namespace Orlo.UI.Settings
                 case Tab.Network:  DrawNetworkTab();  break;
                 case Tab.Social:   DrawSocialTab();   break;
                 case Tab.Controls: DrawControlsTab(); break;
+                case Tab.Gameplay: DrawGameplayTab(); break;
             }
 
             GUILayout.EndScrollView();
@@ -388,6 +389,21 @@ namespace Orlo.UI.Settings
                 alignment = TextAnchor.MiddleLeft
             };
             GUILayout.Label("Key bindings coming soon", placeholderStyle);
+        }
+
+        // ── Gameplay tab ────────────────────────────────────────────────
+
+        private void DrawGameplayTab()
+        {
+            SectionHeader("Combat");
+
+            S.showDamageNumbers = DrawToggle("Show Damage Numbers", S.showDamageNumbers);
+            S.screenShake = DrawToggle("Screen Shake", S.screenShake);
+
+            SectionHeader("Interface");
+
+            S.showEntityNames = DrawToggle("Show Entity Names", S.showEntityNames);
+            S.autoLoot = DrawToggle("Auto-Loot", S.autoLoot);
         }
 
         // ── Drawing helpers ─────────────────────────────────────────────

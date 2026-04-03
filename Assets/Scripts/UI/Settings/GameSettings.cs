@@ -47,6 +47,12 @@ namespace Orlo.UI.Settings
         public float mouseSensitivity = 1.0f;
         public bool invertY = false;
 
+        // ── Gameplay ───────────────────────────────────────────────────
+        public bool showDamageNumbers = true;
+        public bool showEntityNames = true;
+        public bool autoLoot = false;
+        public bool screenShake = true;
+
         // ── Persistence ────────────────────────────────────────────────
 
         public string ToJson()

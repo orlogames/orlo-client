@@ -185,7 +185,67 @@ namespace Orlo
                 go.AddComponent<CombatFeedback>();
             }
 
+            if (ScreenEffects.Instance == null)
+            {
+                var go = new GameObject("ScreenEffects");
+                go.AddComponent<ScreenEffects>();
+            }
+
+            if (ProgressiveDisclosure.Instance == null)
+            {
+                var go = new GameObject("ProgressiveDisclosure");
+                go.AddComponent<ProgressiveDisclosure>();
+            }
+
+            if (PlayerProfileUI.Instance == null)
+            {
+                var go = new GameObject("PlayerProfileUI");
+                go.AddComponent<PlayerProfileUI>();
+            }
+
+            if (LeaderboardUI.Instance == null)
+            {
+                var go = new GameObject("LeaderboardUI");
+                go.AddComponent<LeaderboardUI>();
+            }
+
+            // Register UIs with progressive disclosure system
+            // Level 1: movement + combat bar (always visible)
+            // Level 3: inventory + minimap
+            // Level 5: crafting + TMD
+            // Level 8: vendor + trading
+            // Level 10: guild + party + full social
+            RegisterProgressiveDisclosureUIs();
+
             Debug.Log("[Orlo] Phase 3 world systems initialized");
+        }
+
+        private void RegisterProgressiveDisclosureUIs()
+        {
+            var pd = ProgressiveDisclosure.Instance;
+            if (pd == null) return;
+
+            // Level 3 unlocks
+            if (InventoryUI.Instance != null)
+                pd.Register(InventoryUI.Instance, "Inventory", 3);
+            if (FindFirstObjectByType<MinimapUI>() is MinimapUI minimap)
+                pd.Register(minimap, "Minimap", 3);
+
+            // Level 5 unlocks
+            if (FindFirstObjectByType<CraftingUI>() is CraftingUI crafting)
+                pd.Register(crafting, "Crafting", 5);
+            if (FindFirstObjectByType<TMDUI>() is TMDUI tmd)
+                pd.Register(tmd, "Terrain Manipulator", 5);
+
+            // Level 8 unlocks
+            if (FindFirstObjectByType<ShopUI>() is ShopUI shop)
+                pd.Register(shop, "Vendor", 8);
+
+            // Level 10 unlocks
+            if (FindFirstObjectByType<PartyUI>() is PartyUI party)
+                pd.Register(party, "Party", 10);
+
+            // LeaderboardUI and PlayerProfileUI are always available (info panels)
         }
 
         private void Update()
