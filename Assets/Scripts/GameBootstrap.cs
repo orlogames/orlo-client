@@ -404,7 +404,7 @@ namespace Orlo
             LoadingScreenUI.Instance.Show(16); // expect ~16 terrain chunks
             // Loading screen will be hidden by TerrainManager when enough chunks arrive
 
-            // Instantiate player
+            // Instantiate player with real model
             GameObject player;
             if (playerPrefab != null)
             {
@@ -412,9 +412,18 @@ namespace Orlo
             }
             else
             {
-                player = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                player = new GameObject("PlayerCharacter");
                 player.transform.SetPositionAndRotation(pos, rot);
-                player.AddComponent<CharacterController>();
+
+                // Load the 3D character model
+                var modelChar = player.AddComponent<ModelCharacter>();
+                _ = modelChar.LoadModel("human_male_base.glb");
+
+                // Add controller components
+                var cc = player.AddComponent<CharacterController>();
+                cc.height = 1.8f;
+                cc.center = Vector3.up * 0.9f;
+                cc.radius = 0.3f;
                 player.AddComponent<PlayerController>();
             }
 

@@ -5,17 +5,18 @@ namespace Orlo.UI.CharacterCreation
 {
     /// <summary>
     /// Manages a 3D character preview rendered to a RenderTexture.
-    /// Creates a dedicated camera, 3-point lighting, and ProceduralCharacter
-    /// all on the CharacterPreview layer (layer 10).
+    /// Creates a dedicated camera, 3-point lighting, and loads a real 3D model
+    /// via ModelCharacter (GLB from StreamingAssets) on the CharacterPreview layer.
+    /// Falls back to ProceduralCharacter if the model fails to load.
     /// </summary>
     public class CharacterPreviewManager : MonoBehaviour
     {
-        // ─── Constants ─────────────────────────────────────────────────────
+        // --- Constants ---
         private const int PreviewLayer = 10;
         private const int RenderWidth = 512;
         private const int RenderHeight = 768;
 
-        // ─── Camera orbit ──────────────────────────────────────────────────
+        // --- Camera orbit ---
         private float _orbitYaw = 180f;
         private float _orbitPitch = 10f;
         private float _orbitDistance = 3f;
@@ -23,18 +24,20 @@ namespace Orlo.UI.CharacterCreation
         private bool _isDragging = false;
         private Vector2 _lastMousePos;
 
-        // ─── Components ────────────────────────────────────────────────────
+        // --- Components ---
         private Camera _previewCamera;
         private RenderTexture _renderTexture;
         private GameObject _characterGO;
-        private ProceduralCharacter _character;
+        private ModelCharacter _modelCharacter;
+        private ProceduralCharacter _proceduralFallback;
         private Light _keyLight, _fillLight, _rimLight;
+        private bool _usingModel = false;
 
-        // ─── Focus modes ───────────────────────────────────────────────────
+        // --- Focus modes ---
         public enum FocusMode { FullBody, Face, UpperBody }
         private FocusMode _currentFocus = FocusMode.FullBody;
 
-        // ─── Public API ────────────────────────────────────────────────────
+        // --- Public API ---
 
         public RenderTexture PreviewTexture => _renderTexture;
 
@@ -50,34 +53,37 @@ namespace Orlo.UI.CharacterCreation
         }
 
         /// <summary>
-        /// Rebuild the procedural character mesh with the given appearance data.
+        /// Update the character preview with new appearance data.
+        /// If using a real model: just updates material colors (instant, no GC).
+        /// If using procedural fallback: destroys and rebuilds the mesh.
         /// </summary>
         public void UpdateAppearance(AppearanceData data)
         {
-            if (_character == null) return;
+            if (_usingModel && _modelCharacter != null && _modelCharacter.IsLoaded)
+            {
+                // Real model path — just update material colors, instant
+                _modelCharacter.UpdateAppearance(data);
+                return;
+            }
 
-            // Destroy existing mesh components
-            var existingRenderer = _characterGO.GetComponent<SkinnedMeshRenderer>();
-            if (existingRenderer != null) DestroyImmediate(existingRenderer);
+            // Procedural fallback path — destroy and rebuild
+            if (_proceduralFallback != null)
+            {
+                var existingRenderer = _characterGO.GetComponent<SkinnedMeshRenderer>();
+                if (existingRenderer != null) DestroyImmediate(existingRenderer);
 
-            // Remove old child bones
-            for (int i = _characterGO.transform.childCount - 1; i >= 0; i--)
-                DestroyImmediate(_characterGO.transform.GetChild(i).gameObject);
+                for (int i = _characterGO.transform.childCount - 1; i >= 0; i--)
+                    DestroyImmediate(_characterGO.transform.GetChild(i).gameObject);
 
-            // Rebuild with new spec
-            var spec = BuildSpecFromData(data);
-            _character = _characterGO.GetComponent<ProceduralCharacter>();
-            if (_character == null)
-                _character = _characterGO.AddComponent<ProceduralCharacter>();
-            _character.Build(spec);
-
-            // Ensure preview layer for all children
-            SetLayerRecursive(_characterGO, PreviewLayer);
+                var spec = BuildSpecFromData(data);
+                _proceduralFallback = _characterGO.GetComponent<ProceduralCharacter>();
+                if (_proceduralFallback == null)
+                    _proceduralFallback = _characterGO.AddComponent<ProceduralCharacter>();
+                _proceduralFallback.Build(spec);
+                SetLayerRecursive(_characterGO, PreviewLayer);
+            }
         }
 
-        /// <summary>
-        /// Set the camera focus mode (adjusts camera position/zoom).
-        /// </summary>
         public void SetFocusMode(FocusMode mode)
         {
             _currentFocus = mode;
@@ -101,9 +107,6 @@ namespace Orlo.UI.CharacterCreation
             }
         }
 
-        /// <summary>
-        /// Handle orbit input. Call from OnGUI when the mouse is over the preview area.
-        /// </summary>
         public void HandleOrbitInput(Rect previewRect)
         {
             var e = Event.current;
@@ -150,13 +153,19 @@ namespace Orlo.UI.CharacterCreation
             if (_rimLight != null) DestroyImmediate(_rimLight.gameObject);
         }
 
-        // ─── MonoBehaviour ─────────────────────────────────────────────────
+        // --- MonoBehaviour ---
 
         private void LateUpdate()
         {
             if (_previewCamera == null) return;
 
-            // Update orbital camera position
+            // If model loaded, adjust orbit target to model center
+            if (_usingModel && _modelCharacter != null && _modelCharacter.IsLoaded &&
+                _currentFocus == FocusMode.FullBody)
+            {
+                _orbitTarget = _modelCharacter.GetModelCenter();
+            }
+
             float yawRad = _orbitYaw * Mathf.Deg2Rad;
             float pitchRad = _orbitPitch * Mathf.Deg2Rad;
 
@@ -175,7 +184,7 @@ namespace Orlo.UI.CharacterCreation
             Cleanup();
         }
 
-        // ─── Setup ─────────────────────────────────────────────────────────
+        // --- Setup ---
 
         private void CreateCamera()
         {
@@ -191,35 +200,23 @@ namespace Orlo.UI.CharacterCreation
             _previewCamera.fieldOfView = 30f;
             _previewCamera.nearClipPlane = 0.1f;
             _previewCamera.farClipPlane = 50f;
-            _previewCamera.depth = -10; // Render before main camera
+            _previewCamera.depth = -10;
             _previewCamera.enabled = true;
         }
 
         private void CreateLighting()
         {
-            // Key light — main directional light from upper-right
             _keyLight = CreateLight("KeyLight",
-                new Vector3(2f, 3f, 2f),
-                Quaternion.Euler(45f, -135f, 0f),
-                LightType.Directional,
-                new Color(1f, 0.95f, 0.9f),
-                1.2f);
+                new Vector3(2f, 3f, 2f), Quaternion.Euler(45f, -135f, 0f),
+                LightType.Directional, new Color(1f, 0.95f, 0.9f), 1.2f);
 
-            // Fill light — softer from the left
             _fillLight = CreateLight("FillLight",
-                new Vector3(-3f, 1.5f, 1f),
-                Quaternion.Euler(20f, 60f, 0f),
-                LightType.Directional,
-                new Color(0.6f, 0.65f, 0.8f),
-                0.5f);
+                new Vector3(-3f, 1.5f, 1f), Quaternion.Euler(20f, 60f, 0f),
+                LightType.Directional, new Color(0.6f, 0.65f, 0.8f), 0.5f);
 
-            // Rim light — behind and above for silhouette
             _rimLight = CreateLight("RimLight",
-                new Vector3(0f, 2.5f, -3f),
-                Quaternion.Euler(30f, 180f, 0f),
-                LightType.Directional,
-                new Color(0.7f, 0.75f, 1f),
-                0.8f);
+                new Vector3(0f, 2.5f, -3f), Quaternion.Euler(30f, 180f, 0f),
+                LightType.Directional, new Color(0.7f, 0.75f, 1f), 0.8f);
         }
 
         private Light CreateLight(string name, Vector3 position, Quaternion rotation,
@@ -240,28 +237,48 @@ namespace Orlo.UI.CharacterCreation
             return light;
         }
 
-        private void CreateCharacter()
+        private async void CreateCharacter()
         {
             _characterGO = new GameObject("PreviewCharacter");
             _characterGO.transform.SetParent(transform);
             _characterGO.transform.position = Vector3.zero;
             SetLayerRecursive(_characterGO, PreviewLayer);
 
-            _character = _characterGO.AddComponent<ProceduralCharacter>();
-            _character.Build(new CharacterSpec());
-            SetLayerRecursive(_characterGO, PreviewLayer);
+            // Try loading real model first
+            _modelCharacter = _characterGO.AddComponent<ModelCharacter>();
+            await _modelCharacter.LoadModel("human_male_base.glb");
+
+            if (_modelCharacter.IsLoaded)
+            {
+                _usingModel = true;
+                _modelCharacter.SetLayer(PreviewLayer);
+
+                // Adjust camera for real model dimensions
+                float modelHeight = _modelCharacter.GetModelHeight();
+                _orbitTarget = new Vector3(0f, modelHeight * 0.5f, 0f);
+                _orbitDistance = modelHeight * 1.8f;
+
+                Debug.Log($"[CharacterPreview] Real model loaded (height: {modelHeight:F2}m)");
+            }
+            else
+            {
+                // Fallback to procedural
+                Debug.LogWarning("[CharacterPreview] Falling back to procedural character");
+                _proceduralFallback = _characterGO.AddComponent<ProceduralCharacter>();
+                _proceduralFallback.Build(new CharacterSpec());
+                SetLayerRecursive(_characterGO, PreviewLayer);
+            }
         }
 
         private CharacterSpec BuildSpecFromData(AppearanceData data)
         {
-            // Map 0-1 sliders to actual spec values
             float heightBase = 1.6f;
-            float heightRange = 0.5f; // 1.6 to 2.1
+            float heightRange = 0.5f;
             switch (data.Race)
             {
-                case 1: heightBase = 1.7f; heightRange = 0.5f; break; // Sylvari (taller)
-                case 2: heightBase = 1.5f; heightRange = 0.4f; break; // Korathi (stockier)
-                case 3: heightBase = 1.55f; heightRange = 0.45f; break; // Ashborn
+                case 1: heightBase = 1.7f; heightRange = 0.5f; break;
+                case 2: heightBase = 1.5f; heightRange = 0.4f; break;
+                case 3: heightBase = 1.55f; heightRange = 0.45f; break;
             }
 
             string archetype = "humanoid";
@@ -274,7 +291,7 @@ namespace Orlo.UI.CharacterCreation
                 BodyWidth = 0.3f + data.ShoulderWidth * 0.25f,
                 LimbThickness = 0.08f + data.ArmThickness * 0.1f,
                 SkinColor = data.SkinColor,
-                ShirtColor = new Color(0.3f, 0.3f, 0.6f), // Default clothing
+                ShirtColor = new Color(0.3f, 0.3f, 0.6f),
                 PantsColor = new Color(0.25f, 0.2f, 0.15f),
                 Archetype = archetype
             };
