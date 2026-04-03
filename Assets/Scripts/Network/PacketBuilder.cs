@@ -8,6 +8,7 @@ using ProtoWorld = Orlo.Proto.World;
 using ProtoCharacter = Orlo.Proto.Character;
 using ProtoAdmin = Orlo.Proto.Admin;
 using ProtoEconomy = Orlo.Proto.Economy;
+using ProtoTMD = Orlo.Proto.TMD;
 
 namespace Orlo.Network
 {
@@ -302,6 +303,37 @@ namespace Orlo.Network
             {
                 Target = new EntityId { Id = targetEntityId },
                 MoveId = moveId
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── TMD (Terrain Manipulation Device) ─────────────────────────────
+
+        /// <summary>
+        /// Send a TMD operation request.
+        /// Operation: 0=Dig, 1=Fill, 2=Smooth, 3=Scan, 4=Reinforce
+        /// </summary>
+        public static byte[] TMDOperation(int operation, Vector3 position, float radius, float intensity)
+        {
+            var pkt = NewPacket();
+            pkt.TmdRequest = new ProtoTMD.TMDRequest
+            {
+                Operation = (ProtoTMD.TMDOperation)operation,
+                Position = new Vec3 { X = position.x, Y = position.y, Z = position.z }
+            };
+            return pkt.ToByteArray();
+        }
+
+        /// <summary>
+        /// Place a land claim at a position with a given radius.
+        /// </summary>
+        public static byte[] PlaceLandClaim(Vector3 position, float radius)
+        {
+            var pkt = NewPacket();
+            pkt.PlaceLandClaim = new ProtoTMD.PlaceLandClaim
+            {
+                Position = new Vec3 { X = position.x, Y = position.y, Z = position.z },
+                Radius = radius
             };
             return pkt.ToByteArray();
         }

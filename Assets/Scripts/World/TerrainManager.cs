@@ -255,6 +255,45 @@ namespace Orlo.World
             return Color.Lerp(DirtColor, GrassColor, grassBlend);
         }
 
+        /// <summary>
+        /// Apply terrain height deltas from TMD operation.
+        /// The server sends packed float32 deltas for the entire chunk heightmap.
+        /// We add these deltas to the existing heights and rebuild the mesh.
+        /// </summary>
+        public void ApplyTerrainModification(int chunkX, int chunkZ, byte[] heightDeltaBytes)
+        {
+            var coord = new Vector2Int(chunkX, chunkZ);
+
+            if (!_chunks.TryGetValue(coord, out var data))
+            {
+                Debug.LogWarning($"[Terrain] Cannot apply TMD mod — chunk {coord} not loaded");
+                return;
+            }
+
+            // Unpack float32 deltas
+            int deltaCount = heightDeltaBytes.Length / 4;
+            int vertexCount = data.Heightmap.Length;
+            int count = Mathf.Min(deltaCount, vertexCount);
+
+            for (int i = 0; i < count; i++)
+            {
+                float delta = System.BitConverter.ToSingle(heightDeltaBytes, i * 4);
+                data.Heightmap[i] += delta;
+            }
+
+            // Store updated data back
+            _chunks[coord] = data;
+
+            // Rebuild mesh if this chunk is currently visible
+            if (_activeChunks.TryGetValue(coord, out var existing))
+            {
+                Destroy(existing);
+                _activeChunks[coord] = BuildTerrainMesh(coord, data);
+            }
+
+            Debug.Log($"[Terrain] Applied TMD modification to chunk {coord}: {count} vertices modified");
+        }
+
         private GameObject CreatePlaceholderChunk(Vector2Int coord)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Plane);

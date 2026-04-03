@@ -16,6 +16,7 @@ using ProtoEconomy = Orlo.Proto.Economy;
 using ProtoEnv = Orlo.Proto.Environment;
 using ProtoCombat = Orlo.Proto.Combat;
 using ProtoInventory = Orlo.Proto.Inventory;
+using ProtoTMD = Orlo.Proto.TMD;
 
 namespace Orlo.Network
 {
@@ -196,6 +197,20 @@ namespace Orlo.Network
                     break;
                 case Packet.PayloadOneofCase.MartialArtsState:
                     HandleMartialArtsState(packet.MartialArtsState);
+                    break;
+
+                // TMD (Terrain Manipulation Device)
+                case Packet.PayloadOneofCase.TmdResult:
+                    HandleTMDResult(packet.TmdResult);
+                    break;
+                case Packet.PayloadOneofCase.TerrainModification:
+                    HandleTerrainModification(packet.TerrainModification);
+                    break;
+                case Packet.PayloadOneofCase.TmdStatus:
+                    HandleTMDStatus(packet.TmdStatus);
+                    break;
+                case Packet.PayloadOneofCase.LandClaimInfo:
+                    HandleLandClaimInfo(packet.LandClaimInfo);
                     break;
 
                 // Admin
@@ -465,6 +480,58 @@ namespace Orlo.Network
         {
             FindFirstObjectByType<MinimapUI>()?.OnMinimapUpdate(
                 map.CellX, map.CellZ, (int)map.Resolution, map.ColorData.ToByteArray());
+        }
+
+        // ─── TMD handlers ───────────────────────────────────────────────────
+
+        private void HandleTMDResult(ProtoTMD.TMDResult result)
+        {
+            Debug.Log($"[TMD] Result: op={result.Operation} success={result.Success} charges={result.ChargesRemaining}");
+
+            var tmdUI = FindFirstObjectByType<TMDUI>();
+            tmdUI?.OnOperationResult(result.Success, (int)result.Operation, result.ChargesRemaining, result.Error);
+
+            // If scan, show result count
+            if (result.Operation == ProtoTMD.TMDOperation.TmdScan && result.ScanResults.Count > 0)
+            {
+                tmdUI?.OnScanResults(result.ScanResults.Count);
+                foreach (var res in result.ScanResults)
+                {
+                    var pos = new Vector3(res.Position.X, res.Position.Y, res.Position.Z);
+                    FindFirstObjectByType<MinimapUI>()?.AddMarker(pos, "resource", res.Name, Color.yellow);
+                }
+            }
+        }
+
+        private void HandleTerrainModification(ProtoTMD.TerrainModification mod)
+        {
+            Debug.Log($"[TMD] Terrain mod: chunk ({mod.ChunkX}, {mod.ChunkZ})");
+            var terrainMgr = FindFirstObjectByType<TerrainManager>();
+            if (terrainMgr != null && mod.HeightDeltas != null && mod.HeightDeltas.Length > 0)
+            {
+                terrainMgr.ApplyTerrainModification(mod.ChunkX, mod.ChunkZ, mod.HeightDeltas.ToByteArray());
+            }
+        }
+
+        private void HandleTMDStatus(ProtoTMD.TMDStatus status)
+        {
+            Debug.Log($"[TMD] Status: tier={status.Tier} charges={status.Charges}/{status.MaxCharges}");
+            var tmdUI = FindFirstObjectByType<TMDUI>();
+            if (tmdUI == null)
+            {
+                var go = new GameObject("TMDUI");
+                tmdUI = go.AddComponent<TMDUI>();
+            }
+            tmdUI.UpdateStatus((int)status.Tier, status.Charges, status.MaxCharges);
+        }
+
+        private void HandleLandClaimInfo(ProtoTMD.LandClaimInfo claim)
+        {
+            Debug.Log($"[TMD] Land claim {claim.ClaimId}: owner={claim.OwnerId} radius={claim.Radius} yours={claim.IsYours}");
+            var pos = new Vector3(claim.Center.X, claim.Center.Y, claim.Center.Z);
+            var color = claim.IsYours ? new Color(0.3f, 0.8f, 0.3f) : new Color(0.8f, 0.3f, 0.3f);
+            FindFirstObjectByType<MinimapUI>()?.AddMarker(pos, "claim",
+                claim.IsYours ? "Your Claim" : "Land Claim", color);
         }
 
         // ─── Character Creation handlers ────────────────────────────────────
