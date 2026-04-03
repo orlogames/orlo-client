@@ -412,5 +412,119 @@ namespace Orlo.Network
         // TODO: Add CraftFinalizeRequest when proto message is defined.
         // Should include: recipe_id (server tracks session, but client confirms intent)
         // public static byte[] CraftFinalize()
+
+        // ─── Inventory Actions ──────────────────────────────────────────────
+
+        /// <summary>Request to equip an item from inventory.</summary>
+        public static byte[] EquipItem(uint slotIndex, ProtoInventory.EquipmentSlot targetSlot = ProtoInventory.EquipmentSlot.None)
+        {
+            var pkt = NewPacket();
+            pkt.EquipItemRequest = new ProtoInventory.EquipItemRequest
+            {
+                SlotIndex = slotIndex,
+                TargetSlot = targetSlot
+            };
+            return pkt.ToByteArray();
+        }
+
+        /// <summary>Request to unequip an item to inventory.</summary>
+        public static byte[] UnequipItem(ProtoInventory.EquipmentSlot slot)
+        {
+            var pkt = NewPacket();
+            pkt.UnequipItemRequest = new ProtoInventory.UnequipItemRequest
+            {
+                Slot = slot
+            };
+            return pkt.ToByteArray();
+        }
+
+        /// <summary>Request to drop an item from inventory.</summary>
+        public static byte[] DropItem(uint slotIndex, uint quantity)
+        {
+            var pkt = NewPacket();
+            pkt.DropItemRequest = new ProtoInventory.DropItemRequest
+            {
+                SlotIndex = slotIndex,
+                Quantity = quantity
+            };
+            return pkt.ToByteArray();
+        }
+
+        /// <summary>Request to move an item between inventory slots.</summary>
+        public static byte[] MoveItem(uint fromSlot, uint toSlot)
+        {
+            var pkt = NewPacket();
+            pkt.ItemMoveRequest = new ProtoInventory.ItemMoveRequest
+            {
+                FromSlot = fromSlot,
+                ToSlot = toSlot
+            };
+            return pkt.ToByteArray();
+        }
+
+        /// <summary>Request to split a stack.</summary>
+        public static byte[] SplitStack(uint slotIndex, uint splitQuantity, uint targetSlot)
+        {
+            var pkt = NewPacket();
+            pkt.SplitStackRequest = new ProtoInventory.SplitStackRequest
+            {
+                SlotIndex = slotIndex,
+                SplitQuantity = splitQuantity,
+                TargetSlot = targetSlot
+            };
+            return pkt.ToByteArray();
+        }
+
+        /// <summary>Request to pick up a loot entity in the world.</summary>
+        public static byte[] LootPickup(ulong lootEntityId)
+        {
+            var pkt = NewPacket();
+            pkt.LootPickupRequest = new ProtoInventory.LootPickupRequest
+            {
+                LootEntity = new EntityId { Id = lootEntityId }
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Quest Actions ──────────────────────────────────────────────────
+
+        /// <summary>Accept a quest from an NPC.</summary>
+        public static byte[] QuestAccept(string questId)
+        {
+            var pkt = NewPacket();
+            pkt.QuestAccept = new Orlo.Proto.Progression.QuestAccept
+            {
+                QuestId = questId
+            };
+            return pkt.ToByteArray();
+        }
+
+        /// <summary>Turn in a completed quest to an NPC.</summary>
+        public static byte[] QuestTurnIn(string questId)
+        {
+            var pkt = NewPacket();
+            pkt.QuestTurnIn = new Orlo.Proto.Progression.QuestTurnIn
+            {
+                QuestId = questId
+            };
+            return pkt.ToByteArray();
+        }
+
+        /// <summary>Abandon an active quest.</summary>
+        public static byte[] QuestAbandon(string questId)
+        {
+            // TODO: QuestAbandon proto message not yet defined — use QuestTurnIn as placeholder
+            // Server should handle abandon via a separate message type when added
+            Debug.LogWarning($"[PacketBuilder] QuestAbandon not yet in proto — sending as log only for quest {questId}");
+            var pkt = NewPacket();
+            // Placeholder: send a system-level abandon via chat or admin channel
+            // Real implementation needs a QuestAbandon message in progression.proto
+            pkt.QuestTurnIn = new Orlo.Proto.Progression.QuestTurnIn
+            {
+                QuestId = questId
+            };
+            return pkt.ToByteArray();
+        }
     }
 }
+

@@ -18,6 +18,7 @@ using ProtoCombat = Orlo.Proto.Combat;
 using ProtoInventory = Orlo.Proto.Inventory;
 using ProtoResource = Orlo.Proto.Resource;
 using ProtoTMD = Orlo.Proto.TMD;
+using ProtoProgression = Orlo.Proto.Progression;
 
 namespace Orlo.Network
 {
@@ -441,6 +442,21 @@ namespace Orlo.Network
         {
             switch (packet.PayloadCase)
             {
+                case Packet.PayloadOneofCase.InventoryUpdate:
+                    HandleInventoryUpdate(packet.InventoryUpdate);
+                    break;
+                case Packet.PayloadOneofCase.ItemAdd:
+                    HandleItemAdd(packet.ItemAdd);
+                    break;
+                case Packet.PayloadOneofCase.ItemRemove:
+                    HandleItemRemove(packet.ItemRemove);
+                    break;
+                case Packet.PayloadOneofCase.ItemMoveConfirm:
+                    HandleItemMoveConfirm(packet.ItemMoveConfirm);
+                    break;
+                case Packet.PayloadOneofCase.EquipmentChanged:
+                    HandleEquipmentChanged(packet.EquipmentChanged);
+                    break;
                 case Packet.PayloadOneofCase.CraftProgress:
                     HandleCraftProgress(packet.CraftProgress);
                     break;
@@ -450,11 +466,8 @@ namespace Orlo.Network
                 case Packet.PayloadOneofCase.RecipeDiscovered:
                     HandleRecipeDiscovered(packet.RecipeDiscovered);
                     break;
-                case Packet.PayloadOneofCase.GatherProgress:
-                    HandleGatherProgress(packet.GatherProgress);
-                    break;
-                case Packet.PayloadOneofCase.GatherComplete:
-                    HandleGatherComplete(packet.GatherComplete);
+                case Packet.PayloadOneofCase.LootPickup:
+                    HandleLootPickup(packet.LootPickup);
                     break;
                 default:
                     Debug.Log($"[Inventory] Received: {packet.PayloadCase}");
@@ -534,6 +547,175 @@ namespace Orlo.Network
             }
         }
 
+        // ─── Inventory sync handlers ────────────────────────────────────────
+
+        private void HandleInventoryUpdate(ProtoInventory.InventoryUpdate update)
+        {
+            Debug.Log($"[Inventory] Full update: {update.Slots.Count} slots, {update.Equipment.Count} equipment, " +
+                      $"weight={update.TotalWeight:F1}/{update.MaxWeight:F1}");
+
+            var inv = InventoryUI.Instance;
+            if (inv == null)
+            {
+                var go = new GameObject("InventoryUI");
+                inv = go.AddComponent<InventoryUI>();
+            }
+
+            var items = new List<InventoryUI.ItemSlot>();
+            foreach (var slot in update.Slots)
+            {
+                items.Add(ProtoItemToSlot(slot.Item, (int)slot.SlotIndex));
+            }
+
+            var equipment = new List<InventoryUI.ItemSlot>();
+            foreach (var eq in update.Equipment)
+            {
+                equipment.Add(ProtoItemToSlot(eq.Item, MapEquipSlotToIndex(eq.Slot)));
+            }
+
+            inv.SetItems(items, equipment, update.TotalWeight, update.MaxWeight);
+        }
+
+        private void HandleItemAdd(ProtoInventory.ItemAdd add)
+        {
+            Debug.Log($"[Inventory] Item added to slot {add.SlotIndex}: item#{add.Item?.ItemId} x{add.Item?.Quantity}");
+
+            var inv = InventoryUI.Instance;
+            if (inv == null) return;
+
+            var slot = ProtoItemToSlot(add.Item, (int)add.SlotIndex);
+            inv.AddItem((int)add.SlotIndex, slot, add.TotalWeight);
+
+            // Show notification
+            string name = add.Item?.Metadata != null && add.Item.Metadata.ContainsKey("name")
+                ? add.Item.Metadata["name"]
+                : $"Item #{add.Item?.ItemId}";
+            NotificationUI.Instance?.Show("Item Received", $"+{add.Item?.Quantity} {name}", 0, 3f);
+        }
+
+        private void HandleItemRemove(ProtoInventory.ItemRemove remove)
+        {
+            Debug.Log($"[Inventory] Item removed from slot {remove.SlotIndex}: -{remove.QuantityRemoved}");
+
+            var inv = InventoryUI.Instance;
+            if (inv == null) return;
+
+            inv.RemoveItem((int)remove.SlotIndex, remove.QuantityRemoved, remove.TotalWeight);
+        }
+
+        private void HandleItemMoveConfirm(ProtoInventory.ItemMoveConfirm confirm)
+        {
+            Debug.Log($"[Inventory] Move confirmed: slot {confirm.FromSlot} -> {confirm.ToSlot}");
+
+            var inv = InventoryUI.Instance;
+            if (inv == null) return;
+
+            var fromItem = ProtoItemToSlot(confirm.FromItem, (int)confirm.FromSlot);
+            var toItem = ProtoItemToSlot(confirm.ToItem, (int)confirm.ToSlot);
+            inv.ConfirmMove((int)confirm.FromSlot, (int)confirm.ToSlot, fromItem, toItem);
+        }
+
+        private void HandleEquipmentChanged(ProtoInventory.EquipmentChanged changed)
+        {
+            Debug.Log($"[Inventory] Equipment changed: slot={changed.Slot} inv_slot={changed.InventorySlot}");
+
+            var inv = InventoryUI.Instance;
+            if (inv == null) return;
+
+            int equipIdx = MapEquipSlotToIndex(changed.Slot);
+            var equipItem = ProtoItemToSlot(changed.Item, equipIdx);
+            var invItem = ProtoItemToSlot(changed.InventoryItem, (int)changed.InventorySlot);
+            inv.UpdateEquipment(equipIdx, equipItem, (int)changed.InventorySlot, invItem);
+        }
+
+        private void HandleLootPickup(ProtoInventory.LootPickup pickup)
+        {
+            var pos = new Vector3(pickup.Position.X, pickup.Position.Y, pickup.Position.Z);
+            Debug.Log($"[Inventory] Loot pickup: entity={pickup.LootEntity?.Id} at {pos} ({pickup.Items.Count} items)");
+
+            FindFirstObjectByType<MinimapUI>()?.AddMarker(pos, "loot", "Loot", Color.yellow);
+            NotificationUI.Instance?.Show("Loot", "Loot available nearby", 0, 4f);
+        }
+
+        /// <summary>Convert a proto ItemStack to InventoryUI.ItemSlot.</summary>
+        private InventoryUI.ItemSlot ProtoItemToSlot(ProtoInventory.ItemStack item, int slotIndex)
+        {
+            if (item == null || item.ItemId == 0)
+                return default;
+
+            string name = item.Metadata != null && item.Metadata.ContainsKey("name")
+                ? item.Metadata["name"]
+                : $"Item #{item.ItemId}";
+            string desc = item.Metadata != null && item.Metadata.ContainsKey("description")
+                ? item.Metadata["description"]
+                : "";
+            int rarity = 0;
+            if (item.Metadata != null && item.Metadata.ContainsKey("rarity"))
+                int.TryParse(item.Metadata["rarity"], out rarity);
+            float weight = 0;
+            if (item.Metadata != null && item.Metadata.ContainsKey("weight"))
+                float.TryParse(item.Metadata["weight"],
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out weight);
+            int category = 0;
+            if (item.Metadata != null && item.Metadata.ContainsKey("category"))
+                int.TryParse(item.Metadata["category"], out category);
+
+            // Resource quality attributes
+            uint[] resAttrs = null;
+            if (item.ResourceAttrs != null)
+            {
+                resAttrs = new uint[11];
+                resAttrs[0]  = item.ResourceAttrs.Conductivity;
+                resAttrs[1]  = item.ResourceAttrs.ThermalResistance;
+                resAttrs[2]  = item.ResourceAttrs.TensileStrength;
+                resAttrs[3]  = item.ResourceAttrs.Malleability;
+                resAttrs[4]  = item.ResourceAttrs.Reactivity;
+                resAttrs[5]  = item.ResourceAttrs.Density;
+                resAttrs[6]  = item.ResourceAttrs.Purity;
+                resAttrs[7]  = item.ResourceAttrs.Resonance;
+                resAttrs[8]  = item.ResourceAttrs.DecayResistance;
+                resAttrs[9]  = item.ResourceAttrs.Flexibility;
+                resAttrs[10] = item.ResourceAttrs.HarmonicResponse;
+            }
+
+            return new InventoryUI.ItemSlot
+            {
+                Occupied = true,
+                ItemId = (uint)slotIndex, // slot index for SetItems mapping
+                Name = name,
+                Description = desc,
+                RarityColor = InventoryUI.GetRarityColor(rarity),
+                Rarity = rarity,
+                Category = category,
+                Weight = weight,
+                StackCount = (int)item.Quantity,
+                Condition = item.Condition > 0 ? item.Condition : 1f,
+                MaxCondition = item.MaxCondition > 0 ? item.MaxCondition : 1f,
+                CraftedBy = item.CraftedBy ?? "",
+                ResourceAttrs = resAttrs
+            };
+        }
+
+        /// <summary>Map proto EquipmentSlot enum to local array index.</summary>
+        private int MapEquipSlotToIndex(ProtoInventory.EquipmentSlot slot)
+        {
+            return slot switch
+            {
+                ProtoInventory.EquipmentSlot.Head => 0,
+                ProtoInventory.EquipmentSlot.Chest => 1,
+                ProtoInventory.EquipmentSlot.Legs => 2,
+                ProtoInventory.EquipmentSlot.Feet => 3,
+                ProtoInventory.EquipmentSlot.MainHand => 4,
+                ProtoInventory.EquipmentSlot.OffHand => 5,
+                ProtoInventory.EquipmentSlot.Accessory1 => 6,
+                ProtoInventory.EquipmentSlot.Accessory2 => 7,
+                _ => 0
+            };
+        }
+
+        // ─── Social / Progression handlers ──────────────────────────────────
+
         private void HandleSocialPacket(Packet packet)
         {
             Debug.Log($"[Social] Received: {packet.PayloadCase}");
@@ -541,7 +723,164 @@ namespace Orlo.Network
 
         private void HandleProgressionPacket(Packet packet)
         {
-            Debug.Log($"[Progression] Received: {packet.PayloadCase}");
+            switch (packet.PayloadCase)
+            {
+                case Packet.PayloadOneofCase.QuestAvailable:
+                    HandleQuestAvailable(packet.QuestAvailable);
+                    break;
+                case Packet.PayloadOneofCase.QuestProgress:
+                    HandleQuestProgress(packet.QuestProgress);
+                    break;
+                case Packet.PayloadOneofCase.QuestComplete:
+                    HandleQuestComplete(packet.QuestComplete);
+                    break;
+                case Packet.PayloadOneofCase.QuestTurnInResponse:
+                    HandleQuestTurnInResponse(packet.QuestTurnInResponse);
+                    break;
+                case Packet.PayloadOneofCase.QuestLog:
+                    HandleQuestLog(packet.QuestLog);
+                    break;
+                case Packet.PayloadOneofCase.XpGain:
+                    HandleXPGain(packet.XpGain);
+                    break;
+                case Packet.PayloadOneofCase.LevelUp:
+                    HandleLevelUp(packet.LevelUp);
+                    break;
+                default:
+                    Debug.Log($"[Progression] Received: {packet.PayloadCase}");
+                    break;
+            }
+        }
+
+        // ─── Quest handlers ─────────────────────────────────────────────────
+
+        private void HandleQuestAvailable(ProtoProgression.QuestAvailable available)
+        {
+            var q = available.Quest;
+            if (q == null) return;
+            Debug.Log($"[Quest] Available: {q.Name} (id={q.QuestId})");
+
+            var questDialog = QuestDialogUI.Instance;
+            if (questDialog == null)
+            {
+                var go = new GameObject("QuestDialogUI");
+                questDialog = go.AddComponent<QuestDialogUI>();
+            }
+
+            var questData = ProtoQuestToData(q);
+            // Show as offer — NPC name comes from the NPC interaction context
+            questDialog.ShowQuestOffer(0, "Quest Giver", q.Description, questData);
+        }
+
+        private void HandleQuestProgress(ProtoProgression.QuestProgress progress)
+        {
+            Debug.Log($"[Quest] Progress: quest={progress.QuestId} obj#{progress.ObjectiveIndex} " +
+                      $"{progress.CurrentCount}/{progress.RequiredCount}");
+
+            // Update quest dialog if open
+            QuestDialogUI.Instance?.UpdateObjective(
+                progress.QuestId,
+                (int)progress.ObjectiveIndex,
+                (int)progress.CurrentCount,
+                (int)progress.RequiredCount);
+
+            // Show notification
+            NotificationUI.Instance?.Show("Quest Update",
+                $"Objective progress: {progress.CurrentCount}/{progress.RequiredCount}", 0, 2f);
+        }
+
+        private void HandleQuestComplete(ProtoProgression.QuestComplete complete)
+        {
+            Debug.Log($"[Quest] All objectives met: {complete.QuestId}");
+            NotificationUI.Instance?.Show("Quest Complete",
+                $"Quest ready to turn in!", 0, 5f);
+        }
+
+        private void HandleQuestTurnInResponse(ProtoProgression.QuestTurnInResponse response)
+        {
+            Debug.Log($"[Quest] Turn-in result: quest={response.QuestId} success={response.Success}");
+
+            if (response.Success)
+            {
+                string rewardText = "";
+                if (response.Rewards != null)
+                {
+                    if (response.Rewards.Xp > 0) rewardText += $"+{response.Rewards.Xp} XP  ";
+                    if (response.Rewards.SkillPoints > 0) rewardText += $"+{response.Rewards.SkillPoints} SP  ";
+                }
+
+                QuestDialogUI.Instance?.ShowTurnInResult(true, $"Quest complete! {rewardText}");
+                NotificationUI.Instance?.Show("Quest Turned In", rewardText, 0, 5f);
+            }
+            else
+            {
+                QuestDialogUI.Instance?.ShowTurnInResult(false, response.Error);
+            }
+        }
+
+        private void HandleQuestLog(ProtoProgression.QuestLog log)
+        {
+            Debug.Log($"[Quest] Quest log: {log.ActiveQuests.Count} active, {log.CompletedQuestIds.Count} completed, " +
+                      $"{log.AvailableQuests.Count} available");
+            // TODO: Feed QuestLogUI with full quest log data
+        }
+
+        private void HandleXPGain(ProtoProgression.XPGain xp)
+        {
+            Debug.Log($"[Progression] +{xp.Amount} XP from {xp.SourceType} (total: {xp.NewTotal})");
+            NotificationUI.Instance?.Show("XP Gained", $"+{xp.Amount} XP", 0, 2f);
+        }
+
+        private void HandleLevelUp(ProtoProgression.LevelUp levelUp)
+        {
+            Debug.Log($"[Progression] LEVEL UP! Now level {levelUp.NewLevel}");
+            NotificationUI.Instance?.Show("Level Up!", $"You are now level {levelUp.NewLevel}!", 0, 8f);
+        }
+
+        /// <summary>Convert a proto QuestInfo to QuestDialogUI.QuestData.</summary>
+        private QuestDialogUI.QuestData ProtoQuestToData(ProtoProgression.QuestInfo quest)
+        {
+            var objectives = new List<QuestDialogUI.QuestObjective>();
+            if (quest.Objectives != null)
+            {
+                foreach (var obj in quest.Objectives)
+                {
+                    objectives.Add(new QuestDialogUI.QuestObjective
+                    {
+                        Description = obj.Description,
+                        Current = (int)obj.CurrentCount,
+                        Required = (int)obj.RequiredCount,
+                        Complete = obj.CurrentCount >= obj.RequiredCount
+                    });
+                }
+            }
+
+            var rewards = new QuestDialogUI.QuestRewardData();
+            if (quest.Rewards != null)
+            {
+                rewards.XP = quest.Rewards.Xp;
+                rewards.SkillPoints = quest.Rewards.SkillPoints;
+                rewards.ItemNames = new List<string>();
+                foreach (var itemId in quest.Rewards.ItemIds)
+                    rewards.ItemNames.Add(itemId); // Display item IDs until we have a lookup table
+            }
+
+            var state = quest.State switch
+            {
+                ProtoProgression.QuestState.Available => QuestDialogUI.QuestDialogState.Offer,
+                ProtoProgression.QuestState.Complete => QuestDialogUI.QuestDialogState.ReadyToTurnIn,
+                _ => QuestDialogUI.QuestDialogState.InProgress
+            };
+
+            return new QuestDialogUI.QuestData
+            {
+                QuestId = quest.QuestId,
+                Name = quest.Name,
+                Description = quest.Description,
+                State = state,
+                Objectives = objectives,
+                Rewards = rewards
+            };
         }
 
         // Phase 3 — Environment handlers
@@ -842,11 +1181,11 @@ namespace Orlo.Network
 
         private void HandleNPCData(ProtoEconomy.NPCData data)
         {
-            Debug.Log($"[NPC] {data.NpcName}: {data.Dialogue} ({data.ShopItems.Count} items)");
+            Debug.Log($"[NPC] {data.NpcName}: {data.Dialogue} (role={data.Role}, items={data.ShopItems.Count}, quests={data.QuestIds.Count})");
 
-            // If vendor, open shop UI
-            if (data.Role == 0) // Vendor
+            if (data.ShopItems.Count > 0)
             {
+                // Vendor NPC — open shop UI
                 var shop = FindFirstObjectByType<ShopUI>();
                 if (shop == null)
                 {
@@ -871,6 +1210,22 @@ namespace Orlo.Network
                 }
                 shop.SetItems(items);
                 shop.Show(data.NpcEntityId.Id, data.NpcName, data.Dialogue, 0);
+            }
+            else if (data.QuestIds.Count > 0)
+            {
+                // Quest NPC — the server will send QuestAvailable packets for each quest
+                // For now, log the available quest IDs so we know they are coming
+                Debug.Log($"[NPC] Quest giver {data.NpcName} has {data.QuestIds.Count} quests");
+
+                // If only one quest, the QuestAvailable handler will open the dialog.
+                // If multiple quests, we could show a selection list (future enhancement).
+                // For now, show a notification that quest dialog is incoming.
+                NotificationUI.Instance?.Show("NPC", $"{data.NpcName}: \"{data.Dialogue}\"", 0, 4f);
+            }
+            else
+            {
+                // Generic NPC — just show dialogue
+                NotificationUI.Instance?.Show("NPC", $"{data.NpcName}: \"{data.Dialogue}\"", 0, 4f);
             }
         }
 

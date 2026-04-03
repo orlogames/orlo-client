@@ -1,14 +1,19 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Orlo.Network;
 
 namespace Orlo.UI
 {
     /// <summary>
     /// Inventory screen with 8x5 grid, equipment panel, tooltips, and context menu.
+    /// Receives real inventory data from server via SetItems/AddItem/RemoveItem/UpdateItem.
+    /// Falls back to test items when not connected (dev mode).
     /// Uses OnGUI for rapid prototyping — will be replaced with proper UI later.
     /// </summary>
     public class InventoryUI : MonoBehaviour
     {
+        public static InventoryUI Instance { get; private set; }
+
         private bool _visible;
         private Vector2 _windowPos = new Vector2(200, 100);
         private bool _dragging;
@@ -35,44 +40,157 @@ namespace Orlo.UI
         // Tooltip
         private int _hoverSlot = -1;
 
-        // Placeholder item data
-        private struct ItemSlot
+        // Item data — populated by server or test data
+        public struct ItemSlot
         {
             public bool Occupied;
+            public uint ItemId;
             public string Name;
             public string Description;
             public Color RarityColor;
+            public int Rarity;         // 0=Common, 1=Uncommon, 2=Rare, 3=Epic, 4=Legendary
+            public int Category;       // Maps to ItemCategory enum
             public float Weight;
             public int StackCount;
+            public float Condition;    // 0.0 = broken, 1.0 = pristine
+            public float MaxCondition;
+            public string CraftedBy;
+            public uint[] ResourceAttrs; // 11 quality attributes (0-1000), null if not a resource
         }
 
         private ItemSlot[] _slots;
         private ItemSlot[] _equipSlots;
         private float _currentWeight;
         private float _maxWeight = 100f;
+        private bool _serverSynced; // true once we receive server data
+
+        // Resource attribute labels (11 attrs)
+        private static readonly string[] AttrLabels = {
+            "CN", "TH", "TN", "ML", "RE", "DN", "PR", "RS", "DC", "FL", "HR"
+        };
 
         private void Awake()
         {
+            if (Instance != null) { Destroy(gameObject); return; }
+            Instance = this;
+
             _slots = new ItemSlot[TotalSlots];
             _equipSlots = new ItemSlot[EquipSlotNames.Length];
+            _serverSynced = false;
 
-            // Seed some placeholder items for testing
+            // Seed placeholder items for dev mode (replaced when server data arrives)
             AddTestItem(0, "Iron Sword", "A sturdy blade.", new Color(0.4f, 0.6f, 1f), 3.5f, 1);
             AddTestItem(1, "Health Potion", "Restores 50 HP.", Color.green, 0.2f, 5);
             AddTestItem(4, "Dragon Scale", "Rare crafting material.", new Color(1f, 0.5f, 0f), 1.0f, 3);
             AddTestItem(8, "Wooden Shield", "Basic protection.", Color.white, 4.0f, 1);
             AddTestItem(12, "Gold Ring", "Shiny.", Color.yellow, 0.1f, 1);
 
-            _equipSlots[0] = new ItemSlot { Occupied = true, Name = "Iron Helm", Description = "Basic head armor.", RarityColor = Color.white, Weight = 2f, StackCount = 1 };
-            _equipSlots[4] = new ItemSlot { Occupied = true, Name = "Iron Sword", Description = "Equipped weapon.", RarityColor = new Color(0.4f, 0.6f, 1f), Weight = 3.5f, StackCount = 1 };
+            _equipSlots[0] = new ItemSlot { Occupied = true, Name = "Iron Helm", Description = "Basic head armor.",
+                RarityColor = Color.white, Weight = 2f, StackCount = 1, Condition = 0.85f, MaxCondition = 1f };
+            _equipSlots[4] = new ItemSlot { Occupied = true, Name = "Iron Sword", Description = "Equipped weapon.",
+                RarityColor = new Color(0.4f, 0.6f, 1f), Weight = 3.5f, StackCount = 1, Condition = 1f, MaxCondition = 1f };
 
             RecalcWeight();
         }
 
         private void AddTestItem(int slot, string name, string desc, Color rarity, float weight, int stack)
         {
-            _slots[slot] = new ItemSlot { Occupied = true, Name = name, Description = desc, RarityColor = rarity, Weight = weight, StackCount = stack };
+            _slots[slot] = new ItemSlot
+            {
+                Occupied = true, Name = name, Description = desc,
+                RarityColor = rarity, Weight = weight, StackCount = stack,
+                Condition = 1f, MaxCondition = 1f
+            };
         }
+
+        // ─── Public API for server sync ─────────────────────────────────────
+
+        /// <summary>
+        /// Replace all inventory slots with server-provided data (sent on login, zone change).
+        /// </summary>
+        public void SetItems(List<ItemSlot> items, List<ItemSlot> equipment, float totalWeight, float maxWeight)
+        {
+            _serverSynced = true;
+
+            // Clear all slots
+            _slots = new ItemSlot[TotalSlots];
+            _equipSlots = new ItemSlot[EquipSlotNames.Length];
+
+            foreach (var item in items)
+            {
+                int idx = (int)item.ItemId; // slot_index is packed into ItemId field by handler
+                if (idx >= 0 && idx < TotalSlots)
+                    _slots[idx] = item;
+            }
+
+            foreach (var eq in equipment)
+            {
+                int idx = eq.Category; // equip slot index packed into Category by handler
+                if (idx >= 0 && idx < _equipSlots.Length)
+                    _equipSlots[idx] = eq;
+            }
+
+            _currentWeight = totalWeight;
+            _maxWeight = maxWeight > 0 ? maxWeight : 100f;
+        }
+
+        /// <summary>Add or update item at a specific inventory slot.</summary>
+        public void AddItem(int slotIndex, ItemSlot item, float totalWeight)
+        {
+            _serverSynced = true;
+            if (slotIndex >= 0 && slotIndex < TotalSlots)
+            {
+                _slots[slotIndex] = item;
+                _currentWeight = totalWeight;
+            }
+        }
+
+        /// <summary>Remove item from a specific inventory slot (or reduce stack).</summary>
+        public void RemoveItem(int slotIndex, uint quantityRemoved, float totalWeight)
+        {
+            if (slotIndex < 0 || slotIndex >= TotalSlots) return;
+
+            if (quantityRemoved >= (uint)_slots[slotIndex].StackCount)
+            {
+                _slots[slotIndex] = default;
+            }
+            else
+            {
+                var s = _slots[slotIndex];
+                s.StackCount -= (int)quantityRemoved;
+                _slots[slotIndex] = s;
+            }
+            _currentWeight = totalWeight;
+        }
+
+        /// <summary>Update item in a specific slot (e.g., condition changed).</summary>
+        public void UpdateItem(int slotIndex, ItemSlot item)
+        {
+            if (slotIndex >= 0 && slotIndex < TotalSlots)
+                _slots[slotIndex] = item;
+        }
+
+        /// <summary>Update equipment slot (equip/unequip).</summary>
+        public void UpdateEquipment(int equipSlot, ItemSlot item, int inventorySlot, ItemSlot inventoryItem)
+        {
+            if (equipSlot >= 0 && equipSlot < _equipSlots.Length)
+                _equipSlots[equipSlot] = item;
+            if (inventorySlot >= 0 && inventorySlot < TotalSlots)
+                _slots[inventorySlot] = inventoryItem;
+            RecalcWeight();
+        }
+
+        /// <summary>Handle item move confirmation from server.</summary>
+        public void ConfirmMove(int fromSlot, int toSlot, ItemSlot fromItem, ItemSlot toItem)
+        {
+            if (fromSlot >= 0 && fromSlot < TotalSlots)
+                _slots[fromSlot] = fromItem;
+            if (toSlot >= 0 && toSlot < TotalSlots)
+                _slots[toSlot] = toItem;
+            RecalcWeight();
+        }
+
+        // ─── Private helpers ────────────────────────────────────────────────
 
         private void RecalcWeight()
         {
@@ -115,8 +233,9 @@ namespace Orlo.UI
             GUI.color = Color.white;
 
             // Title bar
+            string title = _serverSynced ? "Inventory" : "Inventory (Dev)";
             Rect titleBar = new Rect(_windowPos.x, _windowPos.y, windowW - 24, 24);
-            DrawTitleBar(titleBar, "Inventory");
+            DrawTitleBar(titleBar, title);
             HandleDrag(titleBar);
 
             // Close button
@@ -131,7 +250,6 @@ namespace Orlo.UI
             // Equipment panel (left)
             float eqX = _windowPos.x + 8;
             float eqY = contentY;
-            var labelStyle = SmallLabel();
             for (int i = 0; i < EquipSlotNames.Length; i++)
             {
                 Rect slotRect = new Rect(eqX, eqY, equipPanelW - 16, SlotSize * 0.6f);
@@ -145,6 +263,17 @@ namespace Orlo.UI
                     GUI.DrawTexture(inner, Texture2D.whiteTexture);
                     GUI.color = Color.black;
                     GUI.Label(inner, _equipSlots[i].Name, SmallLabelCentered());
+
+                    // Condition bar on equipment
+                    if (_equipSlots[i].MaxCondition > 0)
+                    {
+                        float condPct = Mathf.Clamp01(_equipSlots[i].Condition / _equipSlots[i].MaxCondition);
+                        Rect condBar = new Rect(slotRect.x + 2, slotRect.y + slotRect.height - 5, slotRect.width - 4, 3);
+                        GUI.color = new Color(0.1f, 0.1f, 0.1f);
+                        GUI.DrawTexture(condBar, Texture2D.whiteTexture);
+                        GUI.color = condPct > 0.5f ? Color.green : (condPct > 0.2f ? Color.yellow : Color.red);
+                        GUI.DrawTexture(new Rect(condBar.x, condBar.y, condBar.width * condPct, condBar.height), Texture2D.whiteTexture);
+                    }
                 }
                 else
                 {
@@ -190,6 +319,17 @@ namespace Orlo.UI
                             GUI.Label(new Rect(sx + SlotSize - 18, sy + SlotSize - 16, 16, 14),
                                 _slots[idx].StackCount.ToString(), SmallLabel());
                             GUI.color = Color.white;
+                        }
+
+                        // Condition bar (bottom of slot)
+                        if (_slots[idx].MaxCondition > 0 && _slots[idx].Condition < _slots[idx].MaxCondition)
+                        {
+                            float condPct = Mathf.Clamp01(_slots[idx].Condition / _slots[idx].MaxCondition);
+                            Rect condBar = new Rect(sx + 3, sy + SlotSize - 6, SlotSize - 6, 3);
+                            GUI.color = new Color(0.1f, 0.1f, 0.1f);
+                            GUI.DrawTexture(condBar, Texture2D.whiteTexture);
+                            GUI.color = condPct > 0.5f ? Color.green : (condPct > 0.2f ? Color.yellow : Color.red);
+                            GUI.DrawTexture(new Rect(condBar.x, condBar.y, condBar.width * condPct, condBar.height), Texture2D.whiteTexture);
                         }
                     }
 
@@ -241,21 +381,99 @@ namespace Orlo.UI
         private void DrawTooltip(ItemSlot item)
         {
             Vector2 mp = Event.current.mousePosition;
-            float tw = 180, th = 72;
+            bool hasAttrs = item.ResourceAttrs != null && item.ResourceAttrs.Length == 11;
+            bool hasCond = item.MaxCondition > 0;
+            bool hasCrafter = !string.IsNullOrEmpty(item.CraftedBy);
+
+            // Calculate tooltip height dynamically
+            float th = 72f;
+            if (hasCond) th += 18f;
+            if (hasCrafter) th += 16f;
+            if (hasAttrs) th += 14f * 6 + 4f; // 6 rows of 2 attrs each (11 attrs = 6 rows)
+
+            float tw = hasAttrs ? 220f : 180f;
             Rect bg = new Rect(mp.x + 16, mp.y, tw, th);
+
+            // Clamp to screen
+            if (bg.xMax > Screen.width) bg.x = mp.x - tw - 8;
+            if (bg.yMax > Screen.height) bg.y = Screen.height - th;
 
             GUI.color = new Color(0, 0, 0, 0.92f);
             GUI.DrawTexture(bg, Texture2D.whiteTexture);
 
+            float y = bg.y + 2;
+
+            // Name
             GUI.color = item.RarityColor;
-            GUI.Label(new Rect(bg.x + 4, bg.y + 2, tw - 8, 18), item.Name, SmallLabel());
+            GUI.Label(new Rect(bg.x + 4, y, tw - 8, 18), item.Name, SmallLabel());
+            y += 18;
 
+            // Description
             GUI.color = new Color(0.8f, 0.8f, 0.8f);
-            GUI.Label(new Rect(bg.x + 4, bg.y + 20, tw - 8, 18), item.Description, SmallLabel());
+            GUI.Label(new Rect(bg.x + 4, y, tw - 8, 18), item.Description, SmallLabel());
+            y += 18;
 
+            // Weight + Stack
             GUI.color = new Color(0.6f, 0.6f, 0.6f);
-            GUI.Label(new Rect(bg.x + 4, bg.y + 38, tw - 8, 18), $"Weight: {item.Weight:F1}", SmallLabel());
-            GUI.Label(new Rect(bg.x + 4, bg.y + 54, tw - 8, 18), $"Stack: {item.StackCount}", SmallLabel());
+            GUI.Label(new Rect(bg.x + 4, y, tw - 8, 18), $"Weight: {item.Weight:F1}  Stack: {item.StackCount}", SmallLabel());
+            y += 18;
+
+            // Condition/Durability bar
+            if (hasCond)
+            {
+                float condPct = Mathf.Clamp01(item.Condition / item.MaxCondition);
+                GUI.color = new Color(0.6f, 0.6f, 0.6f);
+                GUI.Label(new Rect(bg.x + 4, y, 60, 14), "Durability:", SmallLabel());
+
+                Rect condBarBg = new Rect(bg.x + 66, y + 3, tw - 74, 8);
+                GUI.color = new Color(0.2f, 0.2f, 0.2f);
+                GUI.DrawTexture(condBarBg, Texture2D.whiteTexture);
+                GUI.color = condPct > 0.5f ? Color.green : (condPct > 0.2f ? Color.yellow : Color.red);
+                GUI.DrawTexture(new Rect(condBarBg.x, condBarBg.y, condBarBg.width * condPct, condBarBg.height), Texture2D.whiteTexture);
+
+                GUI.color = Color.white;
+                GUI.Label(new Rect(condBarBg.x, condBarBg.y - 2, condBarBg.width, 12),
+                    $"{condPct * 100:F0}%", SmallLabelCentered());
+                y += 18;
+            }
+
+            // Crafted by
+            if (hasCrafter)
+            {
+                GUI.color = new Color(0.5f, 0.8f, 1f);
+                GUI.Label(new Rect(bg.x + 4, y, tw - 8, 14), $"Crafted by: {item.CraftedBy}", SmallLabel());
+                y += 16;
+            }
+
+            // Resource quality attributes (11 attrs in a grid)
+            if (hasAttrs)
+            {
+                y += 2;
+                GUI.color = new Color(0.9f, 0.8f, 0.4f);
+                GUI.Label(new Rect(bg.x + 4, y, tw - 8, 12), "Quality Attributes:", SmallLabel());
+                y += 14;
+
+                float halfW = (tw - 12) / 2f;
+                for (int i = 0; i < 11; i++)
+                {
+                    float ax = (i % 2 == 0) ? bg.x + 4 : bg.x + 4 + halfW;
+                    float ay = y + (i / 2) * 14;
+
+                    float attrPct = item.ResourceAttrs[i] / 1000f;
+                    string label = $"{AttrLabels[i]}: {item.ResourceAttrs[i]}";
+
+                    // Small quality bar
+                    GUI.color = new Color(0.2f, 0.2f, 0.2f);
+                    Rect attrBarBg = new Rect(ax + 42, ay + 3, halfW - 48, 7);
+                    GUI.DrawTexture(attrBarBg, Texture2D.whiteTexture);
+
+                    GUI.color = Color.Lerp(Color.red, Color.green, attrPct);
+                    GUI.DrawTexture(new Rect(attrBarBg.x, attrBarBg.y, attrBarBg.width * attrPct, attrBarBg.height), Texture2D.whiteTexture);
+
+                    GUI.color = new Color(0.7f, 0.7f, 0.7f);
+                    GUI.Label(new Rect(ax, ay, 40, 12), label, SmallLabel());
+                }
+            }
 
             GUI.color = Color.white;
         }
@@ -274,9 +492,42 @@ namespace Orlo.UI
                 Rect btn = new Rect(_contextMenuPos.x + 2, _contextMenuPos.y + 2 + i * 24, cmW - 4, 22);
                 if (GUI.Button(btn, ContextOptions[i]))
                 {
-                    Debug.Log($"[InventoryUI] {ContextOptions[i]} on slot {_contextMenuSlot}: {_slots[_contextMenuSlot].Name}");
+                    HandleContextAction(i, _contextMenuSlot);
                     _contextMenuOpen = false;
                 }
+            }
+        }
+
+        private void HandleContextAction(int action, int slot)
+        {
+            if (slot < 0 || slot >= TotalSlots || !_slots[slot].Occupied) return;
+
+            switch (action)
+            {
+                case 0: // Use
+                    Debug.Log($"[InventoryUI] Use item in slot {slot}: {_slots[slot].Name}");
+                    // TODO: Send UseItem packet when proto message is defined
+                    break;
+                case 1: // Equip
+                    Debug.Log($"[InventoryUI] Equip item in slot {slot}: {_slots[slot].Name}");
+                    if (_serverSynced)
+                    {
+                        var data = PacketBuilder.EquipItem((uint)slot);
+                        NetworkManager.Instance?.Send(data);
+                    }
+                    break;
+                case 2: // Drop
+                    Debug.Log($"[InventoryUI] Drop item in slot {slot}: {_slots[slot].Name}");
+                    if (_serverSynced)
+                    {
+                        var data = PacketBuilder.DropItem((uint)slot, (uint)_slots[slot].StackCount);
+                        NetworkManager.Instance?.Send(data);
+                    }
+                    break;
+                case 3: // Split Stack
+                    Debug.Log($"[InventoryUI] Split stack in slot {slot}: {_slots[slot].Name}");
+                    // TODO: Open split dialog to choose quantity and target slot
+                    break;
             }
         }
 
@@ -306,7 +557,22 @@ namespace Orlo.UI
                 _dragging = false;
         }
 
-        // Shared styles
+        // ─── Rarity color helper ────────────────────────────────────────────
+
+        public static Color GetRarityColor(int rarity)
+        {
+            return rarity switch
+            {
+                1 => new Color(0.2f, 0.8f, 0.2f),   // Uncommon - green
+                2 => new Color(0.2f, 0.5f, 1.0f),   // Rare - blue
+                3 => new Color(0.7f, 0.3f, 0.9f),   // Epic - purple
+                4 => new Color(1.0f, 0.6f, 0.1f),   // Legendary - orange
+                _ => Color.white                      // Common - white
+            };
+        }
+
+        // ─── Shared styles ──────────────────────────────────────────────────
+
         private GUIStyle SmallLabel()
         {
             return new GUIStyle(GUI.skin.label) { fontSize = 10, normal = { textColor = Color.white }, wordWrap = true };
