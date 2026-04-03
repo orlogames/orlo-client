@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using Orlo.UI;
 
 namespace Orlo.UI.Settings
 {
@@ -10,7 +11,7 @@ namespace Orlo.UI.Settings
     /// </summary>
     public class SettingsUI : MonoBehaviour
     {
-        private enum Tab { Graphics, Audio, Network, Social, Controls, Gameplay }
+        private enum Tab { Graphics, Audio, Network, Social, Controls, Gameplay, Access }
 
         private bool _visible;
         private Tab _activeTab = Tab.Graphics;
@@ -157,6 +158,7 @@ namespace Orlo.UI.Settings
                 case Tab.Social:   DrawSocialTab();   break;
                 case Tab.Controls: DrawControlsTab(); break;
                 case Tab.Gameplay: DrawGameplayTab(); break;
+                case Tab.Access:   DrawAccessibilityTab(); break;
             }
 
             GUILayout.EndScrollView();
@@ -382,13 +384,18 @@ namespace Orlo.UI.Settings
 
             SectionHeader("Key Bindings");
 
-            var placeholderStyle = new GUIStyle(GUI.skin.label)
+            if (Orlo.UI.KeybindingUI.Instance != null)
+                Orlo.UI.KeybindingUI.Instance.DrawKeybindingPanel();
+            else
             {
-                fontSize = 12, fontStyle = FontStyle.Italic,
-                normal = { textColor = new Color(0.5f, 0.5f, 0.5f) },
-                alignment = TextAnchor.MiddleLeft
-            };
-            GUILayout.Label("Key bindings coming soon", placeholderStyle);
+                var placeholderStyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = 12, fontStyle = FontStyle.Italic,
+                    normal = { textColor = new Color(0.5f, 0.5f, 0.5f) },
+                    alignment = TextAnchor.MiddleLeft
+                };
+                GUILayout.Label("Key bindings initializing...", placeholderStyle);
+            }
         }
 
         // ── Gameplay tab ────────────────────────────────────────────────
@@ -404,6 +411,114 @@ namespace Orlo.UI.Settings
 
             S.showEntityNames = DrawToggle("Show Entity Names", S.showEntityNames);
             S.autoLoot = DrawToggle("Auto-Loot", S.autoLoot);
+        }
+
+        // ── Accessibility tab ───────────────────────────────────────────
+
+        private void DrawAccessibilityTab()
+        {
+            SectionHeader("Vision");
+
+            // Colorblind mode dropdown
+            int cbIdx = S.colorblindMode;
+            int newCbIdx = DrawDropdown("Colorblind Mode", cbIdx,
+                new[] { "Normal", "Protanopia (Red-blind)", "Deuteranopia (Green-blind)", "Tritanopia (Blue-blind)" });
+            if (newCbIdx != cbIdx)
+            {
+                S.colorblindMode = newCbIdx;
+                if (AccessibilityManager.Instance != null)
+                    AccessibilityManager.Instance.ColorblindMode = (ColorblindMode)newCbIdx;
+            }
+
+            // Flash effects toggle
+            bool newFlash = DrawToggle("Flash Effects", S.flashEffects);
+            if (newFlash != S.flashEffects)
+            {
+                S.flashEffects = newFlash;
+                if (AccessibilityManager.Instance != null)
+                    AccessibilityManager.Instance.FlashEffectsEnabled = newFlash;
+            }
+
+            SectionHeader("Interface Scaling");
+
+            // UI scale slider
+            float newScale = DrawSliderFloat("UI Scale", S.uiScale, 0.75f, 2.0f);
+            if (Mathf.Abs(newScale - S.uiScale) > 0.001f)
+            {
+                S.uiScale = newScale;
+                if (AccessibilityManager.Instance != null)
+                    AccessibilityManager.Instance.UIScale = newScale;
+            }
+
+            // Font size multiplier slider
+            float newFont = DrawSliderFloat("Font Size", S.fontSizeMultiplier, 0.75f, 2.0f);
+            if (Mathf.Abs(newFont - S.fontSizeMultiplier) > 0.001f)
+            {
+                S.fontSizeMultiplier = newFont;
+                if (AccessibilityManager.Instance != null)
+                    AccessibilityManager.Instance.FontSizeMultiplier = newFont;
+            }
+
+            SectionHeader("Combat");
+
+            // Screen shake (also in Gameplay, mirrored here for convenience)
+            bool newShake = DrawToggle("Screen Shake", S.screenShake);
+            if (newShake != S.screenShake)
+            {
+                S.screenShake = newShake;
+            }
+
+            // Color preview section
+            SectionHeader("Color Preview");
+            DrawColorPreview();
+        }
+
+        private void DrawColorPreview()
+        {
+            var am = AccessibilityManager.Instance;
+            if (am == null) return;
+
+            float swatchW = 40f;
+            float swatchH = 18f;
+            float gap = 6f;
+
+            GUILayout.BeginHorizontal();
+
+            // Health
+            DrawColorSwatch("VIT", am.RemapColor(new Color(0.85f, 0.15f, 0.15f)), swatchW, swatchH);
+            GUILayout.Space(gap);
+            // Stamina
+            DrawColorSwatch("STAM", am.RemapColor(new Color(0.15f, 0.75f, 0.25f)), swatchW, swatchH);
+            GUILayout.Space(gap);
+            // Focus
+            DrawColorSwatch("FOC", am.RemapColor(new Color(0.25f, 0.45f, 0.95f)), swatchW, swatchH);
+            GUILayout.Space(gap);
+            // Enemy
+            DrawColorSwatch("Enemy", am.RemapColor(new Color(1f, 0.4f, 0.4f)), swatchW, swatchH);
+            GUILayout.Space(gap);
+            // Friendly
+            DrawColorSwatch("Ally", am.RemapColor(new Color(0.5f, 1f, 0.5f)), swatchW, swatchH);
+
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawColorSwatch(string label, Color color, float w, float h)
+        {
+            GUILayout.BeginVertical(GUILayout.Width(w + 10));
+
+            var lblStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 9, alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = Color.white }
+            };
+            GUILayout.Label(label, lblStyle, GUILayout.Width(w + 10), GUILayout.Height(14));
+
+            Rect r = GUILayoutUtility.GetRect(w, h);
+            GUI.color = color;
+            GUI.DrawTexture(r, Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            GUILayout.EndVertical();
         }
 
         // ── Drawing helpers ─────────────────────────────────────────────

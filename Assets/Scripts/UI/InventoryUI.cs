@@ -561,7 +561,7 @@ namespace Orlo.UI
 
         public static Color GetRarityColor(int rarity)
         {
-            return rarity switch
+            Color baseColor = rarity switch
             {
                 1 => new Color(0.2f, 0.8f, 0.2f),   // Uncommon - green
                 2 => new Color(0.2f, 0.5f, 1.0f),   // Rare - blue
@@ -569,6 +569,10 @@ namespace Orlo.UI
                 4 => new Color(1.0f, 0.6f, 0.1f),   // Legendary - orange
                 _ => Color.white                      // Common - white
             };
+            // Apply colorblind remapping
+            if (AccessibilityManager.Instance != null)
+                baseColor = AccessibilityManager.Instance.RemapColor(baseColor);
+            return baseColor;
         }
 
         // ─── Shared styles ──────────────────────────────────────────────────

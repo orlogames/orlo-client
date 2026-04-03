@@ -53,6 +53,12 @@ namespace Orlo.UI.Settings
         public bool autoLoot = false;
         public bool screenShake = true;
 
+        // ── Accessibility ──────────────────────────────────────────────
+        public int colorblindMode = 0;          // 0=Normal, 1=Protanopia, 2=Deuteranopia, 3=Tritanopia
+        public float uiScale = 1.0f;            // 0.75 - 2.0
+        public float fontSizeMultiplier = 1.0f;  // 0.75 - 2.0
+        public bool flashEffects = true;
+
         // ── Persistence ────────────────────────────────────────────────
 
         public string ToJson()

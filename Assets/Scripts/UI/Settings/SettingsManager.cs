@@ -44,6 +44,7 @@ namespace Orlo.UI.Settings
             ApplyGraphics();
             ApplyAudio();
             ApplyControls();
+            ApplyAccessibility();
         }
 
         public void ApplyGraphics()
@@ -145,6 +146,21 @@ namespace Orlo.UI.Settings
         {
             // Network overlay toggles are read directly by the HUD.
             Debug.Log($"[SettingsManager] Network display applied — Ping={Current.showPing}, FPS={Current.showFps}, Stats={Current.showNetworkStats}");
+        }
+
+        public void ApplyAccessibility()
+        {
+            var am = Orlo.UI.AccessibilityManager.Instance;
+            if (am != null)
+            {
+                am.ColorblindMode = (Orlo.UI.ColorblindMode)Current.colorblindMode;
+                am.UIScale = Current.uiScale;
+                am.FontSizeMultiplier = Current.fontSizeMultiplier;
+                am.FlashEffectsEnabled = Current.flashEffects;
+                am.Save();
+            }
+            Debug.Log($"[SettingsManager] Accessibility applied — Colorblind={Current.colorblindMode}, " +
+                      $"UIScale={Current.uiScale:F2}, FontScale={Current.fontSizeMultiplier:F2}, Flash={Current.flashEffects}");
         }
 
         public void ApplySocial()

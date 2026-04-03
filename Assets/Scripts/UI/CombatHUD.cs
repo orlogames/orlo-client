@@ -43,28 +43,38 @@ namespace Orlo.UI
 
         private void OnGUI()
         {
-            const float barW = 200f;
-            const float barH = 16f;
-            const float gap  = 4f;
-            const float padX = 14f;
-            const float padY = 14f;
+            float s = UIScaler.Scale;
+            float barW = 200f * s;
+            float barH = 16f * s;
+            float gap  = 4f * s;
+            float padX = 14f * s;
+            float padY = 14f * s;
 
             float x = padX;
             float y = Screen.height - padY - (barH + gap) * 3;
 
-            // Red damage flash overlay
+            // Red damage flash overlay (respects flash effects setting)
             if (_damageFlashTimer > 0)
             {
                 _damageFlashTimer -= Time.deltaTime;
-                float alpha = _damageFlashTimer / FlashDuration * 0.35f;
-                GUI.color = new Color(1f, 0f, 0f, alpha);
-                GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
-                GUI.color = Color.white;
+                bool flashEnabled = AccessibilityManager.Instance == null || AccessibilityManager.Instance.FlashEffectsEnabled;
+                if (flashEnabled)
+                {
+                    float alpha = _damageFlashTimer / FlashDuration * 0.35f;
+                    GUI.color = new Color(1f, 0f, 0f, alpha);
+                    GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+                    GUI.color = Color.white;
+                }
             }
 
-            DrawBar(x, y,           barW, barH, _vitality / _maxVitality, new Color(0.85f, 0.15f, 0.15f), $"VIT  {_vitality:F0}/{_maxVitality:F0}");
-            DrawBar(x, y + barH + gap, barW, barH, _stamina  / _maxStamina,  new Color(0.15f, 0.75f, 0.25f), $"STAM {_stamina:F0}/{_maxStamina:F0}");
-            DrawBar(x, y + (barH + gap) * 2, barW, barH, _focus / _maxFocus, new Color(0.25f, 0.45f, 0.95f), $"FOC  {_focus:F0}/{_maxFocus:F0}");
+            var am = AccessibilityManager.Instance;
+            Color vitColor = am != null ? am.RemapColor(new Color(0.85f, 0.15f, 0.15f)) : new Color(0.85f, 0.15f, 0.15f);
+            Color stamColor = am != null ? am.RemapColor(new Color(0.15f, 0.75f, 0.25f)) : new Color(0.15f, 0.75f, 0.25f);
+            Color focColor = am != null ? am.RemapColor(new Color(0.25f, 0.45f, 0.95f)) : new Color(0.25f, 0.45f, 0.95f);
+
+            DrawBar(x, y,           barW, barH, _vitality / _maxVitality, vitColor, $"VIT  {_vitality:F0}/{_maxVitality:F0}");
+            DrawBar(x, y + barH + gap, barW, barH, _stamina  / _maxStamina,  stamColor, $"STAM {_stamina:F0}/{_maxStamina:F0}");
+            DrawBar(x, y + (barH + gap) * 2, barW, barH, _focus / _maxFocus, focColor, $"FOC  {_focus:F0}/{_maxFocus:F0}");
         }
 
         private static void DrawBar(float x, float y, float w, float h, float fill, Color color, string label)
@@ -79,7 +89,7 @@ namespace Orlo.UI
 
             // Label
             GUI.color = Color.white;
-            var style = new GUIStyle(GUI.skin.label) { fontSize = 11, alignment = TextAnchor.MiddleLeft };
+            var style = new GUIStyle(GUI.skin.label) { fontSize = UIScaler.ScaledFontSize(11), alignment = TextAnchor.MiddleLeft };
             GUI.Label(new Rect(x + 4, y, w, h), label, style);
         }
     }

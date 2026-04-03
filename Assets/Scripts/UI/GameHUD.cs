@@ -155,7 +155,7 @@ namespace Orlo.UI
         {
             var style = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 14,
+                fontSize = UIScaler.ScaledFontSize(14),
                 normal = { textColor = Color.white }
             };
 
@@ -286,8 +286,10 @@ namespace Orlo.UI
             GUI.DrawTexture(new Rect(fx, fy, frameW, frameH), Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            // Border color based on hostility
+            // Border color based on hostility (colorblind-safe)
+            var am = AccessibilityManager.Instance;
             Color borderColor = _targetHostile ? new Color(0.8f, 0.2f, 0.2f) : new Color(0.3f, 0.6f, 0.3f);
+            if (am != null) borderColor = am.RemapColor(borderColor);
             GUI.color = borderColor;
             GUI.DrawTexture(new Rect(fx, fy, frameW, 2), Texture2D.whiteTexture);
             GUI.DrawTexture(new Rect(fx, fy + frameH - 2, frameW, 2), Texture2D.whiteTexture);
@@ -295,11 +297,13 @@ namespace Orlo.UI
             GUI.DrawTexture(new Rect(fx + frameW - 2, fy, 2, frameH), Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            // Name + Level
+            // Name + Level (colorblind-safe)
+            Color nameColor = _targetHostile ? new Color(1f, 0.4f, 0.4f) : new Color(0.5f, 1f, 0.5f);
+            if (am != null) nameColor = am.RemapColor(nameColor);
             var nameStyle = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 12, fontStyle = FontStyle.Bold,
-                normal = { textColor = _targetHostile ? new Color(1f, 0.4f, 0.4f) : new Color(0.5f, 1f, 0.5f) }
+                fontSize = UIScaler.ScaledFontSize(12), fontStyle = FontStyle.Bold,
+                normal = { textColor = nameColor }
             };
             GUI.Label(new Rect(fx + 6, fy + 3, frameW - 50, 18), _targetName, nameStyle);
 

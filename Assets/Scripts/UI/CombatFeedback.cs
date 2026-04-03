@@ -62,13 +62,13 @@ namespace Orlo.UI
 
             var critStyle = new GUIStyle(GUI.skin.label)
             {
-                fontSize    = 20,
+                fontSize    = UIScaler.ScaledFontSize(20),
                 fontStyle   = FontStyle.Bold,
                 alignment   = TextAnchor.MiddleCenter
             };
             var normalStyle = new GUIStyle(GUI.skin.label)
             {
-                fontSize    = 15,
+                fontSize    = UIScaler.ScaledFontSize(15),
                 fontStyle   = FontStyle.Bold,
                 alignment   = TextAnchor.MiddleCenter
             };
@@ -83,7 +83,9 @@ namespace Orlo.UI
                 float guiY = Screen.height - screen.y - p.OffsetY;
 
                 float alpha = p.TimeRemaining / Lifetime;
-                var c = p.Color;
+                var c = AccessibilityManager.Instance != null
+                    ? AccessibilityManager.Instance.RemapColor(p.Color)
+                    : p.Color;
                 GUI.color = new Color(c.r, c.g, c.b, alpha);
 
                 bool isCrit = p.Text.StartsWith("CRIT");
