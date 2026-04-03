@@ -237,7 +237,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 923960598}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b006606904aee9c4da203cbbd9fca8b0, type: 3}
+  m_Script: {fileID: 11500000, guid: 697268d4be15dca42a6bd53bdf5b2e50, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Orlo.GameBootstrap
   serverHost: play.orlo.games
