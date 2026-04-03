@@ -6,27 +6,44 @@ namespace Orlo.World
 {
     /// <summary>
     /// Manages procedural terrain chunks streamed from the server.
-    /// Builds meshes from server heightmap data, streams chunks based on player proximity.
+    /// Builds meshes from server heightmap + splatmap data with vertex coloring.
+    /// Splatmap channels: R=grass, G=rock, B=dirt, A=sand
     /// </summary>
     public class TerrainManager : MonoBehaviour
     {
         [Header("Chunk Settings")]
-        [SerializeField] private int chunkSize = 64;       // World units per chunk (matches server CHUNK_SIZE)
-        [SerializeField] private int viewDistance = 3;      // Chunks in each direction
-        [SerializeField] private Material terrainMaterial;
+        [SerializeField] private int chunkSize = 64;
+        [SerializeField] private int viewDistance = 3;
 
-        [Header("LOD")]
-        [SerializeField] private int meshResolution = 64;   // Vertices per edge (matches server CHUNK_RESOLUTION)
+        // Biome colors for splatmap blending
+        private static readonly Color GrassColor = new Color(0.25f, 0.45f, 0.15f);   // Green
+        private static readonly Color RockColor = new Color(0.42f, 0.40f, 0.38f);    // Grey
+        private static readonly Color DirtColor = new Color(0.45f, 0.32f, 0.18f);    // Brown
+        private static readonly Color SandColor = new Color(0.76f, 0.70f, 0.50f);    // Yellow-tan
+        private static readonly Color DefaultColor = new Color(0.30f, 0.42f, 0.20f); // Fallback green
 
         private readonly Dictionary<Vector2Int, TerrainChunkData> _chunks = new();
         private readonly Dictionary<Vector2Int, GameObject> _activeChunks = new();
         private Vector2Int _lastPlayerChunk;
+        private Material _terrainMat;
 
         private struct TerrainChunkData
         {
             public int Resolution;
             public float[] Heightmap;
+            public byte[] Splatmap; // 4 bytes per vertex: grass, rock, dirt, sand
             public ulong Seed;
+        }
+
+        private void Awake()
+        {
+            // Create terrain material once — Standard shader with vertex colors
+            _terrainMat = new Material(Shader.Find("Standard"));
+            _terrainMat.color = Color.white; // White base so vertex colors show through
+            _terrainMat.SetFloat("_Glossiness", 0.05f); // Matte terrain
+            _terrainMat.SetFloat("_Metallic", 0.0f);
+            _terrainMat.EnableKeyword("_VERTEXCOLOR");
+            Debug.Log("[TerrainManager] Initialized with vertex-colored terrain material");
         }
 
         private void Update()
@@ -50,20 +67,15 @@ namespace Orlo.World
         private void UpdateVisibleChunks()
         {
             var needed = new HashSet<Vector2Int>();
-
             for (int x = -viewDistance; x <= viewDistance; x++)
             for (int z = -viewDistance; z <= viewDistance; z++)
-            {
                 needed.Add(_lastPlayerChunk + new Vector2Int(x, z));
-            }
 
             // Remove chunks no longer needed
             var toRemove = new List<Vector2Int>();
             foreach (var kv in _activeChunks)
-            {
                 if (!needed.Contains(kv.Key))
                     toRemove.Add(kv.Key);
-            }
             foreach (var key in toRemove)
             {
                 Destroy(_activeChunks[key]);
@@ -76,30 +88,25 @@ namespace Orlo.World
                 if (!_activeChunks.ContainsKey(coord))
                 {
                     if (_chunks.TryGetValue(coord, out var data))
-                    {
                         _activeChunks[coord] = BuildTerrainMesh(coord, data);
-                    }
                     else
-                    {
-                        // No server data yet — show placeholder
                         _activeChunks[coord] = CreatePlaceholderChunk(coord);
-                    }
                 }
             }
         }
 
         /// <summary>
-        /// Called when server sends terrain heightmap data.
+        /// Called when server sends terrain heightmap + splatmap data.
         /// </summary>
-        public void ApplyTerrainChunk(Vector2Int coord, int resolution, byte[] heightmapBytes, ulong seed)
+        public void ApplyTerrainChunk(Vector2Int coord, int resolution, byte[] heightmapBytes, byte[] splatmapBytes, ulong seed)
         {
-            // Unpack float16 heightmap to floats
             float[] heightmap = UnpackHeightmapF16(heightmapBytes, resolution * resolution);
 
             var data = new TerrainChunkData
             {
                 Resolution = resolution,
                 Heightmap = heightmap,
+                Splatmap = splatmapBytes,
                 Seed = seed
             };
             _chunks[coord] = data;
@@ -111,7 +118,8 @@ namespace Orlo.World
                 _activeChunks[coord] = BuildTerrainMesh(coord, data);
             }
 
-            Debug.Log($"[Terrain] Applied chunk {coord} ({resolution}x{resolution}, seed={seed:X})");
+            Debug.Log($"[Terrain] Chunk {coord}: {resolution}x{resolution}, " +
+                      $"splatmap={splatmapBytes?.Length ?? 0}B, seed={seed:X}");
 
             // Update loading screen progress
             UI.LoadingScreenUI.Instance?.UpdateProgress(_chunks.Count);
@@ -124,10 +132,10 @@ namespace Orlo.World
             float worldX = coord.x * chunkSize;
             float worldZ = coord.y * chunkSize;
 
-            // Build vertices and triangles
             var vertices = new Vector3[res * res];
             var uvs = new Vector2[res * res];
             var normals = new Vector3[res * res];
+            var colors = new Color[res * res];
 
             for (int z = 0; z < res; z++)
             {
@@ -137,10 +145,13 @@ namespace Orlo.World
                     float height = data.Heightmap[idx];
                     vertices[idx] = new Vector3(x * step, height, z * step);
                     uvs[idx] = new Vector2((float)x / (res - 1), (float)z / (res - 1));
+
+                    // Calculate vertex color from splatmap or height-based fallback
+                    colors[idx] = GetVertexColor(data, idx, height, x, z, res, step);
                 }
             }
 
-            // Calculate normals from heightmap
+            // Calculate normals from heightmap (finite difference method)
             for (int z = 0; z < res; z++)
             {
                 for (int x = 0; x < res; x++)
@@ -149,12 +160,11 @@ namespace Orlo.World
                     float hR = x < res - 1 ? data.Heightmap[z * res + (x + 1)] : data.Heightmap[z * res + x];
                     float hD = z > 0 ? data.Heightmap[(z - 1) * res + x] : data.Heightmap[z * res + x];
                     float hU = z < res - 1 ? data.Heightmap[(z + 1) * res + x] : data.Heightmap[z * res + x];
-
                     normals[z * res + x] = new Vector3(hL - hR, 2f * step, hD - hU).normalized;
                 }
             }
 
-            // Triangles
+            // Build triangle indices
             var triangles = new int[(res - 1) * (res - 1) * 6];
             int tri = 0;
             for (int z = 0; z < res - 1; z++)
@@ -165,7 +175,6 @@ namespace Orlo.World
                     int br = bl + 1;
                     int tl = bl + res;
                     int tr = tl + 1;
-
                     triangles[tri++] = bl;
                     triangles[tri++] = tl;
                     triangles[tri++] = br;
@@ -182,6 +191,7 @@ namespace Orlo.World
             mesh.triangles = triangles;
             mesh.normals = normals;
             mesh.uv = uvs;
+            mesh.colors = colors;
 
             var go = new GameObject($"Terrain_{coord.x}_{coord.y}");
             go.transform.position = new Vector3(worldX, 0, worldZ);
@@ -190,12 +200,50 @@ namespace Orlo.World
             mf.mesh = mesh;
 
             var mr = go.AddComponent<MeshRenderer>();
-            mr.material = terrainMaterial != null ? terrainMaterial : new Material(Shader.Find("Standard"));
+            mr.material = _terrainMat;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+            mr.receiveShadows = true;
 
             var mc = go.AddComponent<MeshCollider>();
             mc.sharedMesh = mesh;
 
             return go;
+        }
+
+        /// <summary>
+        /// Get vertex color from splatmap data or height/slope-based fallback.
+        /// Splatmap format: 4 bytes per vertex [grass, rock, dirt, sand] (0-255 weights).
+        /// </summary>
+        private Color GetVertexColor(TerrainChunkData data, int idx, float height, int x, int z, int res, float step)
+        {
+            // Try splatmap first
+            if (data.Splatmap != null && idx * 4 + 3 < data.Splatmap.Length)
+            {
+                float grass = data.Splatmap[idx * 4] / 255f;
+                float rock = data.Splatmap[idx * 4 + 1] / 255f;
+                float dirt = data.Splatmap[idx * 4 + 2] / 255f;
+                float sand = data.Splatmap[idx * 4 + 3] / 255f;
+
+                return GrassColor * grass + RockColor * rock + DirtColor * dirt + SandColor * sand;
+            }
+
+            // Fallback: derive color from height and slope
+            float slope = 0;
+            if (x > 0 && x < res - 1 && z > 0 && z < res - 1)
+            {
+                float dx = data.Heightmap[z * res + (x + 1)] - data.Heightmap[z * res + (x - 1)];
+                float dz = data.Heightmap[(z + 1) * res + x] - data.Heightmap[(z - 1) * res + x];
+                slope = Mathf.Sqrt(dx * dx + dz * dz) / (2f * step);
+            }
+
+            // Steep slopes → rock, low areas → sand, mid → grass, high → dirt
+            if (slope > 0.6f) return RockColor;
+            if (height < 1f) return SandColor;
+            if (height > 40f) return Color.Lerp(DirtColor, RockColor, (height - 40f) / 40f);
+
+            // Grass with slight height variation
+            float grassBlend = Mathf.Clamp01(1f - slope * 1.5f);
+            return Color.Lerp(DirtColor, GrassColor, grassBlend);
         }
 
         private GameObject CreatePlaceholderChunk(Vector2Int coord)
@@ -209,15 +257,16 @@ namespace Orlo.World
             );
             go.transform.localScale = new Vector3(chunkSize * 0.1f, 1, chunkSize * 0.1f);
 
-            if (terrainMaterial != null)
-                go.GetComponent<MeshRenderer>().material = terrainMaterial;
+            // Use a dark green placeholder instead of default pink
+            var mr = go.GetComponent<MeshRenderer>();
+            var mat = new Material(Shader.Find("Standard"));
+            mat.color = new Color(0.15f, 0.25f, 0.10f); // Dark green
+            mat.SetFloat("_Glossiness", 0.05f);
+            mr.material = mat;
 
             return go;
         }
 
-        /// <summary>
-        /// Unpack float16 (IEEE 754 half-precision) bytes to float array.
-        /// </summary>
         private static float[] UnpackHeightmapF16(byte[] packed, int count)
         {
             var result = new float[count];
@@ -235,7 +284,7 @@ namespace Orlo.World
             int exp = (half >> 10) & 0x1F;
             int mant = half & 0x3FF;
 
-            if (exp == 0) return sign == 1 ? -0f : 0f; // Zero/subnormal
+            if (exp == 0) return sign == 1 ? -0f : 0f;
             if (exp == 31) return sign == 1 ? float.NegativeInfinity : float.PositiveInfinity;
 
             float value = Mathf.Pow(2, exp - 15) * (1f + mant / 1024f);

@@ -52,6 +52,56 @@ namespace Orlo.World
 
             targetSunColor = sunColor;
             targetAmbientColor = ambientColor;
+
+            UpdateSkyVisuals();
+        }
+
+        /// <summary>
+        /// Force initialization — call when skybox needs to be ready immediately (e.g. after character spawn).
+        /// </summary>
+        public void ForceInitialize()
+        {
+            if (skyboxMaterial == null)
+                Start();
+            else
+                UpdateSkyVisuals();
+        }
+
+        private void UpdateSkyVisuals()
+        {
+            if (skyboxMaterial == null) return;
+
+            // Set initial daytime sky
+            float sunAngle = timeOfDay * 360f - 90f;
+            skyboxMaterial.SetFloat("_SunSize", 0.04f);
+            skyboxMaterial.SetFloat("_SunSizeConvergence", 5f);
+            skyboxMaterial.SetFloat("_AtmosphereThickness", 1.0f);
+            skyboxMaterial.SetColor("_SkyTint", DayTop);
+            skyboxMaterial.SetColor("_GroundColor", new Color(0.37f, 0.35f, 0.34f));
+            skyboxMaterial.SetFloat("_Exposure", 1.3f);
+
+            RenderSettings.skybox = skyboxMaterial;
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilinear;
+            RenderSettings.ambientSkyColor = DayTop;
+            RenderSettings.ambientEquatorColor = DayHorizon;
+            RenderSettings.ambientGroundColor = new Color(0.2f, 0.22f, 0.18f);
+
+            // Fog for depth
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = new Color(0.55f, 0.65f, 0.80f);
+            RenderSettings.fogStartDistance = 100f;
+            RenderSettings.fogEndDistance = 500f;
+
+            // Sun light
+            if (directionalLight != null)
+            {
+                directionalLight.color = sunColor;
+                directionalLight.intensity = 1.2f;
+                directionalLight.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+            }
+
+            DynamicGI.UpdateEnvironment();
         }
 
         /// <summary>

@@ -281,8 +281,9 @@ namespace Orlo.Network
         private void HandleTerrainChunk(ProtoWorld.TerrainChunk chunk)
         {
             var coord = new Vector2Int(chunk.ChunkX, chunk.ChunkZ);
+            byte[] splatmap = chunk.Splatmap?.Length > 0 ? chunk.Splatmap.ToByteArray() : null;
             FindFirstObjectByType<TerrainManager>()?.ApplyTerrainChunk(
-                coord, (int)chunk.Resolution, chunk.Heightmap.ToByteArray(), chunk.Seed);
+                coord, (int)chunk.Resolution, chunk.Heightmap.ToByteArray(), splatmap, chunk.Seed);
         }
 
         private void HandleContentReveal(ProtoWorld.ContentReveal reveal)

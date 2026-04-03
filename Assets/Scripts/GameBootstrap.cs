@@ -416,6 +416,14 @@ namespace Orlo
                 tmGo.AddComponent<TerrainManager>();
                 Debug.Log("[Orlo] TerrainManager created");
             }
+
+            // Initialize skybox and atmosphere
+            var skybox = FindFirstObjectByType<SkyboxController>();
+            if (skybox != null)
+            {
+                skybox.ForceInitialize();
+                Debug.Log("[Orlo] Skybox initialized");
+            }
             var pos = new Vector3(
                 spawn.Transform.Position.X,
                 spawn.Transform.Position.Y,
