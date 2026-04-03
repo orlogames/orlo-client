@@ -81,7 +81,7 @@ namespace Orlo.World
             skyboxMaterial.SetFloat("_Exposure", 1.3f);
 
             RenderSettings.skybox = skyboxMaterial;
-            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilinear;
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
             RenderSettings.ambientSkyColor = DayTop;
             RenderSettings.ambientEquatorColor = DayHorizon;
             RenderSettings.ambientGroundColor = new Color(0.2f, 0.22f, 0.18f);
