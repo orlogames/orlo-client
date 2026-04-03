@@ -9,6 +9,8 @@ using ProtoCharacter = Orlo.Proto.Character;
 using ProtoAdmin = Orlo.Proto.Admin;
 using ProtoEconomy = Orlo.Proto.Economy;
 using ProtoTMD = Orlo.Proto.TMD;
+using ProtoResource = Orlo.Proto.Resource;
+using ProtoInventory = Orlo.Proto.Inventory;
 
 namespace Orlo.Network
 {
@@ -337,5 +339,78 @@ namespace Orlo.Network
             };
             return pkt.ToByteArray();
         }
+
+        // ─── Resource Surveying & Gathering ──────────────────────────────────
+
+        /// <summary>Send a TMD survey/scan request to find nearby resource spawns.</summary>
+        public static byte[] SurveyRequest(Vector3 position, float range)
+        {
+            var pkt = NewPacket();
+            pkt.SurveyRequest = new ProtoResource.SurveyRequest
+            {
+                Position = new Vec3 { X = position.x, Y = position.y, Z = position.z },
+                ScanRange = range
+            };
+            return pkt.ToByteArray();
+        }
+
+        /// <summary>Start gathering from a resource node entity.</summary>
+        public static byte[] GatherStart(ulong nodeEntityId)
+        {
+            var pkt = NewPacket();
+            pkt.GatherStart = new ProtoInventory.GatherStart
+            {
+                NodeEntity = new EntityId { Id = nodeEntityId }
+            };
+            return pkt.ToByteArray();
+        }
+
+        /// <summary>Cancel an in-progress gather.</summary>
+        public static byte[] GatherCancel(ulong nodeEntityId)
+        {
+            var pkt = NewPacket();
+            pkt.GatherCancel = new ProtoInventory.GatherCancel
+            {
+                NodeEntity = new EntityId { Id = nodeEntityId }
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Crafting ───────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Send a craft request using the existing proto CraftRequest message.
+        /// Used as fallback until assembly/experiment proto messages are added.
+        /// </summary>
+        public static byte[] CraftRequest(uint recipeId, uint station)
+        {
+            var pkt = NewPacket();
+            pkt.CraftRequest = new ProtoInventory.CraftRequest
+            {
+                RecipeId = recipeId,
+                Station = (ProtoInventory.CraftingStation)station
+            };
+            return pkt.ToByteArray();
+        }
+
+        /// <summary>Cancel crafting in progress.</summary>
+        public static byte[] CraftCancel()
+        {
+            var pkt = NewPacket();
+            pkt.CraftCancel = new ProtoInventory.CraftCancel();
+            return pkt.ToByteArray();
+        }
+
+        // TODO: Add CraftAssembleRequest when proto message is defined.
+        // Should include: recipe_id, station, repeated resource_slot { slot_index, spawn_id, inventory_slot }
+        // public static byte[] CraftAssemble(uint recipeId, uint station, List<(uint slot, ulong spawnId)> resources)
+
+        // TODO: Add CraftExperimentRequest when proto message is defined.
+        // Should include: round number, repeated category_allocation { category_index, points }
+        // public static byte[] CraftExperiment(uint round, List<(int category, int points)> allocation)
+
+        // TODO: Add CraftFinalizeRequest when proto message is defined.
+        // Should include: recipe_id (server tracks session, but client confirms intent)
+        // public static byte[] CraftFinalize()
     }
 }

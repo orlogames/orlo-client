@@ -16,6 +16,7 @@ using ProtoEconomy = Orlo.Proto.Economy;
 using ProtoEnv = Orlo.Proto.Environment;
 using ProtoCombat = Orlo.Proto.Combat;
 using ProtoInventory = Orlo.Proto.Inventory;
+using ProtoResource = Orlo.Proto.Resource;
 using ProtoTMD = Orlo.Proto.TMD;
 
 namespace Orlo.Network
@@ -117,14 +118,20 @@ namespace Orlo.Network
                     HandleCombatPacket(packet);
                     break;
 
+                // Phase 2 — Gathering (resource nodes)
+                case Packet.PayloadOneofCase.GatherProgress:
+                    HandleGatherProgress(packet.GatherProgress);
+                    break;
+                case Packet.PayloadOneofCase.GatherComplete:
+                    HandleGatherComplete(packet.GatherComplete);
+                    break;
+
                 // Phase 2 — Inventory & Crafting
                 case Packet.PayloadOneofCase.InventoryUpdate:
                 case Packet.PayloadOneofCase.ItemAdd:
                 case Packet.PayloadOneofCase.ItemRemove:
                 case Packet.PayloadOneofCase.ItemMoveConfirm:
                 case Packet.PayloadOneofCase.EquipmentChanged:
-                case Packet.PayloadOneofCase.GatherProgress:
-                case Packet.PayloadOneofCase.GatherComplete:
                 case Packet.PayloadOneofCase.CraftProgress:
                 case Packet.PayloadOneofCase.CraftComplete:
                 case Packet.PayloadOneofCase.RecipeDiscovered:
@@ -211,6 +218,14 @@ namespace Orlo.Network
                     break;
                 case Packet.PayloadOneofCase.LandClaimInfo:
                     HandleLandClaimInfo(packet.LandClaimInfo);
+                    break;
+
+                // Resource Surveying & Gathering
+                case Packet.PayloadOneofCase.SurveyResult:
+                    HandleSurveyResult(packet.SurveyResult);
+                    break;
+                case Packet.PayloadOneofCase.ResourceDetail:
+                    HandleResourceDetail(packet.ResourceDetail);
                     break;
 
                 // Admin
@@ -532,6 +547,162 @@ namespace Orlo.Network
             var color = claim.IsYours ? new Color(0.3f, 0.8f, 0.3f) : new Color(0.8f, 0.3f, 0.3f);
             FindFirstObjectByType<MinimapUI>()?.AddMarker(pos, "claim",
                 claim.IsYours ? "Your Claim" : "Land Claim", color);
+        }
+
+        // ─── Resource Surveying & Gathering handlers ────────────────────────
+
+        private void HandleSurveyResult(ProtoResource.SurveyResult result)
+        {
+            Debug.Log($"[Resource] Survey result: {result.Spawns.Count} spawns found");
+
+            var entries = new List<SurveyUI.SurveyEntry>();
+            foreach (var spawn in result.Spawns)
+            {
+                var pos = new Vector3(spawn.Position.X, spawn.Position.Y, spawn.Position.Z);
+
+                // Extract 11 quality attributes
+                uint[] attrs = new uint[11];
+                if (spawn.Attrs != null)
+                {
+                    attrs[0]  = spawn.Attrs.Conductivity;
+                    attrs[1]  = spawn.Attrs.ThermalResistance;
+                    attrs[2]  = spawn.Attrs.TensileStrength;
+                    attrs[3]  = spawn.Attrs.Malleability;
+                    attrs[4]  = spawn.Attrs.Reactivity;
+                    attrs[5]  = spawn.Attrs.Density;
+                    attrs[6]  = spawn.Attrs.Purity;
+                    attrs[7]  = spawn.Attrs.Resonance;
+                    attrs[8]  = spawn.Attrs.DecayResistance;
+                    attrs[9]  = spawn.Attrs.Flexibility;
+                    attrs[10] = spawn.Attrs.HarmonicResponse;
+                }
+
+                entries.Add(new SurveyUI.SurveyEntry
+                {
+                    SpawnId = spawn.SpawnId,
+                    TypeId = spawn.TypeId,
+                    Name = spawn.Name,
+                    ResourceClass = (int)spawn.ResourceClass,
+                    QualityTier = spawn.QualityTier,
+                    Position = pos,
+                    Radius = spawn.Radius,
+                    Attributes = attrs
+                });
+
+                // Also create/update world ResourceNode for each spawn
+                var existing = FindResourceNode(spawn.SpawnId);
+                if (existing == null)
+                {
+                    ResourceNode.Create(spawn.SpawnId, spawn.TypeId, spawn.Name,
+                        (int)spawn.ResourceClass, attrs, pos, spawn.Radius, spawn.QualityTier);
+                }
+
+                // Add to minimap
+                Color markerColor = ResourceNode.GetColorForClass((int)spawn.ResourceClass);
+                FindFirstObjectByType<MinimapUI>()?.AddMarker(pos, "resource", spawn.Name, markerColor);
+            }
+
+            // Feed SurveyUI
+            var surveyUI = SurveyUI.Instance;
+            if (surveyUI == null)
+            {
+                var go = new GameObject("SurveyUI");
+                surveyUI = go.AddComponent<SurveyUI>();
+            }
+            surveyUI.OnSurveyResult(entries);
+        }
+
+        private void HandleResourceDetail(ProtoResource.ResourceDetail detail)
+        {
+            Debug.Log($"[Resource] Detail for spawn {detail.SpawnId}: {detail.Name} ({detail.QualityTier})");
+            // TODO: Show detailed resource inspector panel if needed
+        }
+
+        private void HandleGatherProgress(ProtoInventory.GatherProgress progress)
+        {
+            ulong nodeId = progress.NodeEntity?.Id ?? 0;
+            Debug.Log($"[Gather] Progress: node={nodeId} {progress.Progress:P0} ({progress.TotalTime:F1}s total)");
+
+            // Update the ResourceNode component
+            var node = FindResourceNode(nodeId);
+            node?.OnGatherProgress(progress.Progress, progress.TotalTime);
+
+            // Update the center-screen GatheringUI
+            var gatherUI = GatheringUI.Instance;
+            if (gatherUI == null)
+            {
+                var go = new GameObject("GatheringUI");
+                gatherUI = go.AddComponent<GatheringUI>();
+            }
+
+            string name = node?.DisplayName ?? "Resource";
+            int resClass = node?.ResourceClass ?? 0;
+            gatherUI.ShowGathering(name, resClass, progress.Progress, progress.TotalTime);
+        }
+
+        private void HandleGatherComplete(ProtoInventory.GatherComplete complete)
+        {
+            ulong nodeId = complete.NodeEntity?.Id ?? 0;
+            Debug.Log($"[Gather] Complete: node={nodeId} remaining={complete.NodeRemaining} tier={complete.QualityTier} items={complete.ItemsReceived.Count}");
+
+            // Update the ResourceNode
+            var node = FindResourceNode(nodeId);
+            node?.OnGatherComplete(complete.NodeRemaining);
+
+            // Build attributes from first received item's resource_attrs (if present)
+            uint[] attrs = null;
+            string name = node?.DisplayName ?? "Resource";
+            int resClass = node?.ResourceClass ?? 0;
+            uint totalQty = 0;
+
+            foreach (var item in complete.ItemsReceived)
+            {
+                totalQty += item.Quantity;
+                if (attrs == null && item.ResourceAttrs != null)
+                {
+                    attrs = new uint[11];
+                    attrs[0]  = item.ResourceAttrs.Conductivity;
+                    attrs[1]  = item.ResourceAttrs.ThermalResistance;
+                    attrs[2]  = item.ResourceAttrs.TensileStrength;
+                    attrs[3]  = item.ResourceAttrs.Malleability;
+                    attrs[4]  = item.ResourceAttrs.Reactivity;
+                    attrs[5]  = item.ResourceAttrs.Density;
+                    attrs[6]  = item.ResourceAttrs.Purity;
+                    attrs[7]  = item.ResourceAttrs.Resonance;
+                    attrs[8]  = item.ResourceAttrs.DecayResistance;
+                    attrs[9]  = item.ResourceAttrs.Flexibility;
+                    attrs[10] = item.ResourceAttrs.HarmonicResponse;
+                }
+            }
+
+            // If no attrs from items, fall back to node attrs
+            if (attrs == null && node != null)
+                attrs = node.Attributes;
+
+            // Show the result panel
+            var gatherUI = GatheringUI.Instance;
+            if (gatherUI == null)
+            {
+                var go = new GameObject("GatheringUI");
+                gatherUI = go.AddComponent<GatheringUI>();
+            }
+            gatherUI.ShowResult(name, complete.QualityTier, resClass,
+                attrs, totalQty, complete.NodeRemaining);
+
+            // Notify
+            NotificationUI.Instance?.Show("Gathered",
+                $"+{totalQty} {name} ({complete.QualityTier})", 0, 3f);
+        }
+
+        /// <summary>Find a ResourceNode by spawn ID in the scene.</summary>
+        private ResourceNode FindResourceNode(ulong spawnId)
+        {
+            // ResourceNode names follow the pattern "ResourceNode_{spawnId}_..."
+            foreach (var node in FindObjectsByType<ResourceNode>(FindObjectsSortMode.None))
+            {
+                if (node.SpawnId == spawnId) return node;
+            }
+            return null;
         }
 
         // ─── Character Creation handlers ────────────────────────────────────
