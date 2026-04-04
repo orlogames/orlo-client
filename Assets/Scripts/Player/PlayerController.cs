@@ -17,20 +17,16 @@ namespace Orlo.Player
         [SerializeField] private float jumpForce = 8f;
         [SerializeField] private float gravity = -20f;
 
-        [Header("Camera")]
-        [SerializeField] private Transform cameraRig;
-        [SerializeField] private float mouseSensitivity = 2f;
-
         [Header("Network")]
         [SerializeField] private float correctionLerpSpeed = 0.3f;
 
         private CharacterController _cc;
+        private OrbitCamera _orbitCamera;
         private Vector3 _velocity;
-        private float _cameraPitch;
         private bool _isSprinting;
         private bool _isJumping;
-        private bool _rmbHeld;   // right mouse button held — enables mouselook
-        private bool _lmbHeld;   // left mouse button held (LMB+RMB = auto-forward)
+        private bool _rmbHeld;
+        private bool _lmbHeld;
 
         // Send rate: 10 times per second
         private float _sendTimer;
@@ -43,53 +39,14 @@ namespace Orlo.Player
         private void Start()
         {
             _cc = GetComponent<CharacterController>();
-            // Start with cursor visible — mouselook only activates on RMB hold
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
+            _orbitCamera = FindFirstObjectByType<OrbitCamera>();
         }
 
         private void Update()
         {
-            HandleMouseButtons();
-            HandleMouseLook();
             HandleMovement();
             ApplyServerCorrections();
             SendMovementInput();
-        }
-
-        private void HandleMouseButtons()
-        {
-            // Track RMB/LMB state and manage cursor accordingly
-            bool wasRmb = _rmbHeld;
-            _rmbHeld = Input.GetMouseButton(1);
-            _lmbHeld = Input.GetMouseButton(0);
-
-            if (_rmbHeld && !wasRmb)
-            {
-                Cursor.lockState = CursorLockMode.Locked;
-                Cursor.visible = false;
-            }
-            else if (!_rmbHeld && wasRmb)
-            {
-                Cursor.lockState = CursorLockMode.None;
-                Cursor.visible = true;
-            }
-        }
-
-        private void HandleMouseLook()
-        {
-            // Mouselook only active while RMB is held
-            if (!_rmbHeld) return;
-
-            float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
-            float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
-
-            transform.Rotate(Vector3.up * mouseX);
-            _cameraPitch -= mouseY;
-            _cameraPitch = Mathf.Clamp(_cameraPitch, -80f, 80f);
-
-            if (cameraRig != null)
-                cameraRig.localRotation = Quaternion.Euler(_cameraPitch, 0, 0);
         }
 
         private void HandleMovement()
@@ -108,10 +65,22 @@ namespace Orlo.Player
             float v = Input.GetAxisRaw("Vertical");
 
             // LMB + RMB held = auto-run forward (WoW/SWG style)
+            _rmbHeld = Input.GetMouseButton(1);
+            _lmbHeld = Input.GetMouseButton(0);
             if (_lmbHeld && _rmbHeld && v == 0)
                 v = 1f;
 
-            Vector3 move = transform.right * h + transform.forward * v;
+            // Movement is relative to camera facing direction
+            float cameraYaw = _orbitCamera != null ? _orbitCamera.Yaw : transform.eulerAngles.y;
+            Quaternion cameraRotation = Quaternion.Euler(0, cameraYaw, 0);
+            Vector3 move = cameraRotation * new Vector3(h, 0, v);
+
+            // Turn character to face movement direction when moving
+            if (move.sqrMagnitude > 0.01f && (_rmbHeld || move.sqrMagnitude > 0.1f))
+            {
+                transform.rotation = Quaternion.Slerp(transform.rotation,
+                    Quaternion.LookRotation(move), Time.deltaTime * 10f);
+            }
             move = Vector3.ClampMagnitude(move, 1f) * speed;
 
             // Admin fly mode — Space/Ctrl for vertical, no gravity

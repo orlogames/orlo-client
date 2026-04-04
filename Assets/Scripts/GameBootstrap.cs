@@ -574,15 +574,20 @@ namespace Orlo
             // Creates visible ground + lighting while server terrain streams in
             EnsureStarterEnvironment();
 
-            // Set up camera to follow
+            // Set up orbit camera
             var cam = Camera.main;
             if (cam != null)
             {
-                cam.transform.SetParent(player.transform);
-                cam.transform.localPosition = new Vector3(0, 2f, -5f);
-                cam.transform.localRotation = Quaternion.Euler(15f, 0, 0);
+                // Remove any parent — orbit camera manages its own position
+                cam.transform.SetParent(null);
                 cam.clearFlags = CameraClearFlags.SolidColor;
                 cam.backgroundColor = new Color(0.45f, 0.65f, 0.85f); // sky blue
+
+                // Add OrbitCamera component
+                var orbit = cam.gameObject.GetComponent<Orlo.Player.OrbitCamera>();
+                if (orbit == null)
+                    orbit = cam.gameObject.AddComponent<Orlo.Player.OrbitCamera>();
+                orbit.SetTarget(player.transform);
             }
 
             // Wire Phase 3 systems to player
