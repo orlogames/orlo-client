@@ -36,7 +36,7 @@ namespace Orlo.UI
         };
 
         // Skills
-        private struct SkillEntry
+        public struct SkillEntry
         {
             public string Name;
             public int Level;

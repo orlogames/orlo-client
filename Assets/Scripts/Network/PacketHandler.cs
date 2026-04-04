@@ -531,21 +531,8 @@ namespace Orlo.Network
             NotificationUI.Instance?.Show("Recipe Discovered", recipe.RecipeName, 0, 5f);
         }
 
-        private void HandleGatherProgress(ProtoInventory.GatherProgress progress)
-        {
-            Debug.Log($"[Gather] Progress: {progress.Progress:P0} ({progress.TotalTime:F1}s)");
-        }
-
-        private void HandleGatherComplete(ProtoInventory.GatherComplete complete)
-        {
-            Debug.Log($"[Gather] Complete: {complete.ItemsReceived.Count} items, " +
-                      $"tier={complete.QualityTier}, remaining={complete.NodeRemaining}");
-            foreach (var item in complete.ItemsReceived)
-            {
-                NotificationUI.Instance?.Show("Gathered",
-                    $"Received x{item.Quantity} (item #{item.ItemId})", 0, 3f);
-            }
-        }
+        // HandleGatherProgress and HandleGatherComplete are defined below
+        // with full ResourceNode + GatheringUI integration
 
         // ─── Inventory sync handlers ────────────────────────────────────────
 
