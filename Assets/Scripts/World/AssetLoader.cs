@@ -1,8 +1,10 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace Orlo.World
 {
@@ -15,6 +17,18 @@ namespace Orlo.World
     public class AssetLoader : MonoBehaviour
     {
         public static AssetLoader Instance { get; private set; }
+
+        // ─── CDN Download ──────────────────────────────────────────────
+        private const string CDN_BASE_URL = "https://cdn.orlo.games/assets/models/";
+
+        private readonly HashSet<string> _downloading = new();
+        private readonly HashSet<string> _downloadFailed = new();
+        private readonly Queue<(string assetId, Action<GameObject> callback)> _downloadQueue = new();
+        private int _activeDownloads = 0;
+        private const int MAX_CONCURRENT_DOWNLOADS = 4;
+
+        /// <summary>Number of downloads pending or in-flight.</summary>
+        public int PendingDownloads => _downloadQueue.Count + _activeDownloads;
 
         /// <summary>Cached mesh data per assetId — avoids re-parsing GLB on every spawn.</summary>
         private readonly Dictionary<string, CachedModel> _cache = new();
@@ -45,12 +59,20 @@ namespace Orlo.World
                 return InstantiateFromCache(assetId, cached);
             }
 
-            // Try to load from disk
+            // Try to load from disk — check StreamingAssets first, then persistentDataPath (CDN downloads)
             string path = Path.Combine(Application.streamingAssetsPath, "models", $"{assetId}.glb");
             if (!File.Exists(path))
             {
-                _missingAssets.Add(assetId);
-                return null;
+                string downloadedPath = Path.Combine(Application.persistentDataPath, "models", $"{assetId}.glb");
+                if (File.Exists(downloadedPath))
+                {
+                    path = downloadedPath;
+                }
+                else
+                {
+                    _missingAssets.Add(assetId);
+                    return null;
+                }
             }
 
             try
@@ -80,12 +102,110 @@ namespace Orlo.World
         }
 
         /// <summary>
+        /// Returns true if a previous CDN download for this assetId failed (404 or error).
+        /// </summary>
+        public bool IsDownloadFailed(string assetId) => _downloadFailed.Contains(assetId);
+
+        /// <summary>
+        /// Queue a CDN download for a missing GLB model.
+        /// When the download completes, onComplete is called with the new GameObject (or null on failure).
+        /// </summary>
+        public void QueueDownload(string assetId, Action<GameObject> onComplete)
+        {
+            if (string.IsNullOrEmpty(assetId)) { onComplete?.Invoke(null); return; }
+            if (_downloading.Contains(assetId) || _downloadFailed.Contains(assetId)) return;
+
+            _downloading.Add(assetId);
+            _downloadQueue.Enqueue((assetId, onComplete));
+            ProcessDownloadQueue();
+        }
+
+        private void ProcessDownloadQueue()
+        {
+            while (_activeDownloads < MAX_CONCURRENT_DOWNLOADS && _downloadQueue.Count > 0)
+            {
+                var (assetId, callback) = _downloadQueue.Dequeue();
+                _activeDownloads++;
+                StartCoroutine(DownloadModel(assetId, callback));
+            }
+        }
+
+        private IEnumerator DownloadModel(string assetId, Action<GameObject> onComplete)
+        {
+            string url = $"{CDN_BASE_URL}{assetId}.glb";
+            Debug.Log($"[AssetLoader] Downloading {assetId} from CDN...");
+
+            using (var request = UnityWebRequest.Get(url))
+            {
+                yield return request.SendWebRequest();
+
+                if (request.result != UnityWebRequest.Result.Success)
+                {
+                    Debug.LogWarning($"[AssetLoader] CDN download failed for {assetId}: {request.error} (HTTP {request.responseCode})");
+                    _downloadFailed.Add(assetId);
+                    _downloading.Remove(assetId);
+                    _activeDownloads--;
+                    ProcessDownloadQueue();
+                    onComplete?.Invoke(null);
+                    yield break;
+                }
+
+                byte[] glbData = request.downloadHandler.data;
+
+                // Save to persistentDataPath for future sessions
+                try
+                {
+                    string dir = Path.Combine(Application.persistentDataPath, "models");
+                    Directory.CreateDirectory(dir);
+                    string filePath = Path.Combine(dir, $"{assetId}.glb");
+                    File.WriteAllBytes(filePath, glbData);
+                    Debug.Log($"[AssetLoader] Saved {assetId}.glb to {filePath} ({glbData.Length} bytes)");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[AssetLoader] Failed to save {assetId}.glb to disk: {ex.Message}");
+                }
+
+                // Parse and cache
+                GameObject result = null;
+                try
+                {
+                    var meshEntries = ParseGlb(glbData);
+                    if (meshEntries.Count > 0)
+                    {
+                        var cached = new CachedModel { entries = meshEntries };
+                        _cache[assetId] = cached;
+                        _missingAssets.Remove(assetId);
+                        result = InstantiateFromCache(assetId, cached);
+                        Debug.Log($"[AssetLoader] CDN model {assetId}: {meshEntries.Count} mesh(es) loaded");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[AssetLoader] CDN model {assetId}.glb contained no meshes");
+                        _downloadFailed.Add(assetId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[AssetLoader] Failed to parse CDN model {assetId}.glb: {ex.Message}");
+                    _downloadFailed.Add(assetId);
+                }
+
+                _downloading.Remove(assetId);
+                _activeDownloads--;
+                ProcessDownloadQueue();
+                onComplete?.Invoke(result);
+            }
+        }
+
+        /// <summary>
         /// Clear the cache and missing-asset set. Useful if assets are hot-reloaded.
         /// </summary>
         public void ClearCache()
         {
             _cache.Clear();
             _missingAssets.Clear();
+            _downloadFailed.Clear();
         }
 
         // ─── Instantiation ──────────────────────────────────────────────

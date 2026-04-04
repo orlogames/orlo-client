@@ -93,6 +93,35 @@ namespace Orlo.World
                     tag.PoolKey = poolKey;
                     return modelGo;
                 }
+
+                // GLB not on disk — try CDN download with procedural placeholder
+                if (!loader.IsDownloadFailed(assetId))
+                {
+                    var placeholder = BuildProceduralFallback(entityType, assetId, position, rotation);
+                    var phTag = placeholder.AddComponent<PoolTag>();
+                    phTag.PoolKey = poolKey;
+
+                    loader.QueueDownload(assetId, (downloadedModel) =>
+                    {
+                        if (downloadedModel != null && placeholder != null)
+                        {
+                            // Swap downloaded model into placeholder's transform
+                            downloadedModel.transform.SetParent(placeholder.transform.parent, false);
+                            downloadedModel.transform.position = placeholder.transform.position;
+                            downloadedModel.transform.rotation = placeholder.transform.rotation;
+                            downloadedModel.transform.localScale = placeholder.transform.localScale;
+                            downloadedModel.name = placeholder.name;
+
+                            // Transfer PoolTag
+                            var newTag = downloadedModel.AddComponent<PoolTag>();
+                            newTag.PoolKey = poolKey;
+
+                            Object.Destroy(placeholder);
+                        }
+                    });
+
+                    return placeholder;
+                }
             }
 
             // Build new — check for settlement assets first
@@ -473,6 +502,29 @@ namespace Orlo.World
             var mps = go.AddComponent<MicroparticleSystem>();
             mps.Initialize(microparticleCompute);
             mps.Assemble();
+        }
+
+        // ─── CDN Fallback Helper ──────────────────────────────────────
+
+        /// <summary>
+        /// Build a procedural placeholder for any entity type, used while CDN download is in progress.
+        /// Delegates to the same type-specific builders used for the normal procedural path.
+        /// </summary>
+        private GameObject BuildProceduralFallback(uint entityType, string assetId, Vector3 position, Quaternion rotation)
+        {
+            if (_settlementAssets.Contains(assetId))
+                return BuildSettlementAsset(assetId, position, rotation);
+
+            switch (entityType)
+            {
+                case TYPE_HUMANOID_NPC: return BuildHumanoidNPC(assetId, position, rotation);
+                case TYPE_ANIMAL:       return BuildAnimal(assetId, position, rotation);
+                case TYPE_PROP:         return BuildProp(assetId, position, rotation);
+                case TYPE_PLAYER:       return BuildPlayer(assetId, position, rotation);
+                case TYPE_VEHICLE:      return BuildProp(assetId, position, rotation);
+                case TYPE_INTERACTABLE: return BuildProp(assetId, position, rotation);
+                default:                return BuildFallback(position, rotation);
+            }
         }
 
         // ─── Settlement Asset Builders ─────────────────────────────────
