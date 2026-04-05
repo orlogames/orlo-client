@@ -89,8 +89,8 @@ namespace Orlo.World
                 {
                     modelGo.name = $"Model_{assetId}";
                     modelGo.transform.SetPositionAndRotation(position, rotation);
-                    var tag = modelGo.AddComponent<PoolTag>();
-                    tag.PoolKey = poolKey;
+                    var modelTag = modelGo.AddComponent<PoolTag>();
+                    modelTag.PoolKey = poolKey;
                     return modelGo;
                 }
 

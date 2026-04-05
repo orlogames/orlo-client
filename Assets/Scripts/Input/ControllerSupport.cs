@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Orlo.Input
+namespace Orlo.InputSystem
 {
     /// <summary>
     /// Detects gamepad connection and provides unified controller input mapping.
