@@ -63,19 +63,21 @@ jobs:
           Write-Host "Found Unity at: $unity"
           echo "path=$unity" >> $env:GITHUB_OUTPUT
 
-      - name: Download asset pak from CDN
-        shell: powershell
+      - name: Download asset pak from orlo-assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          New-Item -ItemType Directory -Force -Path Assets/StreamingAssets | Out-Null
-          $pakUrl = "https://cdn.orlo.games/assets/assets.pak"
-          try {
-            Invoke-WebRequest -Uri $pakUrl -OutFile Assets/StreamingAssets/assets.pak -TimeoutSec 120
-            $size = (Get-Item Assets/StreamingAssets/assets.pak).Length
-            Write-Host "Downloaded assets.pak: $size bytes"
-          } catch {
-            Write-Host "WARNING: Could not download assets.pak from CDN, building without bundled assets"
-            Write-Host "  Error: $($_.Exception.Message)"
-          }
+          mkdir -p Assets/StreamingAssets
+          echo "Fetching latest assets.pak from orlo-assets workflow artifacts..."
+          gh run download --repo orlogames/orlo-assets --name assets-pak --dir /tmp/pak-download 2>/dev/null || true
+          if [ -f /tmp/pak-download/assets.pak ] && [ -s /tmp/pak-download/assets.pak ]; then
+            cp /tmp/pak-download/assets.pak Assets/StreamingAssets/assets.pak
+            size=$(stat -c%s Assets/StreamingAssets/assets.pak 2>/dev/null || stat -f%z Assets/StreamingAssets/assets.pak)
+            echo "Downloaded assets.pak: $size bytes"
+          else
+            echo "WARNING: Could not download assets.pak, building without bundled assets"
+          fi
 
       - name: Build with Unity
         shell: powershell
