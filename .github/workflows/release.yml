@@ -118,8 +118,8 @@ jobs:
             $size = (Get-Item Assets/StreamingAssets/assets.pak).Length
             Write-Host "Downloaded assets.pak: $size bytes"
           } catch {
-            Write-Host "WARNING: Could not download assets.pak from CDN — building without bundled assets"
-            Write-Host "  Error: $_"
+            Write-Host "WARNING: Could not download assets.pak from CDN, building without bundled assets"
+            Write-Host "  Error: $($_.Exception.Message)"
           }
 
       - name: Build with Unity
