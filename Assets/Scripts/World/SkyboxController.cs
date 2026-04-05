@@ -23,13 +23,13 @@ namespace Orlo.World
         private Light directionalLight;
         private Material skyboxMaterial;
 
-        // Sky gradient colors
-        private static readonly Color DayTop = new Color(0.25f, 0.5f, 0.95f);
-        private static readonly Color DayHorizon = new Color(0.6f, 0.75f, 0.95f);
-        private static readonly Color NightTop = new Color(0.02f, 0.02f, 0.08f);
-        private static readonly Color NightHorizon = new Color(0.05f, 0.05f, 0.15f);
-        private static readonly Color SunsetTop = new Color(0.3f, 0.2f, 0.5f);
-        private static readonly Color SunsetHorizon = new Color(0.9f, 0.4f, 0.15f);
+        // Sky gradient colors — Threshold visual target (gritty realism, desaturated)
+        private static readonly Color DayTop = new Color(0.35f, 0.52f, 0.78f);          // Muted steel blue
+        private static readonly Color DayHorizon = new Color(0.55f, 0.62f, 0.72f);      // Hazy, desaturated
+        private static readonly Color NightTop = new Color(0.015f, 0.015f, 0.06f);
+        private static readonly Color NightHorizon = new Color(0.04f, 0.04f, 0.12f);
+        private static readonly Color SunsetTop = new Color(0.28f, 0.18f, 0.42f);       // Deep purple
+        private static readonly Color SunsetHorizon = new Color(0.85f, 0.35f, 0.12f);   // Warm amber
 
         private void Start()
         {
@@ -73,32 +73,35 @@ namespace Orlo.World
 
             // Set initial daytime sky
             float sunAngle = timeOfDay * 360f - 90f;
-            skyboxMaterial.SetFloat("_SunSize", 0.04f);
-            skyboxMaterial.SetFloat("_SunSizeConvergence", 5f);
-            skyboxMaterial.SetFloat("_AtmosphereThickness", 1.0f);
+            // Threshold visual target — gritty realism (Arc Raiders / Division 2)
+            skyboxMaterial.SetFloat("_SunSize", 0.035f);
+            skyboxMaterial.SetFloat("_SunSizeConvergence", 6f);
+            skyboxMaterial.SetFloat("_AtmosphereThickness", 1.2f);
             skyboxMaterial.SetColor("_SkyTint", DayTop);
-            skyboxMaterial.SetColor("_GroundColor", new Color(0.37f, 0.35f, 0.34f));
-            skyboxMaterial.SetFloat("_Exposure", 1.3f);
+            skyboxMaterial.SetColor("_GroundColor", new Color(0.32f, 0.30f, 0.28f));   // Earthy ground
+            skyboxMaterial.SetFloat("_Exposure", 1.15f);
 
             RenderSettings.skybox = skyboxMaterial;
-            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientSkyColor = DayTop;
-            RenderSettings.ambientEquatorColor = DayHorizon;
-            RenderSettings.ambientGroundColor = new Color(0.2f, 0.22f, 0.18f);
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = new Color(0.28f, 0.35f, 0.50f);           // Cool desaturated sky
+            RenderSettings.ambientEquatorColor = new Color(0.22f, 0.24f, 0.28f);       // Muted midtones
+            RenderSettings.ambientGroundColor = new Color(0.12f, 0.11f, 0.10f);        // Dark warm ground
 
-            // Fog for depth
+            // Atmospheric fog — depth + haze for frontier settlement feel
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = new Color(0.55f, 0.65f, 0.80f);
-            RenderSettings.fogStartDistance = 100f;
-            RenderSettings.fogEndDistance = 500f;
+            RenderSettings.fogColor = new Color(0.48f, 0.52f, 0.58f);                  // Cool atmospheric haze
+            RenderSettings.fogStartDistance = 60f;
+            RenderSettings.fogEndDistance = 400f;
 
-            // Sun light
+            // Sun — warm directional, deep shadows
             if (directionalLight != null)
             {
-                directionalLight.color = sunColor;
-                directionalLight.intensity = 1.2f;
-                directionalLight.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+                directionalLight.color = new Color(1f, 0.92f, 0.78f);                  // Warm golden sun
+                directionalLight.intensity = 1.35f;
+                directionalLight.shadows = LightShadows.Soft;
+                directionalLight.shadowStrength = 0.85f;
+                directionalLight.transform.rotation = Quaternion.Euler(45f, -35f, 0f);  // Late morning angle
             }
 
             DynamicGI.UpdateEnvironment();

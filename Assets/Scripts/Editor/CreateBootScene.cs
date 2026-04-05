@@ -14,6 +14,12 @@ public class CreateBootScene
         var bootstrapGO = new GameObject("GameBootstrap");
         bootstrapGO.AddComponent<Orlo.GameBootstrap>();
 
+        // Core systems (asset loading, entity management)
+        var systemsGO = new GameObject("CoreSystems");
+        systemsGO.AddComponent<Orlo.World.AssetLoader>();
+        systemsGO.AddComponent<Orlo.World.EntityManager>();
+        systemsGO.AddComponent<Orlo.World.ProceduralEntityFactory>();
+
         // Save scene
         string scenePath = "Assets/Scenes/Boot.unity";
         System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(

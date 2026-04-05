@@ -126,6 +126,27 @@ namespace Orlo
 
         private void InitializeWorldSystems()
         {
+            // Asset loading pipeline (must init before EntityManager/Factory)
+            if (AssetLoader.Instance == null)
+            {
+                var go = new GameObject("AssetLoader");
+                go.AddComponent<AssetLoader>();
+            }
+
+            // Networked entity lifecycle
+            if (EntityManager.Instance == null)
+            {
+                var go = new GameObject("EntityManager");
+                go.AddComponent<EntityManager>();
+            }
+
+            // Procedural entity factory (wires into EntityManager on Awake)
+            if (ProceduralEntityFactory.Instance == null)
+            {
+                var go = new GameObject("ProceduralEntityFactory");
+                go.AddComponent<ProceduralEntityFactory>();
+            }
+
             // Skybox + day/night
             if (FindFirstObjectByType<SkyboxController>() == null)
             {
