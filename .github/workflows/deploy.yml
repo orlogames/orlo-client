@@ -64,20 +64,25 @@ jobs:
           echo "path=$unity" >> $env:GITHUB_OUTPUT
 
       - name: Download asset pak from orlo-assets
-        shell: bash
+        shell: powershell
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          mkdir -p Assets/StreamingAssets
-          echo "Fetching latest assets.pak from orlo-assets workflow artifacts..."
-          gh run download --repo orlogames/orlo-assets --name assets-pak --dir /tmp/pak-download 2>/dev/null || true
-          if [ -f /tmp/pak-download/assets.pak ] && [ -s /tmp/pak-download/assets.pak ]; then
-            cp /tmp/pak-download/assets.pak Assets/StreamingAssets/assets.pak
-            size=$(stat -c%s Assets/StreamingAssets/assets.pak 2>/dev/null || stat -f%z Assets/StreamingAssets/assets.pak)
-            echo "Downloaded assets.pak: $size bytes"
-          else
-            echo "WARNING: Could not download assets.pak, building without bundled assets"
-          fi
+          New-Item -ItemType Directory -Force -Path Assets/StreamingAssets | Out-Null
+          Write-Host "Fetching latest assets.pak from orlo-assets workflow artifacts..."
+          try {
+            gh run download --repo orlogames/orlo-assets --name assets-pak --dir pak-download
+            if (Test-Path "pak-download/assets.pak") {
+              Copy-Item "pak-download/assets.pak" "Assets/StreamingAssets/assets.pak"
+              $size = (Get-Item "Assets/StreamingAssets/assets.pak").Length
+              Write-Host "Downloaded assets.pak: $size bytes"
+            } else {
+              Write-Host "WARNING: assets.pak not found in artifact, building without bundled assets"
+            }
+          } catch {
+            Write-Host "WARNING: Could not download assets.pak, building without bundled assets"
+            Write-Host "  $($_.Exception.Message)"
+          }
 
       - name: Build with Unity
         shell: powershell
