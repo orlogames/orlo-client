@@ -37,13 +37,17 @@ namespace Orlo.World
 
         private void Awake()
         {
-            // Create terrain material once — Standard shader with vertex colors
-            _terrainMat = new Material(Shader.Find("Standard"));
-            _terrainMat.color = Color.white; // White base so vertex colors show through
-            _terrainMat.SetFloat("_Glossiness", 0.05f); // Matte terrain
-            _terrainMat.SetFloat("_Metallic", 0.0f);
-            _terrainMat.EnableKeyword("_VERTEXCOLOR");
-            Debug.Log("[TerrainManager] Initialized with vertex-colored terrain material");
+            // Create terrain material — custom vertex-color shader (won't be stripped from builds)
+            var terrainShader = Shader.Find("Orlo/TerrainVertexColor");
+            if (terrainShader == null)
+            {
+                Debug.LogWarning("[TerrainManager] Orlo/TerrainVertexColor shader not found, falling back to Standard");
+                terrainShader = Shader.Find("Standard");
+            }
+            _terrainMat = new Material(terrainShader);
+            _terrainMat.color = Color.white;
+            _terrainMat.SetFloat("_Glossiness", 0.05f);
+            Debug.Log("[TerrainManager] Initialized with terrain material");
         }
 
         private void Update()

@@ -36,10 +36,37 @@ namespace Orlo.World
         /// <summary>Set of assetIds known to have no GLB file — avoids repeated File.Exists checks.</summary>
         private readonly HashSet<string> _missingAssets = new();
 
+        /// <summary>Pak archive reader for bundled assets.</summary>
+        private PakReader _pakReader;
+
+        /// <summary>Expose pak reader for other systems (e.g., ModelCharacter) that need raw byte access.</summary>
+        public PakReader GetPakReader() => _pakReader;
+
         private void Awake()
         {
             if (Instance != null) { Destroy(gameObject); return; }
             Instance = this;
+
+            // Open pak file if present in StreamingAssets
+            string pakPath = Path.Combine(Application.streamingAssetsPath, "assets.pak");
+            if (File.Exists(pakPath))
+            {
+                try
+                {
+                    _pakReader = new PakReader(pakPath);
+                    Debug.Log($"[AssetLoader] Opened assets.pak with {_pakReader.EntryCount} entries");
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogError($"[AssetLoader] Failed to open assets.pak: {ex.Message}");
+                }
+            }
+        }
+
+        private void OnDestroy()
+        {
+            _pakReader?.Dispose();
+            _pakReader = null;
         }
 
         /// <summary>
@@ -59,25 +86,47 @@ namespace Orlo.World
                 return InstantiateFromCache(assetId, cached);
             }
 
-            // Try to load from disk — check StreamingAssets first, then persistentDataPath (CDN downloads)
-            string path = Path.Combine(Application.streamingAssetsPath, "models", $"{assetId}.glb");
-            if (!File.Exists(path))
+            // Try pak file first, then loose files on disk
+            byte[] glbData = null;
+            string source = null;
+
+            // 1. Pak archive (bundled with build)
+            if (_pakReader != null && _pakReader.Contains(assetId))
+            {
+                glbData = _pakReader.ReadEntry(assetId);
+                source = "pak";
+            }
+
+            // 2. Loose file in StreamingAssets/models/
+            if (glbData == null)
+            {
+                string path = Path.Combine(Application.streamingAssetsPath, "models", $"{assetId}.glb");
+                if (File.Exists(path))
+                {
+                    glbData = File.ReadAllBytes(path);
+                    source = "StreamingAssets";
+                }
+            }
+
+            // 3. Loose file in persistentDataPath/models/ (CDN download cache)
+            if (glbData == null)
             {
                 string downloadedPath = Path.Combine(Application.persistentDataPath, "models", $"{assetId}.glb");
                 if (File.Exists(downloadedPath))
                 {
-                    path = downloadedPath;
+                    glbData = File.ReadAllBytes(downloadedPath);
+                    source = "cache";
                 }
-                else
-                {
-                    _missingAssets.Add(assetId);
-                    return null;
-                }
+            }
+
+            if (glbData == null)
+            {
+                _missingAssets.Add(assetId);
+                return null;
             }
 
             try
             {
-                byte[] glbData = File.ReadAllBytes(path);
                 var meshEntries = ParseGlb(glbData);
 
                 if (meshEntries.Count == 0)
@@ -90,7 +139,7 @@ namespace Orlo.World
                 cached = new CachedModel { entries = meshEntries };
                 _cache[assetId] = cached;
 
-                Debug.Log($"[AssetLoader] Loaded {assetId}.glb: {meshEntries.Count} mesh(es)");
+                Debug.Log($"[AssetLoader] Loaded {assetId}.glb from {source}: {meshEntries.Count} mesh(es)");
                 return InstantiateFromCache(assetId, cached);
             }
             catch (Exception ex)

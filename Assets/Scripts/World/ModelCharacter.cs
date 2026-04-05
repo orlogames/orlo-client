@@ -25,22 +25,46 @@ namespace Orlo.World
         public bool IsLoaded => _loaded;
 
         /// <summary>
-        /// Load a GLB model from StreamingAssets and apply initial appearance.
+        /// Load a GLB model from pak archive, StreamingAssets, or CDN cache. Apply initial appearance.
         /// </summary>
         public void LoadModel(string glbFileName, AppearanceData initialAppearance = null)
         {
-            string path = Path.Combine(Application.streamingAssetsPath, "Characters", glbFileName);
+            // Derive assetId from filename (strip .glb extension)
+            string assetId = glbFileName;
+            if (assetId.EndsWith(".glb", StringComparison.OrdinalIgnoreCase))
+                assetId = assetId.Substring(0, assetId.Length - 4);
 
-            if (!File.Exists(path))
+            byte[] glbData = null;
+
+            // Try pak archive via AssetLoader first
+            var loader = AssetLoader.Instance;
+            if (loader != null)
             {
-                Debug.LogWarning($"[ModelCharacter] GLB not found at {path}, using fallback");
+                // Check if pak has this asset — use ReadEntry directly for raw bytes
+                var pakReader = loader.GetPakReader();
+                if (pakReader != null && pakReader.Contains(assetId))
+                {
+                    glbData = pakReader.ReadEntry(assetId);
+                }
+            }
+
+            // Fall back to loose file in StreamingAssets/Characters/
+            if (glbData == null)
+            {
+                string path = Path.Combine(Application.streamingAssetsPath, "Characters", glbFileName);
+                if (File.Exists(path))
+                    glbData = File.ReadAllBytes(path);
+            }
+
+            if (glbData == null)
+            {
+                Debug.LogWarning($"[ModelCharacter] GLB not found: {glbFileName}, using fallback");
                 CreateFallbackPrimitive();
                 return;
             }
 
             try
             {
-                byte[] glbData = File.ReadAllBytes(path);
                 var meshes = ParseGlb(glbData);
 
                 if (meshes.Count == 0)
@@ -63,7 +87,8 @@ namespace Orlo.World
                     meshFilter.mesh = meshData.mesh;
 
                     var meshRenderer = meshGO.AddComponent<MeshRenderer>();
-                    var mat = new Material(Shader.Find("Standard"));
+                    var shader = Shader.Find("Orlo/EntityFallback") ?? Shader.Find("Standard");
+                    var mat = new Material(shader);
                     mat.color = meshData.baseColor;
                     if (meshData.texture != null)
                     {

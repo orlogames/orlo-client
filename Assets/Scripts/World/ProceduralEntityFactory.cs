@@ -50,6 +50,24 @@ namespace Orlo.World
             }
         }
 
+        /// <summary>Get a shader that won't be null in builds. Prefers Orlo/EntityFallback, falls back to Standard.</summary>
+        private static Shader _cachedFallbackShader;
+        private static Shader GetFallbackShader()
+        {
+            if (_cachedFallbackShader != null) return _cachedFallbackShader;
+            _cachedFallbackShader = Shader.Find("Orlo/EntityFallback");
+            if (_cachedFallbackShader == null) _cachedFallbackShader = Shader.Find("Standard");
+            if (_cachedFallbackShader == null) _cachedFallbackShader = Shader.Find("Unlit/Color");
+            return _cachedFallbackShader;
+        }
+
+        private static Material MakeMat(Color color)
+        {
+            var mat = new Material(GetFallbackShader());
+            mat.color = color;
+            return mat;
+        }
+
         // Known settlement asset IDs that have dedicated procedural builders
         private static readonly HashSet<string> _settlementAssets = new()
         {
@@ -239,7 +257,7 @@ namespace Orlo.World
             var go = new GameObject($"Animal_{assetId}");
             go.transform.SetPositionAndRotation(position, rotation);
 
-            var standard = Shader.Find("Standard");
+            var standard = GetFallbackShader();
             Color bodyColor;
             float bodyLength, bodyRadius, legLength, legRadius;
 
@@ -346,7 +364,7 @@ namespace Orlo.World
             var go = new GameObject($"Prop_{assetId}");
             go.transform.SetPositionAndRotation(position, rotation);
 
-            var standard = Shader.Find("Standard");
+            var standard = GetFallbackShader();
             string type = assetId.ToLower();
 
             if (type.Contains("crate") || type.Contains("box"))
@@ -553,7 +571,7 @@ namespace Orlo.World
         {
             var go = new GameObject("Prop_nexus_crystal_fountain");
             go.transform.SetPositionAndRotation(position, rotation);
-            var standard = Shader.Find("Standard");
+            var standard = GetFallbackShader();
 
             // Circular stone platform
             var platformMesh = ProceduralMeshBuilder.BuildCylinder(1.8f, 2.0f, 0.3f, 12);
@@ -618,7 +636,7 @@ namespace Orlo.World
         {
             var go = new GameObject("Prop_frontier_cabin");
             go.transform.SetPositionAndRotation(position, rotation);
-            var standard = Shader.Find("Standard");
+            var standard = GetFallbackShader();
             var woodMat = new Material(standard) { color = new Color(0.45f, 0.3f, 0.15f) };
 
             // Rectangular base box (3x2x2.5)
@@ -684,7 +702,7 @@ namespace Orlo.World
         {
             var go = new GameObject("Prop_cooking_station");
             go.transform.SetPositionAndRotation(position, rotation);
-            var standard = Shader.Find("Standard");
+            var standard = GetFallbackShader();
 
             // Dark grey cube base
             var baseMesh = ProceduralMeshBuilder.BuildBox(new Vector3(0.6f, 0.6f, 0.6f));
@@ -723,7 +741,7 @@ namespace Orlo.World
         {
             var go = new GameObject("Prop_ground_lantern");
             go.transform.SetPositionAndRotation(position, rotation);
-            var standard = Shader.Find("Standard");
+            var standard = GetFallbackShader();
 
             // Small glowing box
             var boxMesh = ProceduralMeshBuilder.BuildBox(new Vector3(0.2f, 0.25f, 0.2f));
@@ -755,7 +773,7 @@ namespace Orlo.World
         {
             var go = new GameObject("Prop_wall_lantern");
             go.transform.SetPositionAndRotation(position, rotation);
-            var standard = Shader.Find("Standard");
+            var standard = GetFallbackShader();
 
             // Iron bracket (thin cylinder)
             var bracketMesh = ProceduralMeshBuilder.BuildCylinder(0.02f, 0.02f, 0.3f, 5);
@@ -796,7 +814,7 @@ namespace Orlo.World
         {
             var go = new GameObject("Prop_stone_pathway_segment");
             go.transform.SetPositionAndRotation(position, rotation);
-            var standard = Shader.Find("Standard");
+            var standard = GetFallbackShader();
 
             // Flat dark grey quad at ground level
             var quadMesh = ProceduralMeshBuilder.BuildQuad(2f, 2f);
@@ -816,7 +834,7 @@ namespace Orlo.World
         {
             var go = new GameObject("Prop_settlement_bench");
             go.transform.SetPositionAndRotation(position, rotation);
-            var standard = Shader.Find("Standard");
+            var standard = GetFallbackShader();
             var woodMat = new Material(standard) { color = new Color(0.45f, 0.3f, 0.15f) };
 
             // Seat plank
@@ -849,7 +867,7 @@ namespace Orlo.World
         {
             var go = new GameObject("Prop_vendor_display_table");
             go.transform.SetPositionAndRotation(position, rotation);
-            var standard = Shader.Find("Standard");
+            var standard = GetFallbackShader();
             var woodMat = new Material(standard) { color = new Color(0.5f, 0.35f, 0.18f) };
 
             // Table surface
@@ -903,7 +921,7 @@ namespace Orlo.World
         {
             var go = new GameObject("Prop_settlement_pine");
             go.transform.SetPositionAndRotation(position, rotation);
-            var standard = Shader.Find("Standard");
+            var standard = GetFallbackShader();
 
             // Use assetId hash for slight variation
             int hash = assetId.GetHashCode();
@@ -955,6 +973,7 @@ namespace Orlo.World
             var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             go.name = "Entity_Fallback";
             go.transform.SetPositionAndRotation(position, rotation);
+            go.GetComponent<MeshRenderer>().material = MakeMat(new Color(0.4f, 0.4f, 0.45f));
             return go;
         }
 

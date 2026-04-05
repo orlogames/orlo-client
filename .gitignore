@@ -27,3 +27,7 @@ Thumbs.db
 
 # Proto generated (regenerated from orlo-proto)
 Assets/Scripts/Proto/
+
+# Asset pak (downloaded from CDN during CI build)
+Assets/StreamingAssets/assets.pak
+Assets/StreamingAssets/assets.pak.meta
