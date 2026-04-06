@@ -163,6 +163,13 @@ namespace Orlo
                 go.AddComponent<WeatherController>();
             }
 
+            // Cloud layer (dynamic volumetric clouds with shadows)
+            if (FindFirstObjectByType<CloudRenderer>() == null)
+            {
+                var go = new GameObject("CloudRenderer");
+                go.AddComponent<CloudRenderer>();
+            }
+
             // Water plane
             if (FindFirstObjectByType<WaterPlane>() == null)
             {
@@ -624,6 +631,10 @@ namespace Orlo
             var playerT = player.transform;
             FindFirstObjectByType<WeatherController>()?.SetPlayerTransform(playerT);
             FindFirstObjectByType<WaterPlane>()?.SetPlayerTransform(playerT);
+            FindFirstObjectByType<CloudRenderer>()?.SetPlayerTransform(playerT);
+
+            // Wire cloud + god ray cross-system updates
+            WireCloudAndGodRays();
         }
 
         private void OnPong(ProtoAuth.Pong pong)
@@ -719,9 +730,62 @@ namespace Orlo
                 // Add bloom + color grading post-processing
                 if (mainCam.GetComponent<PostProcessSetup>() == null)
                     mainCam.gameObject.AddComponent<PostProcessSetup>();
+
+                // Add god rays (volumetric light shafts through clouds)
+                if (mainCam.GetComponent<GodRaysEffect>() == null)
+                    mainCam.gameObject.AddComponent<GodRaysEffect>();
             }
 
             Debug.Log("[Orlo] Fallback starter environment created");
+        }
+
+        // --- Cloud + God Ray wiring ---
+        private CloudRenderer _cloudRenderer;
+        private GodRaysEffect _godRaysEffect;
+        private SkyboxController _skyboxController;
+        private WeatherController _weatherController;
+
+        private void WireCloudAndGodRays()
+        {
+            _cloudRenderer = FindFirstObjectByType<CloudRenderer>();
+            _godRaysEffect = Camera.main?.GetComponent<GodRaysEffect>();
+            _skyboxController = FindFirstObjectByType<SkyboxController>();
+            _weatherController = FindFirstObjectByType<WeatherController>();
+
+            Debug.Log($"[Orlo] Cloud/GodRay wiring: clouds={_cloudRenderer != null}, " +
+                      $"rays={_godRaysEffect != null}, sky={_skyboxController != null}, " +
+                      $"weather={_weatherController != null}");
+        }
+
+        private void LateUpdate()
+        {
+            // Drive cloud density and wind from weather state
+            if (_cloudRenderer != null && _weatherController != null)
+            {
+                _cloudRenderer.SetCloudDensity(_weatherController.CloudDensity);
+                _cloudRenderer.SetWind(_weatherController.WindDirection, _weatherController.WindSpeed);
+            }
+
+            // Drive cloud sun direction from skybox
+            if (_cloudRenderer != null && _skyboxController != null)
+            {
+                _cloudRenderer.SetSunDirection(_skyboxController.SunDirection);
+                _cloudRenderer.SetSunColor(_skyboxController.SunColor);
+            }
+
+            // Drive god rays from cloud coverage and sun state
+            if (_godRaysEffect != null)
+            {
+                if (_cloudRenderer != null)
+                    _godRaysEffect.SetGodRayFactor(_cloudRenderer.GodRayFactor);
+
+                if (_skyboxController != null)
+                    _godRaysEffect.SetSunAboveHorizon(_skyboxController.IsSunAboveHorizon);
+
+                // Suppress god rays during heavy overcast
+                if (_weatherController != null && _weatherController.IsOvercast)
+                    _godRaysEffect.SetGodRayFactor(0f);
+            }
         }
 
         private void OnDestroy()

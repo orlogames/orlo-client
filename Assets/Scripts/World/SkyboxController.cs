@@ -185,6 +185,41 @@ namespace Orlo.World
             skyboxMaterial.SetFloat("_AtmosphereThickness", Mathf.Lerp(1.2f, 1.8f, horizonFactor));
         }
 
+        // --- Public API for CloudRenderer / GodRaysEffect ---
+
+        /// <summary>
+        /// Forward direction of the sun (directional light). Used by CloudRenderer for
+        /// backlit edges and shadow projection, and by GodRaysEffect for screen-space position.
+        /// </summary>
+        public Vector3 SunDirection => directionalLight != null
+            ? directionalLight.transform.forward
+            : Vector3.down;
+
+        /// <summary>
+        /// Current sun color (directional light color).
+        /// </summary>
+        public Color SunColor => directionalLight != null
+            ? directionalLight.color
+            : Color.white;
+
+        /// <summary>
+        /// Whether the sun is above the horizon (intensity > 0).
+        /// God rays should be disabled at night.
+        /// </summary>
+        public bool IsSunAboveHorizon
+        {
+            get
+            {
+                float sunHeight = Mathf.Max(0f, Mathf.Sin(timeOfDay * Mathf.PI * 2f));
+                return sunHeight > 0.05f;
+            }
+        }
+
+        /// <summary>
+        /// Current weather intensity (0-1). Used to modulate cloud density externally.
+        /// </summary>
+        public float WeatherIntensity => weatherIntensity;
+
         private void UpdateAmbientLighting()
         {
             // Use trilight ambient to preserve warm golden hour ground/equator/sky separation

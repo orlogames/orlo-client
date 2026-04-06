@@ -65,6 +65,39 @@ namespace Orlo.World
             UpdateFog();
         }
 
+        // --- Public API for CloudRenderer integration ---
+
+        /// <summary>
+        /// Recommended cloud density for the current weather state (0-1).
+        /// Clear = 0.1, Cloudy = 0.6, Rain = 0.8, Storm = 1.0, Fog = 0.5, Snow = 0.7.
+        /// </summary>
+        public float CloudDensity
+        {
+            get
+            {
+                switch (currentWeather)
+                {
+                    case WeatherType.Clear:  return 0.1f + intensity * 0.15f;
+                    case WeatherType.Cloudy: return 0.4f + intensity * 0.4f;
+                    case WeatherType.Rain:   return 0.7f + intensity * 0.3f;
+                    case WeatherType.Storm:  return 0.85f + intensity * 0.15f;
+                    case WeatherType.Fog:    return 0.3f + intensity * 0.3f;
+                    case WeatherType.Snow:   return 0.5f + intensity * 0.3f;
+                    default:                 return 0.2f;
+                }
+            }
+        }
+
+        /// <summary>Current wind direction in radians.</summary>
+        public float WindDirection => windDirection;
+
+        /// <summary>Current wind speed.</summary>
+        public float WindSpeed => windSpeed;
+
+        /// <summary>Whether the current weather produces overcast conditions (suppress god rays).</summary>
+        public bool IsOvercast => currentWeather == WeatherType.Storm ||
+                                  (currentWeather == WeatherType.Rain && intensity > 0.7f);
+
         private void UpdateRain(Vector3 wind)
         {
             if (rainSystem == null) return;
