@@ -852,9 +852,9 @@ namespace Orlo
         /// <summary>
         /// Recursively search for a child transform by name.
         /// </summary>
-        private static Transform FindDeepChild(Transform parent, string name)
+        private static UnityEngine.Transform FindDeepChild(UnityEngine.Transform parent, string name)
         {
-            foreach (Transform child in parent)
+            foreach (UnityEngine.Transform child in parent)
             {
                 if (child.name == name) return child;
                 var found = FindDeepChild(child, name);
