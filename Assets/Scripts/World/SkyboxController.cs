@@ -1,10 +1,12 @@
 using UnityEngine;
+using Orlo.Rendering;
 
 namespace Orlo.World
 {
     /// <summary>
     /// Procedural skybox driven by server environment state.
     /// Uses a gradient-based approach with sun/moon positioning.
+    /// Manages StarFieldRenderer (procedural stars) and MoonRenderer (phased moon).
     /// </summary>
     public class SkyboxController : MonoBehaviour
     {
@@ -22,6 +24,10 @@ namespace Orlo.World
         // Scene references
         private Light directionalLight;
         private Material skyboxMaterial;
+
+        // Night sky subsystems
+        private StarFieldRenderer starField;
+        private MoonRenderer moonRenderer;
 
         // Sky gradient colors — warm cinematic palette (golden hour emphasis)
         private static readonly Color DayTop = new Color(0.38f, 0.55f, 0.82f);          // Vivid sky blue
@@ -53,6 +59,7 @@ namespace Orlo.World
             targetSunColor = sunColor;
             targetAmbientColor = ambientColor;
 
+            InitializeNightSky();
             UpdateSkyVisuals();
         }
 
@@ -65,6 +72,42 @@ namespace Orlo.World
                 Start();
             else
                 UpdateSkyVisuals();
+        }
+
+        private void InitializeNightSky()
+        {
+            // Star field dome — follows camera, fades with day/night
+            var starGo = new GameObject("StarField");
+            starGo.transform.SetParent(transform);
+            starField = starGo.AddComponent<StarFieldRenderer>();
+            starField.Initialize();
+
+            // Moon — orbits sky dome with phase cycle
+            var moonGo = new GameObject("Moon");
+            moonGo.transform.SetParent(transform);
+            moonRenderer = moonGo.AddComponent<MoonRenderer>();
+            moonRenderer.Initialize(directionalLight);
+
+            Debug.Log("[Orlo] Night sky initialized (stars + moon)");
+        }
+
+        /// <summary>
+        /// Compute how visible the night sky is (0=full day, 1=full night).
+        /// Stars fade in during sunset and out during sunrise.
+        /// </summary>
+        private float ComputeNightFactor()
+        {
+            // sunHeight: 0 at horizon, 1 at zenith. Negative when sun below horizon.
+            float sunHeight = Mathf.Sin(timeOfDay * Mathf.PI * 2f);
+
+            // Stars fully visible when sun well below horizon, invisible when above
+            // Transition band: sunHeight -0.1 (full night) to 0.15 (full day)
+            float night = 1f - Mathf.InverseLerp(-0.1f, 0.15f, sunHeight);
+
+            // Reduce star visibility during weather (clouds obscure stars)
+            night *= (1f - weatherIntensity * 0.8f);
+
+            return Mathf.Clamp01(night);
         }
 
         private void UpdateSkyVisuals()
@@ -137,6 +180,7 @@ namespace Orlo.World
             UpdateSunPosition();
             UpdateSkyColors();
             UpdateAmbientLighting();
+            UpdateNightSky();
         }
 
         private void UpdateSunPosition()
@@ -185,6 +229,20 @@ namespace Orlo.World
             skyboxMaterial.SetFloat("_AtmosphereThickness", Mathf.Lerp(1.2f, 1.8f, horizonFactor));
         }
 
+        private void UpdateNightSky()
+        {
+            float nightFactor = ComputeNightFactor();
+
+            if (starField != null)
+                starField.SetNightFactor(nightFactor);
+
+            if (moonRenderer != null)
+            {
+                moonRenderer.SetTimeOfDay(timeOfDay);
+                moonRenderer.SetNightFactor(nightFactor);
+            }
+        }
+
         // --- Public API for CloudRenderer / GodRaysEffect ---
 
         /// <summary>
@@ -219,6 +277,18 @@ namespace Orlo.World
         /// Current weather intensity (0-1). Used to modulate cloud density externally.
         /// </summary>
         public float WeatherIntensity => weatherIntensity;
+
+        /// <summary>
+        /// Access to the star field for "look at star" interaction.
+        /// Returns the name of the star system the player is looking at, or null.
+        /// </summary>
+        public string GetStarSystemAtCursor()
+        {
+            if (starField == null) return null;
+            var cam = Camera.main;
+            if (cam == null) return null;
+            return starField.GetNamedStarAt(cam.transform.forward);
+        }
 
         private void UpdateAmbientLighting()
         {
