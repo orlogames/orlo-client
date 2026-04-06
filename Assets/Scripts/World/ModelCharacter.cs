@@ -80,6 +80,13 @@ namespace Orlo.World
                 _modelRoot = new GameObject("CharacterModel");
                 _modelRoot.transform.SetParent(transform, false);
 
+                // Meshy/glTF character models are often authored with the character
+                // standing along +Z (forward) rather than +Y (up). After the Z-flip
+                // in the GLB parser, the model ends up lying on its back in Unity.
+                // Rotate -90 degrees around X to stand the character upright, and
+                // 180 degrees around Y so the character faces its forward direction.
+                _modelRoot.transform.localRotation = Quaternion.Euler(-90f, 180f, 0f);
+
                 // Create a combined mesh from all primitives
                 foreach (var meshData in meshes)
                 {
