@@ -51,189 +51,6 @@ namespace Orlo.Rendering
         private GameObject shadowProjector;
         private Material shadowMaterial;
 
-        // Shader sources compiled at runtime (same pattern as PostProcessSetup)
-        private static readonly string CloudShaderSource = @"
-Shader ""Hidden/Orlo/Clouds""
-{
-    Properties
-    {
-        _NoiseTex (""Noise"", 2D) = ""white"" {}
-        _CloudColor (""Cloud Color"", Color) = (1, 1, 1, 1)
-        _SunDir (""Sun Direction"", Vector) = (0, -1, 0, 0)
-        _SunColor (""Sun Color"", Color) = (1, 0.92, 0.75, 1)
-        _UVOffset (""UV Offset"", Vector) = (0, 0, 0, 0)
-        _Threshold (""Threshold"", Float) = 0.42
-        _Softness (""Softness"", Float) = 0.18
-        _Density (""Density"", Float) = 0.35
-        _Brightness (""Brightness"", Float) = 1.1
-        _BacklitPower (""Backlit Power"", Float) = 0.6
-        _CloudAlpha (""Cloud Alpha"", Float) = 0.85
-    }
-    SubShader
-    {
-        Tags { ""Queue""=""Transparent+100"" ""RenderType""=""Transparent"" ""IgnoreProjector""=""True"" }
-        LOD 100
-        Blend SrcAlpha OneMinusSrcAlpha
-        ZWrite Off
-        Cull Off
-
-        Pass
-        {
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
-            #include ""UnityCG.cginc""
-
-            sampler2D _NoiseTex;
-            float4 _CloudColor;
-            float4 _SunDir;
-            float4 _SunColor;
-            float4 _UVOffset;
-            float _Threshold;
-            float _Softness;
-            float _Density;
-            float _Brightness;
-            float _BacklitPower;
-            float _CloudAlpha;
-
-            struct appdata
-            {
-                float4 vertex : POSITION;
-                float2 uv : TEXCOORD0;
-            };
-
-            struct v2f
-            {
-                float4 pos : SV_POSITION;
-                float2 uv : TEXCOORD0;
-                float3 worldPos : TEXCOORD1;
-                float3 viewDir : TEXCOORD2;
-            };
-
-            v2f vert(appdata v)
-            {
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
-                o.uv = v.uv;
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                o.viewDir = normalize(o.worldPos - _WorldSpaceCameraPos.xyz);
-                return o;
-            }
-
-            half4 frag(v2f i) : SV_Target
-            {
-                float2 uv = i.uv + _UVOffset.xy;
-
-                // Sample noise texture (3 octaves baked in during generation)
-                float noise = tex2D(_NoiseTex, uv).r;
-
-                // Apply density-adjusted threshold
-                float adjustedThreshold = lerp(0.7, 0.15, _Density);
-                float cloudShape = saturate((noise - adjustedThreshold) / max(_Softness, 0.001));
-
-                // Discard fully transparent fragments
-                if (cloudShape < 0.01)
-                    discard;
-
-                // Base cloud color from sun
-                float3 baseColor = _CloudColor.rgb * _Brightness;
-
-                // Backlit glow: when looking toward the sun through clouds,
-                // edges glow brighter. Compute dot(viewDir, -sunDir).
-                float3 sunDir = normalize(_SunDir.xyz);
-                float backlit = saturate(dot(normalize(i.viewDir), -sunDir));
-                backlit = pow(backlit, 3.0) * _BacklitPower;
-
-                // Edge glow: thinner cloud edges get more backlit effect
-                float edgeFactor = 1.0 - cloudShape;
-                float3 backlitColor = _SunColor.rgb * 1.5;
-                float3 finalColor = lerp(baseColor, backlitColor, backlit * edgeFactor);
-
-                // Slight darkening toward center (thicker clouds = darker base)
-                finalColor *= lerp(1.0, 0.7, cloudShape * 0.5);
-
-                // Sun-facing side brighter (simple NdotL on the cloud plane normal = up)
-                float sunFacing = saturate(-sunDir.y) * 0.3 + 0.7;
-                finalColor *= sunFacing;
-
-                float alpha = cloudShape * _CloudAlpha;
-
-                return half4(finalColor, alpha);
-            }
-            ENDCG
-        }
-    }
-    Fallback Off
-}";
-
-        private static readonly string ShadowShaderSource = @"
-Shader ""Hidden/Orlo/CloudShadow""
-{
-    Properties
-    {
-        _NoiseTex (""Noise"", 2D) = ""white"" {}
-        _UVOffset (""UV Offset"", Vector) = (0, 0, 0, 0)
-        _Threshold (""Threshold"", Float) = 0.42
-        _Softness (""Softness"", Float) = 0.18
-        _Density (""Density"", Float) = 0.35
-        _ShadowStrength (""Shadow Strength"", Float) = 0.3
-    }
-    SubShader
-    {
-        Tags { ""Queue""=""Transparent-100"" ""RenderType""=""Transparent"" ""IgnoreProjector""=""True"" }
-        Blend DstColor Zero
-        ZWrite Off
-        Cull Off
-
-        Pass
-        {
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
-            #include ""UnityCG.cginc""
-
-            sampler2D _NoiseTex;
-            float4 _UVOffset;
-            float _Threshold;
-            float _Softness;
-            float _Density;
-            float _ShadowStrength;
-
-            struct appdata
-            {
-                float4 vertex : POSITION;
-                float2 uv : TEXCOORD0;
-            };
-
-            struct v2f
-            {
-                float4 pos : SV_POSITION;
-                float2 uv : TEXCOORD0;
-            };
-
-            v2f vert(appdata v)
-            {
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
-                o.uv = v.uv;
-                return o;
-            }
-
-            half4 frag(v2f i) : SV_Target
-            {
-                float2 uv = i.uv + _UVOffset.xy;
-                float noise = tex2D(_NoiseTex, uv).r;
-                float adjustedThreshold = lerp(0.7, 0.15, _Density);
-                float cloudShape = saturate((noise - adjustedThreshold) / max(_Softness, 0.001));
-                float shadow = 1.0 - cloudShape * _ShadowStrength;
-                return half4(shadow, shadow, shadow, 1);
-            }
-            ENDCG
-        }
-    }
-    Fallback Off
-}";
-
         private void Awake()
         {
             GenerateNoiseTexture();
@@ -282,14 +99,16 @@ Shader ""Hidden/Orlo/CloudShadow""
 
         private void CreateCloudMaterial()
         {
-            cloudMaterial = CompileMaterial(CloudShaderSource);
-            if (cloudMaterial == null)
+            var shader = Resources.Load<Shader>("Shaders/OrloCloud");
+            if (shader == null) shader = Shader.Find("Orlo/Clouds");
+            if (shader == null)
             {
-                Debug.LogWarning("[CloudRenderer] Failed to compile cloud shader — clouds disabled");
+                Debug.LogWarning("[CloudRenderer] Cloud shader not found — clouds disabled");
                 enabled = false;
                 return;
             }
 
+            cloudMaterial = new Material(shader);
             cloudMaterial.SetTexture("_NoiseTex", noiseTexture);
             cloudMaterial.SetColor("_CloudColor", Color.white);
             cloudMaterial.SetFloat("_Threshold", cloudThreshold);
@@ -327,13 +146,15 @@ Shader ""Hidden/Orlo/CloudShadow""
 
         private void CreateShadowPlane()
         {
-            shadowMaterial = CompileMaterial(ShadowShaderSource);
-            if (shadowMaterial == null)
+            var shader = Resources.Load<Shader>("Shaders/OrloCloudShadow");
+            if (shader == null) shader = Shader.Find("Orlo/CloudShadow");
+            if (shader == null)
             {
-                Debug.LogWarning("[CloudRenderer] Failed to compile shadow shader — cloud shadows disabled");
+                Debug.LogWarning("[CloudRenderer] Shadow shader not found — cloud shadows disabled");
                 return;
             }
 
+            shadowMaterial = new Material(shader);
             shadowMaterial.SetTexture("_NoiseTex", noiseTexture);
 
             // Create a plane just above the terrain surface to receive cloud shadows
@@ -347,25 +168,6 @@ Shader ""Hidden/Orlo/CloudShadow""
             mr.material = shadowMaterial;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.receiveShadows = false;
-        }
-
-        private Material CompileMaterial(string shaderSource)
-        {
-            try
-            {
-                var mat = new Material(shaderSource);
-                if (mat.shader == null || !mat.shader.isSupported)
-                {
-                    Object.Destroy(mat);
-                    return null;
-                }
-                return mat;
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogWarning($"[CloudRenderer] Shader compilation failed: {e.Message}");
-                return null;
-            }
         }
 
         private void Update()

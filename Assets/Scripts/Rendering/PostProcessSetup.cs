@@ -5,7 +5,7 @@ namespace Orlo.Rendering
     /// <summary>
     /// Lightweight post-processing for Built-in Render Pipeline.
     /// Adds bloom (bright area glow) and warm color grading via OnRenderImage.
-    /// No external packages required — uses a runtime-compiled shader.
+    /// No external packages required — uses pre-compiled shaders loaded from Resources.
     /// Attach to the main camera (auto-attached by GameBootstrap).
     /// </summary>
     [RequireComponent(typeof(Camera))]
@@ -26,173 +26,27 @@ namespace Orlo.Rendering
         private Material _compositeMat;
         private Camera _cam;
 
-        private static readonly string BloomShaderSource = @"
-Shader ""Hidden/Orlo/Bloom""
-{
-    Properties { _MainTex (""Base"", 2D) = ""white"" {} }
-    SubShader
-    {
-        ZTest Always Cull Off ZWrite Off
-
-        // Pass 0: Threshold + Downsample
-        Pass
-        {
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment fragThreshold
-            #include ""UnityCG.cginc""
-
-            sampler2D _MainTex;
-            float4 _MainTex_TexelSize;
-            float _Threshold;
-
-            struct v2f { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
-            v2f vert(appdata_img v) { v2f o; o.pos = UnityObjectToClipPos(v.vertex); o.uv = v.texcoord; return o; }
-
-            half4 fragThreshold(v2f i) : SV_Target
-            {
-                half4 c = tex2D(_MainTex, i.uv);
-                float brightness = dot(c.rgb, float3(0.2126, 0.7152, 0.0722));
-                float contribution = max(0, brightness - _Threshold);
-                return half4(c.rgb * contribution, 1);
-            }
-            ENDCG
-        }
-
-        // Pass 1: Gaussian blur (horizontal + vertical in one pass via box filter)
-        Pass
-        {
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment fragBlur
-            #include ""UnityCG.cginc""
-
-            sampler2D _MainTex;
-            float4 _MainTex_TexelSize;
-
-            struct v2f { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
-            v2f vert(appdata_img v) { v2f o; o.pos = UnityObjectToClipPos(v.vertex); o.uv = v.texcoord; return o; }
-
-            half4 fragBlur(v2f i) : SV_Target
-            {
-                float2 texel = _MainTex_TexelSize.xy;
-                half4 c = tex2D(_MainTex, i.uv) * 0.25;
-                c += tex2D(_MainTex, i.uv + float2(texel.x, 0)) * 0.125;
-                c += tex2D(_MainTex, i.uv - float2(texel.x, 0)) * 0.125;
-                c += tex2D(_MainTex, i.uv + float2(0, texel.y)) * 0.125;
-                c += tex2D(_MainTex, i.uv - float2(0, texel.y)) * 0.125;
-                c += tex2D(_MainTex, i.uv + texel) * 0.0625;
-                c += tex2D(_MainTex, i.uv - texel) * 0.0625;
-                c += tex2D(_MainTex, i.uv + float2(texel.x, -texel.y)) * 0.0625;
-                c += tex2D(_MainTex, i.uv + float2(-texel.x, texel.y)) * 0.0625;
-                return c;
-            }
-            ENDCG
-        }
-    }
-    Fallback Off
-}";
-
-        private static readonly string CompositeShaderSource = @"
-Shader ""Hidden/Orlo/Composite""
-{
-    Properties { _MainTex (""Base"", 2D) = ""white"" {} }
-    SubShader
-    {
-        ZTest Always Cull Off ZWrite Off
-        Pass
-        {
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
-            #include ""UnityCG.cginc""
-
-            sampler2D _MainTex;
-            sampler2D _BloomTex;
-            float _BloomIntensity;
-            float _Warmth;
-            float _Contrast;
-            float _Saturation;
-            float _VignetteIntensity;
-
-            struct v2f { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
-            v2f vert(appdata_img v) { v2f o; o.pos = UnityObjectToClipPos(v.vertex); o.uv = v.texcoord; return o; }
-
-            half4 frag(v2f i) : SV_Target
-            {
-                half4 scene = tex2D(_MainTex, i.uv);
-                half4 bloom = tex2D(_BloomTex, i.uv);
-
-                // Additive bloom
-                half3 c = scene.rgb + bloom.rgb * _BloomIntensity;
-
-                // Warm color shift (add to red, slightly to green, reduce blue)
-                c.r += _Warmth;
-                c.g += _Warmth * 0.4;
-                c.b -= _Warmth * 0.3;
-
-                // Contrast (around 0.5 midpoint)
-                c = (c - 0.5) * _Contrast + 0.5;
-
-                // Saturation
-                float luma = dot(c, float3(0.2126, 0.7152, 0.0722));
-                c = lerp(float3(luma, luma, luma), c, _Saturation);
-
-                // Vignette
-                float2 d = i.uv - 0.5;
-                float vignette = 1.0 - dot(d, d) * _VignetteIntensity * 2.0;
-                c *= vignette;
-
-                return half4(saturate(c), 1);
-            }
-            ENDCG
-        }
-    }
-    Fallback Off
-}";
-
         private void Awake()
         {
             _cam = GetComponent<Camera>();
             _cam.allowHDR = true;
 
-            // Create materials from inline shader source
-            _bloomMat = CreateMaterial(BloomShaderSource);
-            _compositeMat = CreateMaterial(CompositeShaderSource);
+            // Load pre-compiled shaders from Resources
+            var bloomShader = Resources.Load<Shader>("Shaders/OrloBloom");
+            if (bloomShader == null) bloomShader = Shader.Find("Orlo/Bloom");
 
-            if (_bloomMat == null || _compositeMat == null)
+            var compositeShader = Resources.Load<Shader>("Shaders/OrloComposite");
+            if (compositeShader == null) compositeShader = Shader.Find("Orlo/Composite");
+
+            if (bloomShader == null || compositeShader == null)
             {
-                Debug.LogWarning("[PostProcess] Failed to compile shaders — post-processing disabled");
+                Debug.LogWarning("[PostProcess] Failed to load shaders — post-processing disabled");
                 enabled = false;
+                return;
             }
-        }
 
-        private Material CreateMaterial(string shaderSource)
-        {
-            var shader = ShaderUtil_CreateShaderFromSource(shaderSource);
-            if (shader == null || !shader.isSupported)
-                return null;
-            return new Material(shader);
-        }
-
-        /// <summary>
-        /// Runtime shader compilation via Shader.Find fallback or Material constructor.
-        /// Unity does not expose a public API for runtime shader compilation from source,
-        /// so we use a workaround: create a temporary Material with the source string.
-        /// </summary>
-        private Shader ShaderUtil_CreateShaderFromSource(string source)
-        {
-            // Unity's Material(string) constructor compiles the shader source at runtime
-            try
-            {
-                var mat = new Material(source);
-                return mat.shader;
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogWarning($"[PostProcess] Shader compilation failed: {e.Message}");
-                return null;
-            }
+            _bloomMat = new Material(bloomShader);
+            _compositeMat = new Material(compositeShader);
         }
 
         private void OnRenderImage(RenderTexture src, RenderTexture dst)

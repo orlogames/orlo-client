@@ -65,67 +65,6 @@ namespace Orlo.Rendering
         private static readonly int PropNightFactor = Shader.PropertyToID("_NightFactor");
         private static readonly int PropTime = Shader.PropertyToID("_Time2");
 
-        // Shader source — unlit additive star points
-        private const string StarShaderSource = @"
-Shader ""Orlo/Stars""
-{
-    Properties
-    {
-        _NightFactor (""Night Factor"", Range(0,1)) = 1
-        _Time2 (""Time"", Float) = 0
-    }
-    SubShader
-    {
-        Tags { ""Queue""=""Background+10"" ""RenderType""=""Transparent"" ""IgnoreProjector""=""True"" }
-        Pass
-        {
-            Blend One One
-            ZWrite Off
-            Cull Front
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
-            #include ""UnityCG.cginc""
-
-            float _NightFactor;
-            float _Time2;
-
-            struct appdata
-            {
-                float4 vertex : POSITION;
-                float4 color : COLOR;
-                float2 uv : TEXCOORD0;
-            };
-
-            struct v2f
-            {
-                float4 pos : SV_POSITION;
-                float4 color : COLOR;
-                float2 uv : TEXCOORD0;
-            };
-
-            v2f vert(appdata v)
-            {
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
-                // uv.x = twinkle phase, uv.y = base brightness
-                float twinkle = sin(_Time2 * 1.5 + v.uv.x * 6.2831) * 0.15 + 0.85;
-                float alpha = v.uv.y * _NightFactor * twinkle;
-                o.color = float4(v.color.rgb * alpha, alpha);
-                o.uv = v.uv;
-                return o;
-            }
-
-            fixed4 frag(v2f i) : SV_Target
-            {
-                return i.color;
-            }
-            ENDCG
-        }
-    }
-}
-";
-
         // ===== Named Star Definitions =====
 
         private struct NamedStar
@@ -422,17 +361,12 @@ Shader ""Orlo/Stars""
 
         private void CreateMaterial()
         {
-            var shader = ShaderUtil_CreateFromString();
+            var shader = Resources.Load<Shader>("Shaders/OrloStars");
+            if (shader == null) shader = Shader.Find("Orlo/Stars");
             if (shader == null)
             {
-                // Fallback: try finding if already loaded
-                shader = Shader.Find("Orlo/Stars");
-            }
-            if (shader == null)
-            {
-                // Last resort: use unlit transparent
                 shader = Shader.Find("Unlit/Color");
-                Debug.LogWarning("[Orlo] Star shader not found, using fallback");
+                Debug.LogWarning("[Orlo] Star shader not found in Resources/Shaders/OrloStars, using fallback");
             }
 
             starMaterial = new Material(shader);
@@ -441,33 +375,6 @@ Shader ""Orlo/Stars""
             var mr = GetComponent<MeshRenderer>();
             if (mr != null)
                 mr.sharedMaterial = starMaterial;
-        }
-
-        /// <summary>
-        /// Runtime shader compilation from string. Falls back to Shader.Find on failure.
-        /// </summary>
-        private Shader ShaderUtil_CreateFromString()
-        {
-            // Unity does not support Shader.Create() from string at runtime in builds.
-            // We write the shader to a temporary material approach:
-            // In practice, for a code-driven project, we create the shader as an asset
-            // or use Material with existing shader. Since this project is all code-driven,
-            // we rely on Shader.Find with the shader pre-existing in Resources.
-            //
-            // For the editor, ShaderUtil can compile from string, but that is editor-only.
-            // Instead, we write the shader file and let Unity compile it.
-#if UNITY_EDITOR
-            string shaderPath = "Assets/Shaders/OrloStars.shader";
-            if (!System.IO.File.Exists(shaderPath))
-            {
-                System.IO.Directory.CreateDirectory("Assets/Shaders");
-                System.IO.File.WriteAllText(shaderPath, StarShaderSource);
-                UnityEditor.AssetDatabase.Refresh();
-            }
-            return Shader.Find("Orlo/Stars");
-#else
-            return Shader.Find("Orlo/Stars");
-#endif
         }
 
         // ===== Public API =====

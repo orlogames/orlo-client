@@ -327,9 +327,12 @@ namespace Orlo.World
             );
             go.transform.localScale = new Vector3(chunkSize * 0.1f, 1, chunkSize * 0.1f);
 
-            // Use a dark green placeholder instead of default pink
+            // Use terrain shader for placeholder instead of Standard (which gets stripped in builds)
             var mr = go.GetComponent<MeshRenderer>();
-            var mat = new Material(Shader.Find("Standard"));
+            var placeholderShader = Resources.Load<Shader>("Shaders/TerrainVertexColor");
+            if (placeholderShader == null) placeholderShader = Shader.Find("Orlo/TerrainVertexColor");
+            if (placeholderShader == null) placeholderShader = Shader.Find("Legacy Shaders/Diffuse");
+            var mat = new Material(placeholderShader);
             mat.color = new Color(0.15f, 0.25f, 0.10f); // Dark green
             mat.SetFloat("_Glossiness", 0.05f);
             mr.material = mat;
