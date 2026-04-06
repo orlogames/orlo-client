@@ -285,9 +285,7 @@ namespace Orlo.World
 
                 var mr = child.AddComponent<MeshRenderer>();
                 var mat = shader != null ? new Material(shader) : new Material(Shader.Find("Hidden/InternalErrorShader"));
-                mat.color = entry.baseColor;
-                if (entry.texture != null)
-                    mat.mainTexture = entry.texture;
+                ApplyPbrMaterial(mat, entry.material);
                 mr.material = mat;
 
                 // Accumulate bounds for the collider
@@ -313,6 +311,68 @@ namespace Orlo.World
             return root;
         }
 
+        /// <summary>
+        /// Apply all PBR material properties from parsed glTF data to a Unity Standard shader material.
+        /// Public static so ModelCharacter can reuse this.
+        /// </summary>
+        public static void ApplyPbrMaterial(Material mat, MaterialData data)
+        {
+            // Base color
+            mat.color = data.baseColor;
+
+            // Albedo texture
+            if (data.albedoTex != null)
+                mat.mainTexture = data.albedoTex;
+
+            // Metallic + smoothness (Standard shader uses smoothness = 1 - roughness)
+            mat.SetFloat("_Metallic", data.metallic);
+            mat.SetFloat("_GlossMapScale", 1f);
+            mat.SetFloat("_Glossiness", 1f - data.roughness);
+
+            // Metallic-roughness texture (green channel = roughness, blue channel = metallic in glTF)
+            // Unity Standard shader expects metallic in R and smoothness in A of _MetallicGlossMap
+            if (data.metallicRoughnessTex != null)
+            {
+                mat.SetTexture("_MetallicGlossMap", data.metallicRoughnessTex);
+                // When a metallic map is present, the shader reads metallic from the texture
+                // Set metallic to 1 so the texture controls the actual value
+                mat.SetFloat("_Metallic", 1f);
+            }
+
+            // Normal map
+            if (data.normalTex != null)
+            {
+                mat.EnableKeyword("_NORMALMAP");
+                mat.SetTexture("_BumpMap", data.normalTex);
+                mat.SetFloat("_BumpScale", 1f);
+            }
+
+            // Emission
+            bool hasEmission = data.emissiveTex != null ||
+                (data.emissiveColor.r > 0.001f || data.emissiveColor.g > 0.001f || data.emissiveColor.b > 0.001f);
+            if (hasEmission)
+            {
+                mat.EnableKeyword("_EMISSION");
+                mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                mat.SetColor("_EmissionColor", data.emissiveColor);
+                if (data.emissiveTex != null)
+                    mat.SetTexture("_EmissionMap", data.emissiveTex);
+            }
+
+            // Transparency
+            if (data.isTransparent)
+            {
+                mat.SetFloat("_Mode", 3f); // Transparent
+                mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                mat.SetInt("_ZWrite", 0);
+                mat.DisableKeyword("_ALPHATEST_ON");
+                mat.EnableKeyword("_ALPHABLEND_ON");
+                mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                mat.renderQueue = 3000; // Transparent queue
+            }
+        }
+
         // ─── GLB Parser (same approach as ModelCharacter) ───────────────
 
         private struct CachedModel
@@ -320,12 +380,25 @@ namespace Orlo.World
             public List<MeshEntry> entries;
         }
 
+        /// <summary>Holds all PBR material properties extracted from a glTF material.</summary>
+        public struct MaterialData
+        {
+            public Color baseColor;
+            public Texture2D albedoTex;
+            public Texture2D normalTex;
+            public Texture2D metallicRoughnessTex;
+            public Texture2D emissiveTex;
+            public Color emissiveColor;
+            public float metallic;
+            public float roughness;
+            public bool isTransparent;
+        }
+
         private struct MeshEntry
         {
             public string name;
             public Mesh mesh;
-            public Color baseColor;
-            public Texture2D texture;
+            public MaterialData material;
         }
 
         private List<MeshEntry> ParseGlb(byte[] data)
@@ -452,8 +525,14 @@ namespace Orlo.World
                     if (normals == null) mesh.RecalculateNormals();
                     mesh.RecalculateBounds();
 
-                    Color baseColor = Color.white;
-                    Texture2D tex2d = null;
+                    var matData = new MaterialData
+                    {
+                        baseColor = Color.white,
+                        metallic = 0f,
+                        roughness = 1f,
+                        emissiveColor = Color.black,
+                        isTransparent = false
+                    };
 
                     if (materialIdx >= 0 && materials != null && materialIdx < materials.Count)
                     {
@@ -461,39 +540,66 @@ namespace Orlo.World
                         var pbr = mat.GetObject("pbrMetallicRoughness");
                         if (pbr != null)
                         {
+                            // Base color factor
                             var colorArr = pbr.GetFloatArray("baseColorFactor");
                             if (colorArr != null && colorArr.Length >= 3)
                             {
-                                baseColor = new Color(
+                                matData.baseColor = new Color(
                                     colorArr[0], colorArr[1], colorArr[2],
                                     colorArr.Length >= 4 ? colorArr[3] : 1f);
                             }
 
-                            var texInfo = pbr.GetObject("baseColorTexture");
-                            if (texInfo != null && textures != null)
-                            {
-                                int texIdx = texInfo.GetInt("index", -1);
-                                if (texIdx >= 0 && texIdx < textures.Count)
-                                {
-                                    int imgIdx = textures[texIdx].GetInt("source", -1);
-                                    if (parsedTextures.ContainsKey(imgIdx))
-                                        tex2d = parsedTextures[imgIdx];
-                                }
-                            }
+                            // Base color texture (albedo)
+                            matData.albedoTex = ResolveTexture(pbr.GetObject("baseColorTexture"), textures, parsedTextures);
+
+                            // Metallic / roughness factors
+                            matData.metallic = pbr.GetFloat("metallicFactor", 1f);
+                            matData.roughness = pbr.GetFloat("roughnessFactor", 1f);
+
+                            // Metallic-roughness combined texture
+                            matData.metallicRoughnessTex = ResolveTexture(pbr.GetObject("metallicRoughnessTexture"), textures, parsedTextures);
                         }
+
+                        // Normal map
+                        matData.normalTex = ResolveTexture(mat.GetObject("normalTexture"), textures, parsedTextures);
+
+                        // Emissive texture + factor
+                        matData.emissiveTex = ResolveTexture(mat.GetObject("emissiveTexture"), textures, parsedTextures);
+                        var emissiveArr = mat.GetFloatArray("emissiveFactor");
+                        if (emissiveArr != null && emissiveArr.Length >= 3)
+                            matData.emissiveColor = new Color(emissiveArr[0], emissiveArr[1], emissiveArr[2]);
+
+                        // Alpha mode
+                        string alphaMode = mat.GetString("alphaMode", "OPAQUE");
+                        matData.isTransparent = alphaMode == "BLEND";
                     }
 
                     meshes.Add(new MeshEntry
                     {
                         name = meshName,
                         mesh = mesh,
-                        baseColor = baseColor,
-                        texture = tex2d
+                        material = matData
                     });
                 }
             }
 
             return meshes;
+        }
+
+        /// <summary>
+        /// Resolve a glTF textureInfo object (e.g. baseColorTexture, normalTexture) to a parsed Texture2D.
+        /// Returns null if the texture is not found or not embedded.
+        /// </summary>
+        private static Texture2D ResolveTexture(
+            SimpleJson.JsonNode texInfo,
+            List<SimpleJson.JsonNode> textures,
+            Dictionary<int, Texture2D> parsedTextures)
+        {
+            if (texInfo == null || textures == null) return null;
+            int texIdx = texInfo.GetInt("index", -1);
+            if (texIdx < 0 || texIdx >= textures.Count) return null;
+            int imgIdx = textures[texIdx].GetInt("source", -1);
+            return parsedTextures.TryGetValue(imgIdx, out var tex) ? tex : null;
         }
 
         private Vector3[] ReadVec3Accessor(SimpleJson.JsonNode accessor, List<SimpleJson.JsonNode> bufferViews, byte[] bin)

@@ -97,15 +97,12 @@ namespace Orlo.World
                     meshFilter.mesh = meshData.mesh;
 
                     var meshRenderer = meshGO.AddComponent<MeshRenderer>();
-                    var shader = Resources.Load<Shader>("Shaders/EntityFallback")
-                        ?? Shader.Find("Standard")
+                    // Use Standard shader for full PBR support (force-included via GraphicsSettings)
+                    var shader = Shader.Find("Standard")
+                        ?? Resources.Load<Shader>("Shaders/EntityFallback")
                         ?? Shader.Find("Legacy Shaders/Diffuse");
                     var mat = new Material(shader);
-                    mat.color = meshData.baseColor;
-                    if (meshData.texture != null)
-                    {
-                        mat.mainTexture = meshData.texture;
-                    }
+                    AssetLoader.ApplyPbrMaterial(mat, meshData.material);
                     meshRenderer.material = mat;
                 }
 
@@ -197,8 +194,7 @@ namespace Orlo.World
         {
             public string name;
             public Mesh mesh;
-            public Color baseColor;
-            public Texture2D texture;
+            public AssetLoader.MaterialData material;
         }
 
         /// <summary>
@@ -344,9 +340,15 @@ namespace Orlo.World
                     if (normals == null) mesh.RecalculateNormals();
                     mesh.RecalculateBounds();
 
-                    // Get material color and texture
-                    Color baseColor = Color.white;
-                    Texture2D tex2d = null;
+                    // Extract full PBR material properties
+                    var matData = new AssetLoader.MaterialData
+                    {
+                        baseColor = Color.white,
+                        metallic = 0f,
+                        roughness = 1f,
+                        emissiveColor = Color.black,
+                        isTransparent = false
+                    };
 
                     if (materialIdx >= 0 && materials != null && materialIdx < materials.Count)
                     {
@@ -357,36 +359,49 @@ namespace Orlo.World
                             var colorArr = pbr.GetFloatArray("baseColorFactor");
                             if (colorArr != null && colorArr.Length >= 3)
                             {
-                                baseColor = new Color(
+                                matData.baseColor = new Color(
                                     colorArr[0], colorArr[1], colorArr[2],
                                     colorArr.Length >= 4 ? colorArr[3] : 1f);
                             }
 
-                            var texInfo = pbr.GetObject("baseColorTexture");
-                            if (texInfo != null && textures != null)
-                            {
-                                int texIdx = texInfo.GetInt("index", -1);
-                                if (texIdx >= 0 && texIdx < textures.Count)
-                                {
-                                    int imgIdx = textures[texIdx].GetInt("source", -1);
-                                    if (parsedTextures.ContainsKey(imgIdx))
-                                        tex2d = parsedTextures[imgIdx];
-                                }
-                            }
+                            matData.albedoTex = ResolveTexture(pbr.GetObject("baseColorTexture"), textures, parsedTextures);
+                            matData.metallic = pbr.GetFloat("metallicFactor", 1f);
+                            matData.roughness = pbr.GetFloat("roughnessFactor", 1f);
+                            matData.metallicRoughnessTex = ResolveTexture(pbr.GetObject("metallicRoughnessTexture"), textures, parsedTextures);
                         }
+
+                        matData.normalTex = ResolveTexture(mat.GetObject("normalTexture"), textures, parsedTextures);
+                        matData.emissiveTex = ResolveTexture(mat.GetObject("emissiveTexture"), textures, parsedTextures);
+                        var emissiveArr = mat.GetFloatArray("emissiveFactor");
+                        if (emissiveArr != null && emissiveArr.Length >= 3)
+                            matData.emissiveColor = new Color(emissiveArr[0], emissiveArr[1], emissiveArr[2]);
+
+                        string alphaMode = mat.GetString("alphaMode", "OPAQUE");
+                        matData.isTransparent = alphaMode == "BLEND";
                     }
 
                     meshes.Add(new ParsedMesh
                     {
                         name = meshName,
                         mesh = mesh,
-                        baseColor = baseColor,
-                        texture = tex2d
+                        material = matData
                     });
                 }
             }
 
             return meshes;
+        }
+
+        private static Texture2D ResolveTexture(
+            SimpleJson.JsonNode texInfo,
+            List<SimpleJson.JsonNode> textures,
+            Dictionary<int, Texture2D> parsedTextures)
+        {
+            if (texInfo == null || textures == null) return null;
+            int texIdx = texInfo.GetInt("index", -1);
+            if (texIdx < 0 || texIdx >= textures.Count) return null;
+            int imgIdx = textures[texIdx].GetInt("source", -1);
+            return parsedTextures.TryGetValue(imgIdx, out var tex) ? tex : null;
         }
 
         private Vector3[] ReadVec3Accessor(SimpleJson.JsonNode accessor, List<SimpleJson.JsonNode> bufferViews, byte[] bin)
@@ -539,6 +554,15 @@ namespace Orlo.World
                 if (_dict == null || !_dict.TryGetValue(key, out var v)) return def;
                 if (v is double d) return (int)d;
                 if (v is long l) return (int)l;
+                if (v is int i) return i;
+                return def;
+            }
+
+            public float GetFloat(string key, float def = 0f)
+            {
+                if (_dict == null || !_dict.TryGetValue(key, out var v)) return def;
+                if (v is double d) return (float)d;
+                if (v is long l) return l;
                 if (v is int i) return i;
                 return def;
             }
