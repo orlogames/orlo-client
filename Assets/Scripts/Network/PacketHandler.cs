@@ -899,14 +899,15 @@ namespace Orlo.Network
 
         private void HandleChatMessage(Orlo.Proto.Social.ChatMessage msg)
         {
+            // Proto C# strips the CHAT_CHANNEL_ prefix from enum values
             string channel = msg.Channel switch
             {
-                Orlo.Proto.Social.ChatChannel.ChatChannelGlobal => "Global",
-                Orlo.Proto.Social.ChatChannel.ChatChannelZone => "Zone",
-                Orlo.Proto.Social.ChatChannel.ChatChannelParty => "Party",
-                Orlo.Proto.Social.ChatChannel.ChatChannelWhisper => "Whisper",
-                Orlo.Proto.Social.ChatChannel.ChatChannelProximity => "Zone",
-                Orlo.Proto.Social.ChatChannel.ChatChannelSystem => "System",
+                Orlo.Proto.Social.ChatChannel.Global => "Global",
+                Orlo.Proto.Social.ChatChannel.Zone => "Zone",
+                Orlo.Proto.Social.ChatChannel.Party => "Party",
+                Orlo.Proto.Social.ChatChannel.Whisper => "Whisper",
+                Orlo.Proto.Social.ChatChannel.Proximity => "Zone",
+                Orlo.Proto.Social.ChatChannel.System => "System",
                 _ => "Global"
             };
 
