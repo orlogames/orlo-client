@@ -288,32 +288,13 @@ jobs:
 
       - name: Update launcher manifest on infra server
         run: |
-          # Generate v1 manifest for the launcher (GitHub release URL fallback)
-          SIZE=$(stat -c%s "dist/OrloClient-Windows-${VERSION}.zip" 2>/dev/null || echo "0")
-          cat > /tmp/launcher_manifest.json << MANIFEST_EOF
-          {
-            "version": "${VERSION}",
-            "manifest_version": 1,
-            "channels": {
-              "stable": {
-                "version": "${VERSION}",
-                "platforms": {
-                  "windows": {
-                    "url": "https://github.com/orlogames/orlo-client/releases/download/v${VERSION}/OrloClient-Windows-${VERSION}.zip",
-                    "filename": "OrloClient-Windows-${VERSION}.zip",
-                    "size": ${SIZE},
-                    "sha256": null
-                  }
-                }
-              }
-            }
-          }
-          MANIFEST_EOF
-          # Upload to infra server via SSH
+          # Deploy the same V2 manifest (with file-level hashes) to the infra server.
+          # The launcher fetches from api.orlo.games/client/manifest.json which is
+          # served by Caddy from /opt/orlo/cdn/client/manifest.json on the infra server.
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > /tmp/deploy_key
           chmod 600 /tmp/deploy_key
           scp -o StrictHostKeyChecking=no -i /tmp/deploy_key \
-            /tmp/launcher_manifest.json \
+            manifest.json \
             root@${{ vars.INFRA_SERVER_IP }}:/opt/orlo/cdn/client/manifest.json
           rm /tmp/deploy_key
-          echo "Launcher manifest updated to v${VERSION} on infra server"
+          echo "V2 manifest (v${VERSION}) deployed to infra server"
