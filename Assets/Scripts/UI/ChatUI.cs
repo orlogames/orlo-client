@@ -54,20 +54,20 @@ namespace Orlo.UI
         {
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
             {
-                if (_inputFocused && !string.IsNullOrEmpty(_inputText))
+                if (!_inputFocused)
                 {
-                    SendMessage();
-                }
-                else
-                {
+                    // First Enter press: focus the input field
                     _inputFocused = true;
                     _lastActivityTime = Time.time;
                 }
+                // Sending is handled in OnGUI via Event detection
+                // (Update runs before OnGUI, so we can't read GUI focus state here)
             }
 
             if (Input.GetKeyDown(KeyCode.Escape) && _inputFocused)
             {
                 _inputFocused = false;
+                _inputText = "";
             }
         }
 
@@ -418,18 +418,46 @@ namespace Orlo.UI
 
             GUI.EndScrollView();
 
-            // Input field
+            // Input field + Send button
             float inputY = y + WindowH - inputH - 4;
+            float sendBtnW = 50f;
+            float inputW = WindowW - sendBtnW - 10;
+
             GUI.color = new Color(0.1f, 0.1f, 0.1f, 0.9f * alpha);
-            GUI.DrawTexture(new Rect(x + 2, inputY, WindowW - 4, inputH), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(x + 2, inputY, inputW, inputH), Texture2D.whiteTexture);
             GUI.color = new Color(1, 1, 1, alpha);
 
             GUI.SetNextControlName(_inputControlName);
-            _inputText = GUI.TextField(new Rect(x + 4, inputY + 1, WindowW - 8, inputH - 2), _inputText, SmallInputStyle());
+            _inputText = GUI.TextField(new Rect(x + 4, inputY + 1, inputW - 4, inputH - 2), _inputText, SmallInputStyle());
 
+            // Send button
+            GUI.color = new Color(0.2f, 0.6f, 0.3f, 0.9f * alpha);
+            GUI.DrawTexture(new Rect(x + inputW + 4, inputY, sendBtnW, inputH), Texture2D.whiteTexture);
+            GUI.color = new Color(1, 1, 1, alpha);
+            if (GUI.Button(new Rect(x + inputW + 4, inputY, sendBtnW, inputH), "Send", SmallLabelCentered()))
+            {
+                if (!string.IsNullOrEmpty(_inputText))
+                {
+                    SendMessage();
+                    _lastActivityTime = Time.time;
+                }
+            }
+
+            // Focus management
             if (_inputFocused)
             {
                 GUI.FocusControl(_inputControlName);
+            }
+
+            // Detect Enter while text field is focused (GUI.TextField consumes Return)
+            if (Event.current.type == EventType.KeyDown &&
+                (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter) &&
+                GUI.GetNameOfFocusedControl() == _inputControlName &&
+                !string.IsNullOrEmpty(_inputText))
+            {
+                SendMessage();
+                _lastActivityTime = Time.time;
+                Event.current.Use();
             }
 
             // Reset GUI color
