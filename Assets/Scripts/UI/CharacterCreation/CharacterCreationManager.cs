@@ -34,7 +34,7 @@ namespace Orlo.UI.CharacterCreation
         private static readonly string[] TabNames =
         {
             "Race/Gender", "Face", "Body", "Skin", "Hair", "Eyes",
-            "Tattoos", "Race Features", "Name/Skill", "Review"
+            "Makeup", "Scars/Voice", "Tattoos", "Race Features", "Name/Skill", "Review"
         };
 
         // ─── Styles ────────────────────────────────────────────────────────
@@ -208,11 +208,11 @@ namespace Orlo.UI.CharacterCreation
 
             // ── Tab Buttons ────────────────────────────────────────────────
             float tabY = toolY + 30;
-            float tabBtnW = (leftPanel.width - 20) / 5f;
+            float tabBtnW = (leftPanel.width - 20) / 6f;
             for (int i = 0; i < TabNames.Length; i++)
             {
-                int col = i % 5;
-                int row = i / 5;
+                int col = i % 6;
+                int row = i / 6;
                 float tx = leftPanel.x + 10 + col * tabBtnW;
                 float ty = tabY + row * 26;
                 var style = (i == _currentTab) ? _tabSelectedStyle : _tabStyle;
@@ -323,15 +323,23 @@ namespace Orlo.UI.CharacterCreation
                         _buttonStyle, _selectedButtonStyle);
                     break;
                 case 6:
-                    DecalPanel.DrawDecalPanel(area, ref _data, _subheaderStyle, _labelStyle,
+                    MakeupPanel.DrawMakeupPanel(area, ref _data, _subheaderStyle, _labelStyle,
                         _buttonStyle, _selectedButtonStyle);
                     break;
                 case 7:
+                    ScarsPanel.DrawScarsPanel(area, ref _data, _subheaderStyle, _labelStyle,
+                        _buttonStyle, _selectedButtonStyle);
+                    break;
+                case 8:
+                    DecalPanel.DrawDecalPanel(area, ref _data, _subheaderStyle, _labelStyle,
+                        _buttonStyle, _selectedButtonStyle);
+                    break;
+                case 9:
                     RaceFeaturesPanel.DrawRaceFeaturesPanel(area, ref _data, _subheaderStyle, _labelStyle,
                         _buttonStyle, _selectedButtonStyle);
                     break;
-                case 8: DrawNameSkillTab(area); break;
-                case 9: DrawReviewTab(area); break;
+                case 10: DrawNameSkillTab(area); break;
+                case 11: DrawReviewTab(area); break;
             }
         }
 
@@ -471,8 +479,14 @@ namespace Orlo.UI.CharacterCreation
             y += 24;
 
             // Hair
-            string[] hairNames = { "Short", "Medium", "Long", "Ponytail", "Braided", "Shaved", "Mohawk", "Bald" };
-            string hairName = _data.HairStyle < hairNames.Length ? hairNames[_data.HairStyle] : "?";
+            string[] maleHairNames = { "Short", "Medium", "Long", "Ponytail", "Mohawk", "Buzz", "Slicked", "Braided" };
+            string[] femaleHairNames = { "Pixie", "Bob", "Long", "Ponytail", "Braids", "Bun", "Curly", "Undercut" };
+            string hairName;
+            if (_data.Gender == 0)
+                hairName = _data.HairStyle < maleHairNames.Length ? maleHairNames[_data.HairStyle] : "?";
+            else
+                hairName = (_data.HairStyle - 8) >= 0 && (_data.HairStyle - 8) < femaleHairNames.Length
+                    ? femaleHairNames[_data.HairStyle - 8] : "?";
             GUI.Label(new Rect(4, y, 80, 22), $"Hair: {hairName}", _bodyStyle);
             prevColor = GUI.color;
             GUI.color = _data.HairColor;
@@ -525,18 +539,20 @@ namespace Orlo.UI.CharacterCreation
                 {
                     case 1: // Face
                     case 5: // Eyes
+                    case 6: // Makeup
                         _preview.SetFocusMode(CharacterPreviewManager.FocusMode.Face);
                         break;
                     case 2: // Body
                     case 0: // Race/Gender
-                    case 6: // Tattoos
-                    case 8: // Name/Skill
-                    case 9: // Review
+                    case 7: // Scars/Voice
+                    case 8: // Tattoos
+                    case 10: // Name/Skill
+                    case 11: // Review
                         _preview.SetFocusMode(CharacterPreviewManager.FocusMode.FullBody);
                         break;
                     case 3: // Skin
                     case 4: // Hair
-                    case 7: // Race Features
+                    case 9: // Race Features
                         _preview.SetFocusMode(CharacterPreviewManager.FocusMode.UpperBody);
                         break;
                 }
@@ -546,6 +562,8 @@ namespace Orlo.UI.CharacterCreation
             SkinPanel.ResetCache();
             HairPanel.ResetCache();
             EyePanel.ResetCache();
+            MakeupPanel.ResetCache();
+            ScarsPanel.ResetCache();
             DecalPanel.ResetCache();
             RaceFeaturesPanel.ResetCache();
         }
@@ -617,7 +635,7 @@ namespace Orlo.UI.CharacterCreation
         private bool ValidateCurrentTab()
         {
             _errorMessage = "";
-            if (_currentTab == 8) // Name/Skill
+            if (_currentTab == 10) // Name/Skill
             {
                 if (string.IsNullOrWhiteSpace(_data.FirstName) || _data.FirstName.Length < 2)
                 { _errorMessage = "First name must be at least 2 characters"; return false; }
@@ -635,7 +653,7 @@ namespace Orlo.UI.CharacterCreation
         {
             // Validate name/skill tab
             int savedTab = _currentTab;
-            _currentTab = 8;
+            _currentTab = 10;
             if (!ValidateCurrentTab())
             {
                 _currentTab = savedTab;

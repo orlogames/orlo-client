@@ -210,6 +210,9 @@ namespace Orlo.Character
             if (!_initialized || appearance == null) return;
             _appearance = appearance;
 
+            // Swap hair mesh if style changed
+            UpdateHairStyle(appearance.HairStyle);
+
             foreach (var kvp in _slots)
             {
                 var state = kvp.Value;
@@ -464,7 +467,69 @@ namespace Orlo.Character
             if (shapeName.Contains("waist")) return a.WaistWidth;
             if (shapeName.Contains("muscle")) return a.MuscleDefinition;
             if (shapeName.Contains("fat") || shapeName.Contains("weight")) return a.BodyFat;
+            // Additional face morphs
+            if (shapeName.Contains("neck") && shapeName.Contains("length")) return a.NeckLength;
+            if (shapeName.Contains("neck") && shapeName.Contains("thick")) return a.NeckThickness;
+            if (shapeName.Contains("head") && shapeName.Contains("size")) return a.HeadSize;
+            if (shapeName.Contains("ear") && shapeName.Contains("protru")) return a.EarProtrusion;
+            if (shapeName.Contains("nose") && shapeName.Contains("length")) return a.NoseLength;
+            if (shapeName.Contains("mouth") && shapeName.Contains("height")) return a.MouthHeight;
+            if (shapeName.Contains("teeth") && shapeName.Contains("gap")) return a.TeethGap;
+            if (shapeName.Contains("overbite")) return a.Overbite;
+            // Eye extras
+            if (shapeName.Contains("eye") && shapeName.Contains("open")) return a.EyeOpenness;
+            if (shapeName.Contains("lash") && shapeName.Contains("length")) return a.EyeLashLength;
+            // Eyebrow extras
+            if (shapeName.Contains("eyebrow") && shapeName.Contains("thick")) return a.EyebrowThickness;
+            if (shapeName.Contains("eyebrow") && shapeName.Contains("arch")) return a.EyebrowArch;
             return -1f; // No match
+        }
+
+        // ─── Hair Style Swapping ──────────────────────────────────────
+
+        // Hair style → asset ID mapping (0-7 male, 8-15 female)
+        private static readonly string[] HairAssetIds =
+        {
+            // Male (0-7)
+            "hair_male_short", "hair_male_medium", "hair_male_long", "hair_male_ponytail",
+            "hair_male_mohawk", "hair_male_buzz", "hair_male_slicked", "hair_male_braided",
+            // Female (8-15)
+            "hair_female_pixie", "hair_female_bob", "hair_female_long", "hair_female_ponytail",
+            "hair_female_braids", "hair_female_bun", "hair_female_curly", "hair_female_undercut"
+        };
+
+        private int _lastHairStyle = -1;
+
+        /// <summary>
+        /// Swap the hair mesh when hair style changes.
+        /// Loads the corresponding GLB from pak/StreamingAssets/CDN.
+        /// </summary>
+        public void UpdateHairStyle(int hairStyle)
+        {
+            if (!_initialized) return;
+            if (hairStyle == _lastHairStyle) return;
+            _lastHairStyle = hairStyle;
+
+            if (hairStyle < 0 || hairStyle >= HairAssetIds.Length)
+            {
+                // Invalid style — hide hair slot
+                if (_slots.TryGetValue(BodySlot.Hair, out var state))
+                {
+                    if (state.Renderer != null)
+                        state.Renderer.enabled = false;
+                }
+                return;
+            }
+
+            string assetId = HairAssetIds[hairStyle];
+            SetSlotFromAsset(BodySlot.Hair, assetId);
+
+            // Make sure hair slot is visible
+            if (_slots.TryGetValue(BodySlot.Hair, out var hairState))
+            {
+                if (hairState.Renderer != null)
+                    hairState.Renderer.enabled = true;
+            }
         }
 
         // ─── Material Application ──────────────────────────────────────────

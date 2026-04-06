@@ -14,6 +14,7 @@ namespace Orlo.UI.CharacterCreation
         private static bool _jawOpen = true;
         private static bool _cheeksOpen = true;
         private static bool _foreheadOpen = true;
+        private static bool _neckHeadOpen = false;
         private static bool _otherOpen = false;
 
         private static Vector2 _scrollPos;
@@ -45,8 +46,8 @@ namespace Orlo.UI.CharacterCreation
                 y += 8f;
             }
 
-            // ── Nose (5 sliders) ───────────────────────────────────────────
-            _noseOpen = DrawGroupHeader("Nose (5)", _noseOpen, ref y, w, headerStyle, buttonStyle);
+            // ── Nose (6 sliders) ───────────────────────────────────────────
+            _noseOpen = DrawGroupHeader("Nose (6)", _noseOpen, ref y, w, headerStyle, buttonStyle);
             if (_noseOpen)
             {
                 DrawSlider(ref y, w, labelW, sliderW, "Bridge Width", ref data.NoseBridgeWidth, labelStyle);
@@ -54,16 +55,20 @@ namespace Orlo.UI.CharacterCreation
                 DrawSlider(ref y, w, labelW, sliderW, "Tip Width", ref data.NoseTipWidth, labelStyle);
                 DrawSlider(ref y, w, labelW, sliderW, "Tip Height", ref data.NoseTipHeight, labelStyle);
                 DrawSlider(ref y, w, labelW, sliderW, "Nostril Flare", ref data.NoseNostrilFlare, labelStyle);
+                DrawSlider(ref y, w, labelW, sliderW, "Nose Length", ref data.NoseLength, labelStyle);
                 y += 8f;
             }
 
-            // ── Mouth (3 sliders) ──────────────────────────────────────────
-            _mouthOpen = DrawGroupHeader("Mouth (3)", _mouthOpen, ref y, w, headerStyle, buttonStyle);
+            // ── Mouth (6 sliders) ──────────────────────────────────────────
+            _mouthOpen = DrawGroupHeader("Mouth (6)", _mouthOpen, ref y, w, headerStyle, buttonStyle);
             if (_mouthOpen)
             {
                 DrawSlider(ref y, w, labelW, sliderW, "Upper Lip", ref data.LipFullnessUpper, labelStyle);
                 DrawSlider(ref y, w, labelW, sliderW, "Lower Lip", ref data.LipFullnessLower, labelStyle);
                 DrawSlider(ref y, w, labelW, sliderW, "Lip Width", ref data.LipWidth, labelStyle);
+                DrawSlider(ref y, w, labelW, sliderW, "Mouth Height", ref data.MouthHeight, labelStyle);
+                DrawSlider(ref y, w, labelW, sliderW, "Teeth Gap", ref data.TeethGap, labelStyle);
+                DrawSlider(ref y, w, labelW, sliderW, "Overbite", ref data.Overbite, labelStyle);
                 y += 8f;
             }
 
@@ -97,6 +102,17 @@ namespace Orlo.UI.CharacterCreation
                 y += 8f;
             }
 
+            // ── Neck & Head (4 sliders) ────────────────────────────────────
+            _neckHeadOpen = DrawGroupHeader("Neck & Head (4)", _neckHeadOpen, ref y, w, headerStyle, buttonStyle);
+            if (_neckHeadOpen)
+            {
+                DrawSlider(ref y, w, labelW, sliderW, "Neck Length", ref data.NeckLength, labelStyle);
+                DrawSlider(ref y, w, labelW, sliderW, "Neck Thickness", ref data.NeckThickness, labelStyle);
+                DrawSlider(ref y, w, labelW, sliderW, "Head Size", ref data.HeadSize, labelStyle);
+                DrawSlider(ref y, w, labelW, sliderW, "Ear Protrusion", ref data.EarProtrusion, labelStyle);
+                y += 8f;
+            }
+
             // ── Other (3 sliders) ──────────────────────────────────────────
             _otherOpen = DrawGroupHeader("Other (3)", _otherOpen, ref y, w, headerStyle, buttonStyle);
             if (_otherOpen)
@@ -116,15 +132,17 @@ namespace Orlo.UI.CharacterCreation
             h += 30f; // Eyes header
             if (_eyesOpen) h += 6 * 24f + 8f;
             h += 30f; // Nose header
-            if (_noseOpen) h += 5 * 24f + 8f;
+            if (_noseOpen) h += 6 * 24f + 8f;
             h += 30f; // Mouth header
-            if (_mouthOpen) h += 3 * 24f + 8f;
+            if (_mouthOpen) h += 6 * 24f + 8f;
             h += 30f; // Jaw header
             if (_jawOpen) h += 4 * 24f + 8f;
             h += 30f; // Cheeks header
             if (_cheeksOpen) h += 2 * 24f + 8f;
             h += 30f; // Forehead header
             if (_foreheadOpen) h += 3 * 24f + 8f;
+            h += 30f; // Neck & Head header
+            if (_neckHeadOpen) h += 4 * 24f + 8f;
             h += 30f; // Other header
             if (_otherOpen) h += 3 * 24f + 8f;
             return h + 20f;

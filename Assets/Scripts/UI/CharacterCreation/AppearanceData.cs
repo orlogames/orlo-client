@@ -83,6 +83,16 @@ namespace Orlo.UI.CharacterCreation
         public float MuscleDefinition = 0.5f;
         public float BodyFat = 0.5f;
 
+        // ─── Additional Face Morphs ───────────────────────────────────────
+        public float NeckLength = 0.5f;
+        public float NeckThickness = 0.5f;
+        public float HeadSize = 0.5f;
+        public float EarProtrusion = 0.5f;    // How far ears stick out
+        public float NoseLength = 0.5f;
+        public float MouthHeight = 0.5f;      // Vertical position of mouth
+        public float TeethGap = 0f;            // Gap between front teeth (0 = none)
+        public float Overbite = 0.5f;          // 0 = underbite, 1 = overbite
+
         // ─── Skin ──────────────────────────────────────────────────────────
         public Color SkinColor = new Color(0.85f, 0.7f, 0.55f);
         public float FreckleDensity = 0f;
@@ -92,23 +102,65 @@ namespace Orlo.UI.CharacterCreation
         public float Roughness = 0.3f;
         public float SkinTextureVariation = 0f;
 
+        // Skin details (BDO/Star Citizen style)
+        public float Vitiligo = 0f;            // Vitiligo intensity (0 = none)
+        public float BodyHairDensity = 0f;     // Chest/arm hair
+        public Color BodyHairColor = new Color(0.2f, 0.15f, 0.1f);
+        public float Wrinkles = 0f;            // Forehead/eye wrinkle depth
+        public float Moles = 0f;               // Mole density
+        public float Pores = 0.3f;             // Skin pore visibility
+        public float SkinSheen = 0.2f;         // Oily/matte (0=matte, 1=oily)
+
+        // ─── Makeup (Dragon Age / BDO style) ──────────────────────────────
+        public float EyelinerIntensity = 0f;
+        public Color EyelinerColor = Color.black;
+        public float EyeshadowIntensity = 0f;
+        public Color EyeshadowColor = new Color(0.3f, 0.2f, 0.4f);
+        public float BlushIntensity = 0f;
+        public Color BlushColor = new Color(0.9f, 0.5f, 0.4f);
+        public float LipstickIntensity = 0f;
+        public Color LipstickColor = new Color(0.7f, 0.2f, 0.2f);
+        public float LipGloss = 0f;
+
+        // ─── Scars & Markings (Star Citizen style) ────────────────────────
+        public int FaceScarStyle = 0;          // 0=none, 1-8=scar patterns
+        public float FaceScarIntensity = 0.5f;
+        public int BodyScarStyle = 0;          // 0=none, 1-6=body scar patterns
+        public float BodyScarIntensity = 0.5f;
+        public int BirthmarkStyle = 0;         // 0=none, 1-4=birthmark types
+        public float BirthmarkSize = 0.3f;
+
         // ─── Hair ──────────────────────────────────────────────────────────
-        public int HairStyle = 0;         // Maps to HairStyle enum (0-7)
+        public int HairStyle = 0;         // 0-7 male, 8-15 female (gender-specific)
         public float HairLength = 0.5f;
         public float HairThickness = 0.5f;
         public float HairCurl = 0f;
         public Color HairColor = new Color(0.2f, 0.15f, 0.1f);
         public Color HairHighlightColor = new Color(0.4f, 0.3f, 0.2f);
-        public int FacialHairStyle = 0;   // 0 = none
+        public Color HairRootColor = new Color(0.15f, 0.1f, 0.05f);  // Root coloring
+        public float HairRootBlend = 0.3f;     // How far roots extend
+        public float HairGreying = 0f;         // Grey hair amount (0=none, 1=full grey)
+        public int FacialHairStyle = 0;        // 0=none, 1=stubble, 2=goatee, 3=full, 4=mustache
         public float FacialHairLength = 0f;
+        public Color EyebrowColor = new Color(0.2f, 0.15f, 0.1f);
+        public float EyebrowThickness = 0.5f;
+        public float EyebrowArch = 0.5f;
 
         // ─── Eyes ──────────────────────────────────────────────────────────
         public Color LeftEyeColor = new Color(0.3f, 0.5f, 0.2f);
         public Color RightEyeColor = new Color(0.3f, 0.5f, 0.2f);
-        public bool MatchEyes = true;
+        public bool MatchEyes = true;          // false = heterochromia
         public float IrisSize = 0.5f;
         public float PupilSize = 0.5f;
         public float EyeShapeSlider = 0.5f;
+        public float EyeOpenness = 0.5f;       // Droopy vs wide
+        public Color ScleraColor = Color.white; // Eye white tint
+        public float EyeLashLength = 0.5f;
+        public Color EyeLashColor = Color.black;
+
+        // ─── Voice ─────────────────────────────────────────────────────────
+        public int VoiceType = 0;              // 0-3 voice presets per gender
+        public float VoicePitch = 0.5f;        // 0=deep, 1=high
 
         // ─── Decals (tattoos/markings) ─────────────────────────────────────
         public List<DecalEntry> Decals = new List<DecalEntry>();
@@ -437,20 +489,45 @@ namespace Orlo.UI.CharacterCreation
                 LegLength = LegLength, LegThickness = LegThickness,
                 TorsoLength = TorsoLength, MuscleDefinition = MuscleDefinition, BodyFat = BodyFat,
 
+                // Additional face morphs
+                NeckLength = NeckLength, NeckThickness = NeckThickness, HeadSize = HeadSize,
+                EarProtrusion = EarProtrusion, NoseLength = NoseLength, MouthHeight = MouthHeight,
+                TeethGap = TeethGap, Overbite = Overbite,
+
                 // Skin
                 SkinColor = SkinColor, FreckleDensity = FreckleDensity, FreckleSize = FreckleSize,
                 FreckleColor = FreckleColor, Aging = Aging, Roughness = Roughness,
                 SkinTextureVariation = SkinTextureVariation,
+                Vitiligo = Vitiligo, BodyHairDensity = BodyHairDensity, BodyHairColor = BodyHairColor,
+                Wrinkles = Wrinkles, Moles = Moles, Pores = Pores, SkinSheen = SkinSheen,
+
+                // Makeup
+                EyelinerIntensity = EyelinerIntensity, EyelinerColor = EyelinerColor,
+                EyeshadowIntensity = EyeshadowIntensity, EyeshadowColor = EyeshadowColor,
+                BlushIntensity = BlushIntensity, BlushColor = BlushColor,
+                LipstickIntensity = LipstickIntensity, LipstickColor = LipstickColor,
+                LipGloss = LipGloss,
+
+                // Scars & Markings
+                FaceScarStyle = FaceScarStyle, FaceScarIntensity = FaceScarIntensity,
+                BodyScarStyle = BodyScarStyle, BodyScarIntensity = BodyScarIntensity,
+                BirthmarkStyle = BirthmarkStyle, BirthmarkSize = BirthmarkSize,
 
                 // Hair
                 HairStyle = HairStyle, HairLength = HairLength, HairThickness = HairThickness,
                 HairCurl = HairCurl, HairColor = HairColor, HairHighlightColor = HairHighlightColor,
+                HairRootColor = HairRootColor, HairRootBlend = HairRootBlend, HairGreying = HairGreying,
                 FacialHairStyle = FacialHairStyle, FacialHairLength = FacialHairLength,
+                EyebrowColor = EyebrowColor, EyebrowThickness = EyebrowThickness, EyebrowArch = EyebrowArch,
 
                 // Eyes
                 LeftEyeColor = LeftEyeColor, RightEyeColor = RightEyeColor,
                 MatchEyes = MatchEyes, IrisSize = IrisSize, PupilSize = PupilSize,
-                EyeShapeSlider = EyeShapeSlider,
+                EyeShapeSlider = EyeShapeSlider, EyeOpenness = EyeOpenness,
+                ScleraColor = ScleraColor, EyeLashLength = EyeLashLength, EyeLashColor = EyeLashColor,
+
+                // Voice
+                VoiceType = VoiceType, VoicePitch = VoicePitch,
 
                 // Race features
                 RaceFeatureSetId = RaceFeatureSetId,
@@ -524,6 +601,16 @@ namespace Orlo.UI.CharacterCreation
             MuscleDefinition = UnityEngine.Random.value;
             BodyFat = UnityEngine.Random.value;
 
+            // Additional face morphs
+            NeckLength = UnityEngine.Random.Range(0.3f, 0.7f);
+            NeckThickness = UnityEngine.Random.Range(0.3f, 0.7f);
+            HeadSize = UnityEngine.Random.Range(0.35f, 0.65f);
+            EarProtrusion = UnityEngine.Random.Range(0.2f, 0.8f);
+            NoseLength = UnityEngine.Random.value;
+            MouthHeight = UnityEngine.Random.value;
+            TeethGap = UnityEngine.Random.value * 0.3f; // Mostly no gap
+            Overbite = UnityEngine.Random.Range(0.3f, 0.7f);
+
             // Skin
             SkinColor = new Color(
                 UnityEngine.Random.Range(0.4f, 1f),
@@ -538,9 +625,46 @@ namespace Orlo.UI.CharacterCreation
             Aging = UnityEngine.Random.value * 0.5f;
             Roughness = UnityEngine.Random.Range(0.1f, 0.5f);
             SkinTextureVariation = UnityEngine.Random.value;
+            Vitiligo = UnityEngine.Random.value < 0.05f ? UnityEngine.Random.Range(0.1f, 0.6f) : 0f; // Rare
+            BodyHairDensity = Gender == 0 ? UnityEngine.Random.value * 0.7f : UnityEngine.Random.value * 0.1f;
+            BodyHairColor = new Color(
+                UnityEngine.Random.Range(0.1f, 0.4f),
+                UnityEngine.Random.Range(0.05f, 0.25f),
+                UnityEngine.Random.Range(0.02f, 0.15f));
+            Wrinkles = Aging * UnityEngine.Random.Range(0.5f, 1.5f); // Correlate with aging
+            Wrinkles = Mathf.Clamp01(Wrinkles);
+            Moles = UnityEngine.Random.value * 0.4f;
+            Pores = UnityEngine.Random.Range(0.1f, 0.5f);
+            SkinSheen = UnityEngine.Random.Range(0.1f, 0.5f);
+
+            // Makeup (mostly none on randomize, occasionally light)
+            bool hasMakeup = UnityEngine.Random.value < 0.3f;
+            EyelinerIntensity = hasMakeup ? UnityEngine.Random.value * 0.6f : 0f;
+            EyelinerColor = Color.black;
+            EyeshadowIntensity = hasMakeup ? UnityEngine.Random.value * 0.5f : 0f;
+            EyeshadowColor = new Color(
+                UnityEngine.Random.Range(0.2f, 0.5f),
+                UnityEngine.Random.Range(0.1f, 0.4f),
+                UnityEngine.Random.Range(0.3f, 0.6f));
+            BlushIntensity = hasMakeup ? UnityEngine.Random.value * 0.4f : 0f;
+            BlushColor = new Color(0.9f, 0.5f, 0.4f);
+            LipstickIntensity = hasMakeup ? UnityEngine.Random.value * 0.5f : 0f;
+            LipstickColor = new Color(
+                UnityEngine.Random.Range(0.5f, 0.9f),
+                UnityEngine.Random.Range(0.1f, 0.3f),
+                UnityEngine.Random.Range(0.1f, 0.3f));
+            LipGloss = hasMakeup ? UnityEngine.Random.value * 0.5f : 0f;
+
+            // Scars & Markings (mostly none)
+            FaceScarStyle = UnityEngine.Random.value < 0.1f ? UnityEngine.Random.Range(1, 9) : 0;
+            FaceScarIntensity = FaceScarStyle > 0 ? UnityEngine.Random.Range(0.3f, 0.8f) : 0.5f;
+            BodyScarStyle = UnityEngine.Random.value < 0.1f ? UnityEngine.Random.Range(1, 7) : 0;
+            BodyScarIntensity = BodyScarStyle > 0 ? UnityEngine.Random.Range(0.3f, 0.8f) : 0.5f;
+            BirthmarkStyle = UnityEngine.Random.value < 0.15f ? UnityEngine.Random.Range(1, 5) : 0;
+            BirthmarkSize = BirthmarkStyle > 0 ? UnityEngine.Random.Range(0.1f, 0.5f) : 0.3f;
 
             // Hair
-            HairStyle = UnityEngine.Random.Range(0, 8);
+            HairStyle = Gender == 0 ? UnityEngine.Random.Range(0, 8) : UnityEngine.Random.Range(8, 16);
             HairLength = UnityEngine.Random.value;
             HairThickness = UnityEngine.Random.value;
             HairCurl = UnityEngine.Random.value;
@@ -552,8 +676,17 @@ namespace Orlo.UI.CharacterCreation
                 Mathf.Clamp01(HairColor.r + UnityEngine.Random.Range(0.1f, 0.3f)),
                 Mathf.Clamp01(HairColor.g + UnityEngine.Random.Range(0.1f, 0.3f)),
                 Mathf.Clamp01(HairColor.b + UnityEngine.Random.Range(0.05f, 0.15f)));
+            HairRootColor = new Color(
+                Mathf.Clamp01(HairColor.r - UnityEngine.Random.Range(0.05f, 0.15f)),
+                Mathf.Clamp01(HairColor.g - UnityEngine.Random.Range(0.05f, 0.1f)),
+                Mathf.Clamp01(HairColor.b - UnityEngine.Random.Range(0.02f, 0.08f)));
+            HairRootBlend = UnityEngine.Random.Range(0.1f, 0.5f);
+            HairGreying = UnityEngine.Random.value < 0.15f ? UnityEngine.Random.Range(0.1f, 0.6f) : 0f;
             FacialHairStyle = Gender == 0 ? UnityEngine.Random.Range(0, 5) : 0;
             FacialHairLength = Gender == 0 ? UnityEngine.Random.value : 0f;
+            EyebrowColor = new Color(HairColor.r * 0.8f, HairColor.g * 0.8f, HairColor.b * 0.8f);
+            EyebrowThickness = UnityEngine.Random.Range(0.3f, 0.7f);
+            EyebrowArch = UnityEngine.Random.value;
 
             // Eyes
             LeftEyeColor = new Color(
@@ -568,6 +701,17 @@ namespace Orlo.UI.CharacterCreation
             IrisSize = UnityEngine.Random.Range(0.3f, 0.7f);
             PupilSize = UnityEngine.Random.Range(0.3f, 0.7f);
             EyeShapeSlider = UnityEngine.Random.value;
+            EyeOpenness = UnityEngine.Random.Range(0.3f, 0.7f);
+            ScleraColor = new Color(
+                UnityEngine.Random.Range(0.9f, 1f),
+                UnityEngine.Random.Range(0.9f, 1f),
+                UnityEngine.Random.Range(0.9f, 1f));
+            EyeLashLength = UnityEngine.Random.Range(0.3f, 0.7f);
+            EyeLashColor = Color.black;
+
+            // Voice
+            VoiceType = UnityEngine.Random.Range(0, 4);
+            VoicePitch = UnityEngine.Random.Range(0.3f, 0.7f);
 
             // Clear decals on randomize
             Decals.Clear();

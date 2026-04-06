@@ -30,7 +30,7 @@ namespace Orlo.UI.CharacterCreation
             EnsureTextures();
 
             _scrollPos = GUI.BeginScrollView(area, _scrollPos,
-                new Rect(0, 0, area.width - 20, 650));
+                new Rect(0, 0, area.width - 20, 870));
 
             float y = 0f;
             float w = area.width - 30f;
@@ -110,6 +110,40 @@ namespace Orlo.UI.CharacterCreation
             GUI.Label(new Rect(4, y, labelW, 20), $"Texture Var: {data.SkinTextureVariation:F2}", labelStyle);
             data.SkinTextureVariation = GUI.HorizontalSlider(new Rect(labelW + 4, y + 4, sliderW, 16),
                 data.SkinTextureVariation, 0f, 1f);
+            y += 24f;
+
+            // ── Skin Details ──────────────────────────────────────────────
+            GUI.Label(new Rect(4, y, w, 22), "Skin Details", headerStyle);
+            y += 26f;
+
+            GUI.Label(new Rect(4, y, labelW, 20), $"Vitiligo: {data.Vitiligo:F2}", labelStyle);
+            data.Vitiligo = GUI.HorizontalSlider(new Rect(labelW + 4, y + 4, sliderW, 16),
+                data.Vitiligo, 0f, 1f);
+            y += 24f;
+
+            GUI.Label(new Rect(4, y, labelW, 20), $"Body Hair: {data.BodyHairDensity:F2}", labelStyle);
+            data.BodyHairDensity = GUI.HorizontalSlider(new Rect(labelW + 4, y + 4, sliderW, 16),
+                data.BodyHairDensity, 0f, 1f);
+            y += 24f;
+
+            GUI.Label(new Rect(4, y, labelW, 20), $"Wrinkles: {data.Wrinkles:F2}", labelStyle);
+            data.Wrinkles = GUI.HorizontalSlider(new Rect(labelW + 4, y + 4, sliderW, 16),
+                data.Wrinkles, 0f, 1f);
+            y += 24f;
+
+            GUI.Label(new Rect(4, y, labelW, 20), $"Moles: {data.Moles:F2}", labelStyle);
+            data.Moles = GUI.HorizontalSlider(new Rect(labelW + 4, y + 4, sliderW, 16),
+                data.Moles, 0f, 1f);
+            y += 24f;
+
+            GUI.Label(new Rect(4, y, labelW, 20), $"Pores: {data.Pores:F2}", labelStyle);
+            data.Pores = GUI.HorizontalSlider(new Rect(labelW + 4, y + 4, sliderW, 16),
+                data.Pores, 0f, 1f);
+            y += 24f;
+
+            GUI.Label(new Rect(4, y, labelW, 20), $"Skin Sheen: {data.SkinSheen:F2}", labelStyle);
+            data.SkinSheen = GUI.HorizontalSlider(new Rect(labelW + 4, y + 4, sliderW, 16),
+                data.SkinSheen, 0f, 1f);
             y += 24f;
 
             GUI.EndScrollView();

@@ -10,9 +10,14 @@ namespace Orlo.UI.CharacterCreation
     {
         private static Vector2 _scrollPos;
 
-        private static readonly string[] HairStyleNames =
+        private static readonly string[] MaleHairStyleNames =
         {
-            "Short", "Medium", "Long", "Ponytail", "Braided", "Shaved", "Mohawk", "Bald"
+            "Short", "Medium", "Long", "Ponytail", "Mohawk", "Buzz", "Slicked", "Braided"
+        };
+
+        private static readonly string[] FemaleHairStyleNames =
+        {
+            "Pixie", "Bob", "Long", "Ponytail", "Braids", "Bun", "Curly", "Undercut"
         };
 
         private static readonly string[] FacialHairNames =
@@ -30,12 +35,22 @@ namespace Orlo.UI.CharacterCreation
         private static bool _hlHsvInit = false;
         private static Texture2D _hlHueBar, _hlSvSquare;
 
+        // HSV state for root color
+        private static float _rootH, _rootS, _rootV;
+        private static bool _rootHsvInit = false;
+        private static Texture2D _rootHueBar, _rootSvSquare;
+
+        // HSV state for eyebrow color
+        private static float _browH, _browS, _browV;
+        private static bool _browHsvInit = false;
+        private static Texture2D _browHueBar, _browSvSquare;
+
         public static void DrawHairPanel(Rect area, ref AppearanceData data, GUIStyle headerStyle,
             GUIStyle labelStyle, GUIStyle buttonStyle, GUIStyle selectedButtonStyle)
         {
             EnsureTextures();
 
-            float contentHeight = 700f;
+            float contentHeight = 1200f;
             if (data.Gender == 0) contentHeight += 260f; // Facial hair section
 
             _scrollPos = GUI.BeginScrollView(area, _scrollPos,
@@ -46,20 +61,24 @@ namespace Orlo.UI.CharacterCreation
             float labelW = 140f;
             float sliderW = w - labelW - 50f;
 
-            // ── Hair Style Grid (8 styles, 4x2) ───────────────────────────
+            // ── Hair Style Grid (8 styles per gender, 4x2) ──────────────────
             GUI.Label(new Rect(4, y, w, 22), "Hair Style", headerStyle);
             y += 26f;
 
+            string[] styleNames = data.Gender == 0 ? MaleHairStyleNames : FemaleHairStyleNames;
+            int styleOffset = data.Gender == 0 ? 0 : 8; // Male 0-7, Female 8-15
+
             float btnW = (w - 16f) / 4f;
-            for (int i = 0; i < HairStyleNames.Length; i++)
+            for (int i = 0; i < styleNames.Length; i++)
             {
+                int styleIndex = styleOffset + i;
                 int col = i % 4;
                 int row = i / 4;
                 float bx = 4 + col * (btnW + 4);
                 float by = y + row * 32;
-                var style = (data.HairStyle == i) ? selectedButtonStyle : buttonStyle;
-                if (GUI.Button(new Rect(bx, by, btnW, 28), HairStyleNames[i], style))
-                    data.HairStyle = i;
+                var style = (data.HairStyle == styleIndex) ? selectedButtonStyle : buttonStyle;
+                if (GUI.Button(new Rect(bx, by, btnW, 28), styleNames[i], style))
+                    data.HairStyle = styleIndex;
             }
             y += 70f;
 
@@ -122,6 +141,68 @@ namespace Orlo.UI.CharacterCreation
             GUI.color = prevColor;
             y += 30f;
 
+            // ── Root Color (HSV) ──────────────────────────────────────────
+            GUI.Label(new Rect(4, y, w, 22), "Root Color", headerStyle);
+            y += 26f;
+
+            if (!_rootHsvInit)
+            {
+                Color.RGBToHSV(data.HairRootColor, out _rootH, out _rootS, out _rootV);
+                _rootHsvInit = true;
+            }
+
+            bool rootChanged = SkinPanel.DrawHSVPicker(ref y, w, ref _rootH, ref _rootS, ref _rootV,
+                _rootHueBar, _rootSvSquare, labelStyle);
+            if (rootChanged)
+                data.HairRootColor = Color.HSVToRGB(_rootH, _rootS, _rootV);
+
+            prevColor = GUI.color;
+            GUI.color = data.HairRootColor;
+            GUI.DrawTexture(new Rect(4, y, 60, 20), Texture2D.whiteTexture);
+            GUI.color = prevColor;
+            y += 30f;
+
+            GUI.Label(new Rect(4, y, labelW, 20), $"Root Blend: {data.HairRootBlend:F2}", labelStyle);
+            data.HairRootBlend = GUI.HorizontalSlider(new Rect(labelW + 4, y + 4, sliderW, 16),
+                data.HairRootBlend, 0f, 1f);
+            y += 24f;
+
+            GUI.Label(new Rect(4, y, labelW, 20), $"Greying: {data.HairGreying:F2}", labelStyle);
+            data.HairGreying = GUI.HorizontalSlider(new Rect(labelW + 4, y + 4, sliderW, 16),
+                data.HairGreying, 0f, 1f);
+            y += 32f;
+
+            // ── Eyebrows ──────────────────────────────────────────────────
+            GUI.Label(new Rect(4, y, w, 22), "Eyebrows", headerStyle);
+            y += 26f;
+
+            if (!_browHsvInit)
+            {
+                Color.RGBToHSV(data.EyebrowColor, out _browH, out _browS, out _browV);
+                _browHsvInit = true;
+            }
+
+            bool browChanged = SkinPanel.DrawHSVPicker(ref y, w, ref _browH, ref _browS, ref _browV,
+                _browHueBar, _browSvSquare, labelStyle);
+            if (browChanged)
+                data.EyebrowColor = Color.HSVToRGB(_browH, _browS, _browV);
+
+            prevColor = GUI.color;
+            GUI.color = data.EyebrowColor;
+            GUI.DrawTexture(new Rect(4, y, 60, 20), Texture2D.whiteTexture);
+            GUI.color = prevColor;
+            y += 30f;
+
+            GUI.Label(new Rect(4, y, labelW, 20), $"Thickness: {data.EyebrowThickness:F2}", labelStyle);
+            data.EyebrowThickness = GUI.HorizontalSlider(new Rect(labelW + 4, y + 4, sliderW, 16),
+                data.EyebrowThickness, 0f, 1f);
+            y += 24f;
+
+            GUI.Label(new Rect(4, y, labelW, 20), $"Arch: {data.EyebrowArch:F2}", labelStyle);
+            data.EyebrowArch = GUI.HorizontalSlider(new Rect(labelW + 4, y + 4, sliderW, 16),
+                data.EyebrowArch, 0f, 1f);
+            y += 32f;
+
             // ── Facial Hair (male only) ────────────────────────────────────
             if (data.Gender == 0)
             {
@@ -159,6 +240,10 @@ namespace Orlo.UI.CharacterCreation
             if (_hairSvSquare == null) _hairSvSquare = CreateSVSquare();
             if (_hlHueBar == null) _hlHueBar = CreateHueBar();
             if (_hlSvSquare == null) _hlSvSquare = CreateSVSquare();
+            if (_rootHueBar == null) _rootHueBar = CreateHueBar();
+            if (_rootSvSquare == null) _rootSvSquare = CreateSVSquare();
+            if (_browHueBar == null) _browHueBar = CreateHueBar();
+            if (_browSvSquare == null) _browSvSquare = CreateSVSquare();
         }
 
         private static Texture2D CreateHueBar()
@@ -190,6 +275,8 @@ namespace Orlo.UI.CharacterCreation
         {
             _hairHsvInit = false;
             _hlHsvInit = false;
+            _rootHsvInit = false;
+            _browHsvInit = false;
         }
     }
 }
