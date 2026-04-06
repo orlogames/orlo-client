@@ -114,6 +114,7 @@ namespace Orlo.World
                     modelGo.transform.SetPositionAndRotation(position, rotation);
                     var modelTag = modelGo.AddComponent<PoolTag>();
                     modelTag.PoolKey = poolKey;
+                    AttachPointLightIfNeeded(modelGo, assetId);
                     return modelGo;
                 }
 
@@ -185,6 +186,9 @@ namespace Orlo.World
             var tag = go.AddComponent<PoolTag>();
             tag.PoolKey = poolKey;
 
+            // Add atmospheric point lights based on asset type
+            AttachPointLightIfNeeded(go, assetId);
+
             return go;
         }
 
@@ -228,6 +232,41 @@ namespace Orlo.World
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Attach atmospheric point lights to lantern and building entities
+        /// for warm golden hour fill lighting.
+        /// </summary>
+        private static void AttachPointLightIfNeeded(GameObject go, string assetId)
+        {
+            if (string.IsNullOrEmpty(assetId)) return;
+            string id = assetId.ToLower();
+
+            if (id.Contains("lantern"))
+            {
+                var lightGo = new GameObject("LanternLight");
+                lightGo.transform.SetParent(go.transform, false);
+                lightGo.transform.localPosition = Vector3.up * 1.5f;
+                var pl = lightGo.AddComponent<Light>();
+                pl.type = LightType.Point;
+                pl.color = new Color(1.0f, 0.7f, 0.3f);
+                pl.intensity = 1.2f;
+                pl.range = 8f;
+                pl.shadows = LightShadows.None;
+            }
+            else if (id.Contains("building") || id.Contains("cabin"))
+            {
+                var lightGo = new GameObject("BuildingLight");
+                lightGo.transform.SetParent(go.transform, false);
+                lightGo.transform.localPosition = Vector3.up * 2.0f;
+                var pl = lightGo.AddComponent<Light>();
+                pl.type = LightType.Point;
+                pl.color = new Color(1.0f, 0.75f, 0.4f);
+                pl.intensity = 0.8f;
+                pl.range = 5f;
+                pl.shadows = LightShadows.None;
+            }
         }
 
         /// <summary>

@@ -19,14 +19,14 @@ namespace Orlo.Rendering
         [Header("Ray Quality")]
         [SerializeField] private int numSamples = 64;
         [SerializeField] private float decay = 0.96f;
-        [SerializeField] private float weight = 0.6f;
-        [SerializeField] private float exposure = 0.22f;
+        [SerializeField] private float weight = 0.75f;
+        [SerializeField] private float exposure = 0.30f;
 
         [Header("Threshold")]
-        [SerializeField] private float brightThreshold = 0.75f;
+        [SerializeField] private float brightThreshold = 0.65f;
 
         [Header("Intensity")]
-        [SerializeField] private float rayIntensity = 1.0f;
+        [SerializeField] private float rayIntensity = 1.3f;
         [SerializeField] private float maxIntensity = 1.5f;
 
         private Material godRaysMaterial;

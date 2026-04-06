@@ -12,13 +12,13 @@ namespace Orlo.Rendering
     public class PostProcessSetup : MonoBehaviour
     {
         [Header("Bloom")]
-        [SerializeField] private float bloomThreshold = 0.8f;
-        [SerializeField] private float bloomIntensity = 0.35f;
+        [SerializeField] private float bloomThreshold = 0.7f;
+        [SerializeField] private float bloomIntensity = 0.45f;
         [SerializeField] private int bloomIterations = 4;
 
         [Header("Color Grading")]
-        [SerializeField] private float warmth = 0.08f;          // Shift toward warm tones
-        [SerializeField] private float contrast = 1.05f;
+        [SerializeField] private float warmth = 0.12f;          // Shift toward warm tones
+        [SerializeField] private float contrast = 1.08f;
         [SerializeField] private float saturation = 1.1f;
         [SerializeField] private float vignetteIntensity = 0.25f;
 

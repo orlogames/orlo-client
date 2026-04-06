@@ -690,10 +690,10 @@ namespace Orlo
                 var sun = sunGo.AddComponent<Light>();
                 sun.type = LightType.Directional;
                 sun.color = new Color(1.0f, 0.92f, 0.75f); // warm golden sun
-                sun.intensity = 1.4f;
+                sun.intensity = 1.5f;
                 sun.shadows = LightShadows.Soft;
                 sun.shadowStrength = 0.85f;
-                sunGo.transform.rotation = Quaternion.Euler(35f, -45f, 0); // low golden hour angle
+                sunGo.transform.rotation = Quaternion.Euler(35f, -30f, 0); // more frontal golden hour angle
             }
 
             // Ground plane (200x200 flat green surface)
@@ -715,17 +715,17 @@ namespace Orlo
 
             // Ambient lighting — trilight for warm golden hour atmosphere
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientGroundColor = new Color(0.4f, 0.35f, 0.25f);  // warm ground bounce
-            RenderSettings.ambientEquatorColor = new Color(0.55f, 0.5f, 0.4f);  // warm midtones
-            RenderSettings.ambientSkyColor = new Color(0.5f, 0.6f, 0.75f);      // cool sky fill
-            RenderSettings.ambientIntensity = 1.0f;
+            RenderSettings.ambientSkyColor = new Color(0.4f, 0.5f, 0.7f);       // cooler blue shadows
+            RenderSettings.ambientEquatorColor = new Color(0.55f, 0.48f, 0.35f); // warmer amber midtone
+            RenderSettings.ambientGroundColor = new Color(0.45f, 0.38f, 0.25f);  // warmer bounce light
+            RenderSettings.ambientIntensity = 1.1f;
 
             // Atmospheric fog — warm haze for depth
             RenderSettings.fog = true;
-            RenderSettings.fogColor = new Color(0.65f, 0.6f, 0.5f); // warm atmospheric haze
+            RenderSettings.fogColor = new Color(0.70f, 0.62f, 0.48f); // warmer golden haze
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogStartDistance = 50f;
-            RenderSettings.fogEndDistance = 400f;
+            RenderSettings.fogStartDistance = 30f;
+            RenderSettings.fogEndDistance = 300f;
 
             // Enable HDR on main camera + attach post-processing
             var mainCam = Camera.main;

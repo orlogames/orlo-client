@@ -141,10 +141,10 @@ namespace Orlo.World
             if (directionalLight != null)
             {
                 directionalLight.color = new Color(1f, 0.92f, 0.75f);                  // Golden sun
-                directionalLight.intensity = 1.4f;
+                directionalLight.intensity = 1.5f;
                 directionalLight.shadows = LightShadows.Soft;
                 directionalLight.shadowStrength = 0.85f;
-                directionalLight.transform.rotation = Quaternion.Euler(35f, -45f, 0f);  // Low golden hour angle
+                directionalLight.transform.rotation = Quaternion.Euler(35f, -30f, 0f);  // More frontal golden hour angle
             }
 
             DynamicGI.UpdateEnvironment();
