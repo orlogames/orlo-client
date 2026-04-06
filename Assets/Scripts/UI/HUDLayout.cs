@@ -120,9 +120,48 @@ namespace Orlo.UI
                 GUI.Label(new Rect(Screen.width / 2 - 200, 40, 400, 24), msg, style);
             }
 
+            // Draw lock icon on each window (always visible)
+            float iconSize = 14f;
+            float iconPad = 3f;
+            var lockStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 10,
+                alignment = TextAnchor.MiddleCenter,
+                fontStyle = FontStyle.Bold
+            };
+
+            foreach (var kvp in _windows)
+            {
+                var state = kvp.Value;
+                Rect iconRect = new Rect(
+                    state.X + state.Width - iconSize - iconPad,
+                    state.Y + iconPad,
+                    iconSize, iconSize);
+
+                // Icon background
+                GUI.color = _locked
+                    ? new Color(0.2f, 0.5f, 0.2f, 0.6f)   // Green = locked
+                    : new Color(0.7f, 0.5f, 0.1f, 0.8f);   // Orange = unlocked
+                GUI.DrawTexture(iconRect, Texture2D.whiteTexture);
+                GUI.color = Color.white;
+
+                // Lock symbol
+                lockStyle.normal.textColor = _locked ? new Color(0.5f, 0.8f, 0.5f) : Color.yellow;
+                GUI.Label(iconRect, _locked ? "L" : "U", lockStyle);
+
+                // Click icon to toggle lock
+                if (Event.current.type == EventType.MouseDown && Event.current.button == 0 &&
+                    iconRect.Contains(Event.current.mousePosition))
+                {
+                    ToggleLock();
+                    Event.current.Use();
+                    return;
+                }
+            }
+
             if (_locked) return;
 
-            // Draw drag handles on all registered windows
+            // --- Unlocked mode: show title bars and enable dragging ---
             foreach (var kvp in _windows)
             {
                 var state = kvp.Value;
@@ -139,12 +178,21 @@ namespace Orlo.UI
                     alignment = TextAnchor.MiddleCenter,
                     normal = { textColor = Color.white }
                 };
-                GUI.Label(titleRect, state.Label, labelStyle);
+                GUI.Label(titleRect, state.Label + " (drag to move)", labelStyle);
+
+                // Border highlight when unlocked
+                GUI.color = new Color(0.3f, 0.6f, 1f, 0.3f);
+                Rect borderRect = new Rect(state.X - 1, state.Y - 1, state.Width + 2, state.Height + 2);
+                GUI.DrawTexture(new Rect(borderRect.x, borderRect.y, borderRect.width, 1), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(borderRect.x, borderRect.yMax, borderRect.width, 1), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(borderRect.x, borderRect.y, 1, borderRect.height), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(borderRect.xMax, borderRect.y, 1, borderRect.height), Texture2D.whiteTexture);
+                GUI.color = Color.white;
             }
 
-            // Handle dragging with right mouse button
+            // Handle dragging (left mouse button when unlocked)
             Event e = Event.current;
-            if (e.type == EventType.MouseDown && e.button == 1)
+            if (e.type == EventType.MouseDown && e.button == 0)
             {
                 foreach (var kvp in _windows)
                 {
@@ -159,7 +207,7 @@ namespace Orlo.UI
                     }
                 }
             }
-            else if (e.type == EventType.MouseDrag && e.button == 1 && _draggingWindow != null)
+            else if (e.type == EventType.MouseDrag && e.button == 0 && _draggingWindow != null)
             {
                 if (_windows.TryGetValue(_draggingWindow, out var state))
                 {
@@ -174,7 +222,7 @@ namespace Orlo.UI
                     e.Use();
                 }
             }
-            else if (e.type == EventType.MouseUp && e.button == 1 && _draggingWindow != null)
+            else if (e.type == EventType.MouseUp && e.button == 0 && _draggingWindow != null)
             {
                 // Save position
                 if (_windows.TryGetValue(_draggingWindow, out var state))
