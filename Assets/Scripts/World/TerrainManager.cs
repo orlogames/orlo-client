@@ -15,13 +15,6 @@ namespace Orlo.World
         [SerializeField] private int chunkSize = 64;
         [SerializeField] private int viewDistance = 3;
 
-        // Biome colors for splatmap blending — warm, rich palette for golden hour lighting
-        private static readonly Color GrassColor = new Color(0.30f, 0.50f, 0.18f);   // Rich warm green
-        private static readonly Color RockColor = new Color(0.50f, 0.45f, 0.38f);    // Warm grey-brown
-        private static readonly Color DirtColor = new Color(0.48f, 0.35f, 0.22f);    // Warm brown
-        private static readonly Color SandColor = new Color(0.78f, 0.72f, 0.52f);    // Warm yellow-tan
-        private static readonly Color DefaultColor = new Color(0.32f, 0.48f, 0.20f); // Warm fallback green
-
         private readonly Dictionary<Vector2Int, TerrainChunkData> _chunks = new();
         private readonly Dictionary<Vector2Int, GameObject> _activeChunks = new();
         private Vector2Int _lastPlayerChunk;
@@ -37,18 +30,50 @@ namespace Orlo.World
 
         private void Awake()
         {
-            // Load custom shader from Resources/ (immune to stripping, uses Resources.Load not Shader.Find)
-            var terrainShader = Resources.Load<Shader>("Shaders/TerrainVertexColor");
+            // Generate procedural terrain textures (one-time, ~20ms)
+            TerrainTextures.Initialize();
+
+            // Try the new textured terrain shader first, fall back to vertex color
+            var terrainShader = Resources.Load<Shader>("Shaders/TerrainTextured");
             if (terrainShader == null)
-                terrainShader = Shader.Find("Orlo/TerrainVertexColor");
-            if (terrainShader == null)
-                terrainShader = Shader.Find("Standard");
-            if (terrainShader == null)
-                terrainShader = Shader.Find("Legacy Shaders/Diffuse"); // Always available
+                terrainShader = Shader.Find("Orlo/TerrainTextured");
+
+            bool useTextured = terrainShader != null;
+
+            if (!useTextured)
+            {
+                // Fallback to vertex-color-only shader
+                terrainShader = Resources.Load<Shader>("Shaders/TerrainVertexColor");
+                if (terrainShader == null)
+                    terrainShader = Shader.Find("Orlo/TerrainVertexColor");
+                if (terrainShader == null)
+                    terrainShader = Shader.Find("Legacy Shaders/Diffuse");
+            }
 
             _terrainMat = new Material(terrainShader);
             _terrainMat.color = Color.white;
             _terrainMat.SetFloat("_Glossiness", 0.05f);
+
+            if (useTextured)
+            {
+                // Assign procedural textures to the shader
+                _terrainMat.SetTexture("_GrassTex", TerrainTextures.GrassTex);
+                _terrainMat.SetTexture("_RockTex", TerrainTextures.RockTex);
+                _terrainMat.SetTexture("_DirtTex", TerrainTextures.DirtTex);
+                _terrainMat.SetTexture("_SandTex", TerrainTextures.SandTex);
+
+                _terrainMat.SetTexture("_GrassNorm", TerrainTextures.GrassNorm);
+                _terrainMat.SetTexture("_RockNorm", TerrainTextures.RockNorm);
+                _terrainMat.SetTexture("_DirtNorm", TerrainTextures.DirtNorm);
+                _terrainMat.SetTexture("_SandNorm", TerrainTextures.SandNorm);
+
+                _terrainMat.SetFloat("_TexScale", 0.1f);       // 10m repeat
+                _terrainMat.SetFloat("_NormalStrength", 1.0f);
+                _terrainMat.SetFloat("_DetailNoiseStrength", 0.08f);
+
+                Debug.Log("[TerrainManager] Using textured terrain shader with procedural PBR textures");
+            }
+
             Debug.Log($"[TerrainManager] Initialized with shader: {terrainShader?.name ?? "NULL"}");
         }
 
@@ -226,35 +251,23 @@ namespace Orlo.World
         }
 
         /// <summary>
-        /// Get vertex color from splatmap data or height/slope-based fallback.
-        /// Splatmap format: 4 bytes per vertex [grass, rock, dirt, sand] (0-255 weights).
+        /// Get vertex color as splatmap weights for the textured shader.
+        /// R=grass, G=rock, B=dirt, A=sand — weights that the shader uses to blend textures.
+        /// When splatmap data is available, uses it directly. Otherwise derives from height/slope.
         /// </summary>
         private Color GetVertexColor(TerrainChunkData data, int idx, float height, int x, int z, int res, float step)
         {
-            // Per-vertex noise for subtle color variation (avoids flat uniform look)
-            float worldPosX = x * step;
-            float worldPosZ = z * step;
-            float noiseVal = Mathf.PerlinNoise(worldPosX * 0.05f + data.Seed * 0.001f,
-                                                worldPosZ * 0.05f + data.Seed * 0.002f);
-            float variation = (noiseVal - 0.5f) * 0.08f; // +/- 4% color shift
-
-            // Try splatmap first
+            // Try splatmap first — pass raw weights to shader
             if (data.Splatmap != null && idx * 4 + 3 < data.Splatmap.Length)
             {
                 float grass = data.Splatmap[idx * 4] / 255f;
                 float rock = data.Splatmap[idx * 4 + 1] / 255f;
                 float dirt = data.Splatmap[idx * 4 + 2] / 255f;
                 float sand = data.Splatmap[idx * 4 + 3] / 255f;
-
-                Color baseColor = GrassColor * grass + RockColor * rock + DirtColor * dirt + SandColor * sand;
-                // Apply per-vertex variation for visual variety
-                baseColor.r = Mathf.Clamp01(baseColor.r + variation);
-                baseColor.g = Mathf.Clamp01(baseColor.g + variation * 0.8f);
-                baseColor.b = Mathf.Clamp01(baseColor.b + variation * 0.6f);
-                return baseColor;
+                return new Color(grass, rock, dirt, sand);
             }
 
-            // Fallback: derive color from height and slope
+            // Fallback: derive splatmap weights from height and slope
             float slope = 0;
             if (x > 0 && x < res - 1 && z > 0 && z < res - 1)
             {
@@ -263,18 +276,51 @@ namespace Orlo.World
                 slope = Mathf.Sqrt(dx * dx + dz * dz) / (2f * step);
             }
 
-            // Steep slopes → rock, low areas → sand, mid → grass, high → dirt
-            if (slope > 0.6f) return RockColor;
-            if (height < 1f) return SandColor;
-            if (height > 40f) return Color.Lerp(DirtColor, RockColor, (height - 40f) / 40f);
+            // Per-vertex noise for natural transitions
+            float worldPosX = x * step;
+            float worldPosZ = z * step;
+            float noiseVal = Mathf.PerlinNoise(worldPosX * 0.03f + data.Seed * 0.001f,
+                                                worldPosZ * 0.03f + data.Seed * 0.002f);
 
-            // Grass with slight height variation + per-vertex noise
-            float grassBlend = Mathf.Clamp01(1f - slope * 1.5f);
-            Color result = Color.Lerp(DirtColor, GrassColor, grassBlend);
-            result.r = Mathf.Clamp01(result.r + variation);
-            result.g = Mathf.Clamp01(result.g + variation * 0.8f);
-            result.b = Mathf.Clamp01(result.b + variation * 0.6f);
-            return result;
+            // Compute blend weights based on terrain properties
+            float grassW = 0f, rockW = 0f, dirtW = 0f, sandW = 0f;
+
+            // Steep slopes → rock
+            rockW = Mathf.Clamp01((slope - 0.3f) * 2f);
+
+            // Low areas → sand
+            sandW = Mathf.Clamp01((1f - height) * 0.8f) * (1f - rockW);
+
+            // High areas → dirt/rock mix
+            float highBlend = Mathf.Clamp01((height - 30f) / 20f);
+            dirtW = highBlend * 0.6f * (1f - rockW);
+
+            // Everything else → grass with noise variation
+            grassW = Mathf.Clamp01(1f - rockW - sandW - dirtW);
+
+            // Add noise-driven dirt patches into grassy areas
+            if (grassW > 0.3f && noiseVal > 0.6f)
+            {
+                float dirtPatch = (noiseVal - 0.6f) * 2f * 0.4f;
+                dirtW += dirtPatch * grassW;
+                grassW -= dirtPatch * grassW;
+            }
+
+            // Normalize
+            float total = grassW + rockW + dirtW + sandW;
+            if (total > 0.001f)
+            {
+                grassW /= total;
+                rockW /= total;
+                dirtW /= total;
+                sandW /= total;
+            }
+            else
+            {
+                grassW = 1f;
+            }
+
+            return new Color(grassW, rockW, dirtW, sandW);
         }
 
         /// <summary>
