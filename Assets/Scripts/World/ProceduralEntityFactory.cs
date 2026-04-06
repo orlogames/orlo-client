@@ -1039,7 +1039,7 @@ namespace Orlo.World
                 character.Equip(EquipmentSlot.MainHand, sword);
 
                 var shield = ProceduralEquipment.CreateShield(0.4f, EquipmentStyle.Rugged);
-                character.Equip(EquipmentSlot.OffHand, shield);
+                character.Equip(EquipmentSlot.LeftBracer, shield); // Shield held in left hand
 
                 var helmet = ProceduralEquipment.CreateHelmet(EquipmentStyle.Rugged);
                 character.Equip(EquipmentSlot.Head, helmet);

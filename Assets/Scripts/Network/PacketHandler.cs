@@ -693,10 +693,17 @@ namespace Orlo.Network
                 ProtoInventory.EquipmentSlot.Chest => 1,
                 ProtoInventory.EquipmentSlot.Legs => 2,
                 ProtoInventory.EquipmentSlot.Feet => 3,
-                ProtoInventory.EquipmentSlot.MainHand => 4,
-                ProtoInventory.EquipmentSlot.OffHand => 5,
-                ProtoInventory.EquipmentSlot.Accessory1 => 6,
-                ProtoInventory.EquipmentSlot.Accessory2 => 7,
+                ProtoInventory.EquipmentSlot.Gloves => 4,
+                ProtoInventory.EquipmentSlot.LeftBracer => 5,
+                ProtoInventory.EquipmentSlot.RightBracer => 6,
+                ProtoInventory.EquipmentSlot.LeftBicep => 7,
+                ProtoInventory.EquipmentSlot.RightBicep => 8,
+                ProtoInventory.EquipmentSlot.Shoulders => 9,
+                ProtoInventory.EquipmentSlot.Belt => 10,
+                ProtoInventory.EquipmentSlot.Backpack => 11,
+                ProtoInventory.EquipmentSlot.LeftWrist => 12,
+                ProtoInventory.EquipmentSlot.RightWrist => 13,
+                ProtoInventory.EquipmentSlot.MainHand => 14,
                 _ => 0
             };
         }
