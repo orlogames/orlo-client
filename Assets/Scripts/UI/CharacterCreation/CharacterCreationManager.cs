@@ -95,6 +95,9 @@ namespace Orlo.UI.CharacterCreation
             _redoStack.Clear();
             _lastSnapshot = _data.Clone();
 
+            // Hide all HUD elements during character creation
+            SetHUDVisible(false);
+
             if (_preview == null)
             {
                 var go = new GameObject("CharacterPreview");
@@ -109,6 +112,9 @@ namespace Orlo.UI.CharacterCreation
         public void Hide()
         {
             _visible = false;
+            // Restore HUD elements
+            SetHUDVisible(true);
+
             if (_preview != null)
             {
                 _preview.Cleanup();
@@ -711,6 +717,40 @@ namespace Orlo.UI.CharacterCreation
             for (int i = 0; i < w * h; i++) tex.SetPixel(i % w, i / w, col);
             tex.Apply();
             return tex;
+        }
+
+        /// <summary>
+        /// Hide/show all HUD elements. Called when entering/exiting character creation.
+        /// </summary>
+        private static void SetHUDVisible(bool visible)
+        {
+            // CombatHUD (HAM bars)
+            if (CombatHUD.Instance != null)
+                CombatHUD.Instance.gameObject.SetActive(visible);
+
+            // Minimap
+            var minimap = UnityEngine.Object.FindFirstObjectByType<MinimapUI>();
+            if (minimap != null)
+                minimap.gameObject.SetActive(visible);
+
+            // Chat
+            var chat = UnityEngine.Object.FindFirstObjectByType<ChatUI>();
+            if (chat != null)
+                chat.gameObject.SetActive(visible);
+
+            // GameHUD
+            var hud = UnityEngine.Object.FindFirstObjectByType<GameHUD>();
+            if (hud != null)
+                hud.gameObject.SetActive(visible);
+
+            // HUD Layout
+            if (HUDLayout.Instance != null)
+                HUDLayout.Instance.gameObject.SetActive(visible);
+
+            // Combat bar
+            var combatBar = UnityEngine.Object.FindFirstObjectByType<CombatBarUI>();
+            if (combatBar != null)
+                combatBar.gameObject.SetActive(visible);
         }
     }
 }
