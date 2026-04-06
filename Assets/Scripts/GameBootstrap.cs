@@ -247,6 +247,13 @@ namespace Orlo
                 go.AddComponent<LeaderboardUI>();
             }
 
+            // HUD Layout manager (draggable windows)
+            if (HUDLayout.Instance == null)
+            {
+                var go = new GameObject("HUDLayout");
+                go.AddComponent<HUDLayout>();
+            }
+
             // Chat window (always visible)
             if (FindFirstObjectByType<ChatUI>() == null)
             {

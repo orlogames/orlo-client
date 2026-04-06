@@ -41,6 +41,9 @@ namespace Orlo.UI
             _damageFlashTimer = FlashDuration;
         }
 
+        private const string HUD_KEY = "HAM";
+        private bool _hudRegistered;
+
         private void OnGUI()
         {
             float s = UIScaler.Scale;
@@ -50,8 +53,28 @@ namespace Orlo.UI
             float padX = 14f * s;
             float padY = 14f * s;
 
-            float x = padX;
-            float y = Screen.height - padY - (barH + gap) * 3;
+            float totalH = (barH + gap) * 3;
+
+            // Register with HUDLayout for draggable positioning
+            if (!_hudRegistered && HUDLayout.Instance != null)
+            {
+                HUDLayout.Instance.Register(HUD_KEY, "Health", padX, padY, barW, totalH);
+                _hudRegistered = true;
+            }
+
+            // Get position from HUDLayout (defaults to top-left)
+            float x, y;
+            if (HUDLayout.Instance != null)
+            {
+                var pos = HUDLayout.Instance.GetPosition(HUD_KEY);
+                x = pos.x;
+                y = pos.y;
+            }
+            else
+            {
+                x = padX;
+                y = padY; // Top-left default
+            }
 
             // Red damage flash overlay (respects flash effects setting)
             if (_damageFlashTimer > 0)

@@ -271,8 +271,26 @@ namespace Orlo.UI
                     }
                     break;
 
+                case "/hudlock":
+                    if (HUDLayout.Instance != null)
+                    {
+                        HUDLayout.Instance.ToggleLock();
+                        AddSystemMessage(HUDLayout.Instance.IsLocked
+                            ? "HUD locked."
+                            : "HUD unlocked. Right-click drag to move windows. /hudlock to lock.");
+                    }
+                    break;
+
+                case "/hudreset":
+                    if (HUDLayout.Instance != null)
+                    {
+                        HUDLayout.Instance.ResetLayout();
+                        AddSystemMessage("HUD positions reset to defaults. Restart to apply.");
+                    }
+                    break;
+
                 case "/help":
-                    AddSystemMessage("Commands: /w /g /p /tp /setspeed /fly /god /spawn /creatures /pos /help");
+                    AddSystemMessage("Commands: /w /g /p /tp /setspeed /fly /god /spawn /creatures /pos /hudlock /hudreset /help");
                     break;
 
                 default:
@@ -292,10 +310,30 @@ namespace Orlo.UI
             return true;
         }
 
+        private const string HUD_KEY = "Chat";
+        private bool _hudRegistered;
+
         private void OnGUI()
         {
-            float x = 10f;
-            float y = Screen.height - WindowH - 10f;
+            // Register with HUDLayout for draggable positioning
+            if (!_hudRegistered && HUDLayout.Instance != null)
+            {
+                HUDLayout.Instance.Register(HUD_KEY, "Chat", 10f, Screen.height - WindowH - 10f, WindowW, WindowH);
+                _hudRegistered = true;
+            }
+
+            float x, y;
+            if (HUDLayout.Instance != null)
+            {
+                var pos = HUDLayout.Instance.GetPosition(HUD_KEY);
+                x = pos.x;
+                y = pos.y;
+            }
+            else
+            {
+                x = 10f;
+                y = Screen.height - WindowH - 10f;
+            }
 
             // Check hover
             Rect fullRect = new Rect(x, y, WindowW, WindowH);
