@@ -236,6 +236,9 @@ namespace Orlo.Network
                 case Packet.PayloadOneofCase.AdminState:
                     HandleAdminState(packet.AdminState);
                     break;
+                case Packet.PayloadOneofCase.AdminCreatureList:
+                    HandleCreatureList(packet.AdminCreatureList);
+                    break;
 
                 // Character creation
                 case Packet.PayloadOneofCase.CharacterListResponse:
@@ -880,7 +883,47 @@ namespace Orlo.Network
 
         private void HandleSocialPacket(Packet packet)
         {
-            Debug.Log($"[Social] Received: {packet.PayloadCase}");
+            switch (packet.PayloadCase)
+            {
+                case Packet.PayloadOneofCase.ChatMessage:
+                    HandleChatMessage(packet.ChatMessage);
+                    break;
+                case Packet.PayloadOneofCase.SystemMessage:
+                    HandleSystemMessage(packet.SystemMessage);
+                    break;
+                default:
+                    Debug.Log($"[Social] Unhandled: {packet.PayloadCase}");
+                    break;
+            }
+        }
+
+        private void HandleChatMessage(Orlo.Proto.Social.ChatMessage msg)
+        {
+            string channel = msg.Channel switch
+            {
+                Orlo.Proto.Social.ChatChannel.ChatChannelGlobal => "Global",
+                Orlo.Proto.Social.ChatChannel.ChatChannelZone => "Zone",
+                Orlo.Proto.Social.ChatChannel.ChatChannelParty => "Party",
+                Orlo.Proto.Social.ChatChannel.ChatChannelWhisper => "Whisper",
+                Orlo.Proto.Social.ChatChannel.ChatChannelProximity => "Zone",
+                Orlo.Proto.Social.ChatChannel.ChatChannelSystem => "System",
+                _ => "Global"
+            };
+
+            var chatUI = FindFirstObjectByType<ChatUI>();
+            if (chatUI != null)
+                chatUI.ReceiveMessage(msg.SenderName, channel, msg.Content);
+            else
+                Debug.Log($"[Chat] [{channel}] {msg.SenderName}: {msg.Content}");
+        }
+
+        private void HandleSystemMessage(Orlo.Proto.Social.SystemMessage msg)
+        {
+            var chatUI = FindFirstObjectByType<ChatUI>();
+            if (chatUI != null)
+                chatUI.AddSystemMessage(msg.Text);
+            else
+                Debug.Log($"[System] {msg.Text}");
         }
 
         private void HandleProgressionPacket(Packet packet)
@@ -1515,6 +1558,13 @@ namespace Orlo.Network
                 panel.SetAdminState(state.IsAdmin, state.RunSpeed,
                     state.FlyEnabled, state.ToolPower, state.GodMode);
             }
+        }
+
+        private void HandleCreatureList(Orlo.Proto.Admin.AdminCreatureList list)
+        {
+            var browser = FindFirstObjectByType<CreatureBrowserUI>();
+            if (browser != null)
+                browser.SetCreatureList(list);
         }
     }
 }

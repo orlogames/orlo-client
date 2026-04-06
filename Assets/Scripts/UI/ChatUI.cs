@@ -105,31 +105,191 @@ namespace Orlo.UI
         {
             string text = _inputText.Trim();
             _inputText = "";
+            _inputFocused = false;
 
             if (string.IsNullOrEmpty(text)) return;
 
-            // Whisper command
-            if (text.StartsWith("/w "))
+            // Slash commands
+            if (text.StartsWith("/"))
             {
-                string remainder = text.Substring(3).TrimStart();
-                int spaceIdx = remainder.IndexOf(' ');
-                if (spaceIdx > 0)
-                {
-                    string target = remainder.Substring(0, spaceIdx);
-                    string msg = remainder.Substring(spaceIdx + 1);
-                    AddEntry("You", "Whisper", $"-> {target}: {msg}", Color.magenta);
-                    Debug.Log($"[ChatUI] Whisper to {target}: {msg}");
-                }
-                else
-                {
-                    AddSystemMessage("Usage: /w <name> <message>");
-                }
+                HandleSlashCommand(text);
                 return;
             }
 
+            // Send to server
             string channel = _activeChannel.ToString();
+            int channelId = _activeChannel switch
+            {
+                Channel.Global => 2,
+                Channel.Zone => 1,
+                Channel.Party => 3,
+                _ => 2
+            };
+
+            var data = Network.PacketBuilder.ChatSend(channelId, text);
+            Network.NetworkManager.Instance?.Send(data);
+
+            // Show locally immediately
             AddEntry("You", channel, text, ChannelColors[channel]);
-            Debug.Log($"[ChatUI] [{channel}] {text}");
+        }
+
+        private void HandleSlashCommand(string text)
+        {
+            string[] parts = text.Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+            string cmd = parts[0].ToLowerInvariant();
+
+            switch (cmd)
+            {
+                case "/w":
+                case "/whisper":
+                case "/tell":
+                    if (parts.Length >= 3)
+                    {
+                        string target = parts[1];
+                        string msg = string.Join(" ", parts, 2, parts.Length - 2);
+                        var data = Network.PacketBuilder.ChatSend(4, msg, target); // 4 = whisper
+                        Network.NetworkManager.Instance?.Send(data);
+                        AddEntry("You", "Whisper", $"-> {target}: {msg}", Color.magenta);
+                    }
+                    else
+                        AddSystemMessage("Usage: /w <name> <message>");
+                    break;
+
+                case "/g":
+                    if (parts.Length >= 2)
+                    {
+                        string msg = string.Join(" ", parts, 1, parts.Length - 1);
+                        var data = Network.PacketBuilder.ChatSend(2, msg);
+                        Network.NetworkManager.Instance?.Send(data);
+                        AddEntry("You", "Global", msg, ChannelColors["Global"]);
+                    }
+                    break;
+
+                case "/p":
+                    if (parts.Length >= 2)
+                    {
+                        string msg = string.Join(" ", parts, 1, parts.Length - 1);
+                        var data = Network.PacketBuilder.ChatSend(3, msg);
+                        Network.NetworkManager.Instance?.Send(data);
+                        AddEntry("You", "Party", msg, ChannelColors["Party"]);
+                    }
+                    break;
+
+                case "/tp":
+                case "/teleport":
+                    if (parts.Length >= 4 && AdminCheck())
+                    {
+                        if (float.TryParse(parts[1], out float x) &&
+                            float.TryParse(parts[2], out float y) &&
+                            float.TryParse(parts[3], out float z))
+                        {
+                            Network.NetworkManager.Instance?.Send(
+                                Network.PacketBuilder.AdminTeleport(x, y, z));
+                            AddSystemMessage($"Teleporting to ({x}, {y}, {z})...");
+                        }
+                        else
+                            AddSystemMessage("Usage: /tp <x> <y> <z>");
+                    }
+                    break;
+
+                case "/setspeed":
+                case "/speed":
+                    if (parts.Length >= 2 && AdminCheck())
+                    {
+                        if (float.TryParse(parts[1], out float speed))
+                        {
+                            Network.NetworkManager.Instance?.Send(
+                                Network.PacketBuilder.AdminSetSpeed(speed));
+                            AddSystemMessage($"Speed set to {speed} m/s");
+                        }
+                        else
+                            AddSystemMessage("Usage: /setspeed <number>");
+                    }
+                    break;
+
+                case "/fly":
+                    if (AdminCheck())
+                    {
+                        var admin = AdminPanel.Instance;
+                        bool newState = admin != null ? !admin.FlyEnabled : true;
+                        Network.NetworkManager.Instance?.Send(
+                            Network.PacketBuilder.AdminSetFly(newState));
+                        AddSystemMessage(newState ? "Fly mode enabled" : "Fly mode disabled");
+                    }
+                    break;
+
+                case "/god":
+                    if (AdminCheck())
+                    {
+                        var admin = AdminPanel.Instance;
+                        bool newState = admin != null ? !admin.GodMode : true;
+                        Network.NetworkManager.Instance?.Send(
+                            Network.PacketBuilder.AdminGodMode(newState));
+                        AddSystemMessage(newState ? "God mode enabled" : "God mode disabled");
+                    }
+                    break;
+
+                case "/spawn":
+                    if (parts.Length >= 2 && AdminCheck())
+                    {
+                        string creatureType = parts[1];
+                        var player = GameObject.FindWithTag("Player");
+                        if (player != null)
+                        {
+                            var pos = player.transform.position;
+                            Network.NetworkManager.Instance?.Send(
+                                Network.PacketBuilder.AdminSpawnCreature(creatureType, pos.x, pos.y, pos.z));
+                            AddSystemMessage($"Spawning {creatureType}...");
+                        }
+                    }
+                    else if (AdminCheck())
+                        AddSystemMessage("Usage: /spawn <creature_type>");
+                    break;
+
+                case "/creatures":
+                    if (AdminCheck())
+                    {
+                        Network.NetworkManager.Instance?.Send(
+                            Network.PacketBuilder.AdminListCreatures());
+                        AddSystemMessage("Requesting creature list...");
+                        // CreatureBrowserUI will open when response arrives
+                        var browser = FindFirstObjectByType<CreatureBrowserUI>();
+                        if (browser == null)
+                        {
+                            var go = new GameObject("CreatureBrowserUI");
+                            go.AddComponent<CreatureBrowserUI>();
+                        }
+                    }
+                    break;
+
+                case "/pos":
+                    var p = GameObject.FindWithTag("Player");
+                    if (p != null)
+                    {
+                        var pos = p.transform.position;
+                        AddSystemMessage($"Position: ({pos.x:F1}, {pos.y:F1}, {pos.z:F1})");
+                    }
+                    break;
+
+                case "/help":
+                    AddSystemMessage("Commands: /w /g /p /tp /setspeed /fly /god /spawn /creatures /pos /help");
+                    break;
+
+                default:
+                    AddSystemMessage($"Unknown command: {cmd}. Type /help for commands.");
+                    break;
+            }
+        }
+
+        private bool AdminCheck()
+        {
+            var admin = AdminPanel.Instance;
+            if (admin == null || !admin.IsAdmin)
+            {
+                AddSystemMessage("You must be an admin to use this command.");
+                return false;
+            }
+            return true;
         }
 
         private void OnGUI()

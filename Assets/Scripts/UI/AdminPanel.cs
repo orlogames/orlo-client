@@ -67,6 +67,7 @@ namespace Orlo.UI
         public float RunSpeed => _runSpeed;
         public bool FlyEnabled => _flyEnabled;
         public float ToolPower => _toolPower;
+        public bool GodMode => _godMode;
 
         private void OnGUI()
         {

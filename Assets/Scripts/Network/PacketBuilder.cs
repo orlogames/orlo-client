@@ -11,6 +11,7 @@ using ProtoEconomy = Orlo.Proto.Economy;
 using ProtoTMD = Orlo.Proto.TMD;
 using ProtoResource = Orlo.Proto.Resource;
 using ProtoInventory = Orlo.Proto.Inventory;
+using ProtoSocial = Orlo.Proto.Social;
 
 namespace Orlo.Network
 {
@@ -256,6 +257,46 @@ namespace Orlo.Network
             pkt.AdminCommand = new ProtoAdmin.AdminCommand
             {
                 GodMode = new ProtoAdmin.GodMode { Enabled = enabled }
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Chat ───────────────────────────────────────────────────────────
+
+        public static byte[] ChatSend(int channel, string content, string whisperTarget = "")
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = (ProtoSocial.ChatChannel)channel,
+                Content = content,
+                WhisperTarget = whisperTarget ?? ""
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Admin: Creature Commands ───────────────────────────────────────
+
+        public static byte[] AdminSpawnCreature(string creatureType, float x, float y, float z)
+        {
+            var pkt = NewPacket();
+            pkt.AdminCommand = new ProtoAdmin.AdminCommand
+            {
+                SpawnCreature = new ProtoAdmin.SpawnCreature
+                {
+                    CreatureType = creatureType,
+                    Position = new Vec3 { X = x, Y = y, Z = z }
+                }
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] AdminListCreatures()
+        {
+            var pkt = NewPacket();
+            pkt.AdminCommand = new ProtoAdmin.AdminCommand
+            {
+                ListCreatures = new ProtoAdmin.ListCreatures()
             };
             return pkt.ToByteArray();
         }
