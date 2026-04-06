@@ -269,9 +269,10 @@ namespace Orlo.World
             Bounds combinedBounds = default;
             bool boundsInitialized = false;
 
-            // Get a working shader (Resources first, then fallbacks)
-            var shader = Resources.Load<Shader>("Shaders/EntityFallback")
-                ?? Shader.Find("Standard")
+            // Use Standard shader for GLB models (supports PBR textures from Meshy)
+            // Standard shader is always included via GraphicsSettings.asset
+            var shader = Shader.Find("Standard")
+                ?? Resources.Load<Shader>("Shaders/EntityFallback")
                 ?? Shader.Find("Legacy Shaders/Diffuse");
 
             foreach (var entry in cached.entries)
