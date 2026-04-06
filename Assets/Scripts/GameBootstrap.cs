@@ -4,6 +4,7 @@ using Orlo.Player;
 using Orlo.World;
 using Orlo.Audio;
 using Orlo.UI;
+using Orlo.Animation;
 using Orlo.UI.CharacterCreation;
 using Orlo.Proto;
 using ProtoAuth = Orlo.Proto.Auth;
@@ -580,12 +581,19 @@ namespace Orlo
                 var modelChar = player.AddComponent<ModelCharacter>();
                 modelChar.LoadModel("human_male_base.glb");
 
+                // Attach runtime skeleton for procedural animation
+                if (modelChar.IsLoaded && modelChar.GetModelRoot() != null)
+                    RuntimeRigBuilder.BuildHumanoidRig(modelChar.GetModelRoot(), modelChar.GetModelHeight());
+
                 // Add controller components
                 var cc = player.AddComponent<CharacterController>();
                 cc.height = 1.8f;
                 cc.center = Vector3.up * 0.9f;
                 cc.radius = 0.3f;
                 player.AddComponent<PlayerController>();
+
+                // Add procedural animation driver (reads movement state from PlayerController)
+                player.AddComponent<CharacterAnimator>();
             }
 
             player.tag = "Player";

@@ -1,4 +1,5 @@
 using UnityEngine;
+using Orlo.Animation;
 using Orlo.Network;
 using Orlo.UI;
 
@@ -22,11 +23,19 @@ namespace Orlo.Player
 
         private CharacterController _cc;
         private OrbitCamera _orbitCamera;
+        private CharacterAnimator _animator;
         private Vector3 _velocity;
         private bool _isSprinting;
         private bool _isJumping;
         private bool _rmbHeld;
         private bool _lmbHeld;
+
+        /// <summary>Current velocity from CharacterController.</summary>
+        public Vector3 Velocity => _cc != null ? _cc.velocity : Vector3.zero;
+        /// <summary>Whether the CharacterController is touching the ground.</summary>
+        public bool IsGrounded => _cc != null && _cc.isGrounded;
+        /// <summary>Whether the player is currently sprinting.</summary>
+        public bool IsSprinting => _isSprinting;
 
         // Send rate: 10 times per second
         private float _sendTimer;
@@ -40,6 +49,7 @@ namespace Orlo.Player
         {
             _cc = GetComponent<CharacterController>();
             _orbitCamera = FindFirstObjectByType<OrbitCamera>();
+            _animator = GetComponent<CharacterAnimator>();
         }
 
         private void Update()
@@ -47,6 +57,11 @@ namespace Orlo.Player
             HandleMovement();
             ApplyServerCorrections();
             SendMovementInput();
+
+            // Drive procedural animation from movement state
+            if (_animator == null) _animator = GetComponent<CharacterAnimator>();
+            if (_animator != null)
+                _animator.SetMovementState(_cc.velocity, _cc.isGrounded, _isSprinting);
         }
 
         private void HandleMovement()

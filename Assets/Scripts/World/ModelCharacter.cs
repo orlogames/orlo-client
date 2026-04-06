@@ -24,6 +24,9 @@ namespace Orlo.World
         /// <summary>Whether the model has finished loading.</summary>
         public bool IsLoaded => _loaded;
 
+        /// <summary>The root GameObject of the loaded model hierarchy.</summary>
+        public GameObject GetModelRoot() => _modelRoot;
+
         /// <summary>
         /// Load a GLB model from pak archive, StreamingAssets, or CDN cache. Apply initial appearance.
         /// </summary>
