@@ -442,17 +442,60 @@ namespace Orlo.Network
             return pkt.ToByteArray();
         }
 
-        // TODO: Add CraftAssembleRequest when proto message is defined.
-        // Should include: recipe_id, station, repeated resource_slot { slot_index, spawn_id, inventory_slot }
-        // public static byte[] CraftAssemble(uint recipeId, uint station, List<(uint slot, ulong spawnId)> resources)
+        /// <summary>
+        /// Start 2-phase assembly: place resources in slots and begin crafting.
+        /// </summary>
+        public static byte[] CraftAssemble(string schematicId, List<(uint slotIndex, ulong spawnId, uint qty)> resources)
+        {
+            var pkt = NewPacket();
+            var req = new ProtoInventory.CraftAssembleRequest
+            {
+                SchematicId = schematicId
+            };
+            foreach (var (slotIndex, spawnId, qty) in resources)
+            {
+                req.Slots.Add(new ProtoInventory.ResourceSlotFill
+                {
+                    SlotIndex = slotIndex,
+                    ResourceSpawnId = spawnId,
+                    Quantity = qty
+                });
+            }
+            pkt.CraftAssembleRequest = req;
+            return pkt.ToByteArray();
+        }
 
-        // TODO: Add CraftExperimentRequest when proto message is defined.
-        // Should include: round number, repeated category_allocation { category_index, points }
-        // public static byte[] CraftExperiment(uint round, List<(int category, int points)> allocation)
+        /// <summary>
+        /// Spend experiment points on stat categories.
+        /// </summary>
+        public static byte[] CraftExperiment(List<(string category, uint points)> allocations)
+        {
+            var pkt = NewPacket();
+            var req = new ProtoInventory.CraftExperimentRequest();
+            foreach (var (category, points) in allocations)
+            {
+                req.Allocations.Add(new ProtoInventory.ExperimentAllocation
+                {
+                    Category = category,
+                    Points = points
+                });
+            }
+            pkt.CraftExperimentRequest = req;
+            return pkt.ToByteArray();
+        }
 
-        // TODO: Add CraftFinalizeRequest when proto message is defined.
-        // Should include: recipe_id (server tracks session, but client confirms intent)
-        // public static byte[] CraftFinalize()
+        /// <summary>
+        /// Finalize crafting and name the item.
+        /// </summary>
+        public static byte[] CraftFinalize(string itemName = "")
+        {
+            var pkt = NewPacket();
+            pkt.CraftFinalizeRequest = new ProtoInventory.CraftFinalizeRequest
+            {
+                ItemName = itemName
+            };
+            return pkt.ToByteArray();
+        }
 
         // ─── Inventory Actions ──────────────────────────────────────────────
 
