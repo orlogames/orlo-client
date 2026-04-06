@@ -1036,7 +1036,7 @@ namespace Orlo.World
             if (id.Contains("guard"))
             {
                 var sword = ProceduralEquipment.CreateSword(0.7f, EquipmentStyle.Basic);
-                character.Equip(EquipmentSlot.MainHand, sword);
+                character.Equip(EquipmentSlot.RightHand, sword);
 
                 var shield = ProceduralEquipment.CreateShield(0.4f, EquipmentStyle.Rugged);
                 character.Equip(EquipmentSlot.LeftBracer, shield); // Shield held in left hand
@@ -1047,12 +1047,12 @@ namespace Orlo.World
             else if (id.Contains("bandit"))
             {
                 var sword = ProceduralEquipment.CreateSword(0.65f, EquipmentStyle.Rugged);
-                character.Equip(EquipmentSlot.MainHand, sword);
+                character.Equip(EquipmentSlot.RightHand, sword);
             }
             else if (id.Contains("mage") || id.Contains("wizard"))
             {
                 var staff = ProceduralEquipment.CreateStaff(1.4f);
-                character.Equip(EquipmentSlot.MainHand, staff);
+                character.Equip(EquipmentSlot.RightHand, staff);
 
                 var hat = ProceduralEquipment.CreateHelmet(EquipmentStyle.Elegant);
                 character.Equip(EquipmentSlot.Head, hat);

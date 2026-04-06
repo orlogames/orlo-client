@@ -703,7 +703,9 @@ namespace Orlo.Network
                 ProtoInventory.EquipmentSlot.Backpack => 11,
                 ProtoInventory.EquipmentSlot.LeftWrist => 12,
                 ProtoInventory.EquipmentSlot.RightWrist => 13,
-                ProtoInventory.EquipmentSlot.MainHand => 14,
+                ProtoInventory.EquipmentSlot.LeftHand => 14,
+                ProtoInventory.EquipmentSlot.RightHand => 15,
+                ProtoInventory.EquipmentSlot.TwoHands => 16,
                 _ => 0
             };
         }

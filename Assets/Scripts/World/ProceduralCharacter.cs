@@ -38,7 +38,11 @@ namespace Orlo.World
         Backpack,       // Backpack / cloak
         LeftWrist,      // Left wrist accessory
         RightWrist,     // Right wrist accessory
-        MainHand        // Primary weapon
+        // Weapon stance slots (mutually exclusive)
+        LeftHand,       // One-handed weapon in left hand
+        RightHand,      // One-handed weapon in right hand
+        TwoHands        // Two-handed weapon (occupies both)
+        // Unarmed = all three weapon slots empty
     }
 
     /// <summary>
@@ -405,7 +409,9 @@ namespace Orlo.World
                 case EquipmentSlot.Backpack:     return GetBone(BoneSpine);
                 case EquipmentSlot.LeftWrist:    return GetBone(BoneLeftLowerArm);  // offset at attach time
                 case EquipmentSlot.RightWrist:   return GetBone(BoneRightLowerArm); // offset at attach time
-                case EquipmentSlot.MainHand:     return GetBone(BoneRightHand);
+                case EquipmentSlot.LeftHand:     return GetBone(BoneLeftHand);
+                case EquipmentSlot.RightHand:    return GetBone(BoneRightHand);
+                case EquipmentSlot.TwoHands:     return GetBone(BoneRightHand);  // Primary grip hand
                 default: return null;
             }
         }
