@@ -50,6 +50,10 @@ namespace Orlo.Network
         public event Action<ProtoAuth.CharacterSpawnResponse> OnCharacterSpawn;
         public event Action<ProtoAuth.Pong> OnPong;
 
+        // Death overlay state
+        private bool _deathOverlayActive;
+        private float _deathOverlayTimer;
+
         private void Awake()
         {
             if (_instance != null && _instance != this) { Destroy(gameObject); return; }
@@ -420,6 +424,20 @@ namespace Orlo.Network
         {
             Debug.Log($"[Combat] Entity {death.EntityId} died (killed by {death.KillerEntityId})");
 
+            // Check if the local player died
+            var bootstrap = FindFirstObjectByType<GameBootstrap>();
+            if (bootstrap != null && death.EntityId == bootstrap.PlayerEntityId)
+            {
+                // Local player death — show death overlay instead of death animation
+                var chatUI = FindFirstObjectByType<ChatUI>();
+                chatUI?.AddSystemMessage("You have been defeated! Respawning at Threshold...");
+                StartCoroutine(ShowDeathOverlay());
+
+                // Clear any current target
+                TargetingSystem.Instance?.ClearTarget();
+                return;
+            }
+
             var go = EntityManager.Instance?.GetEntity(death.EntityId);
             if (go != null)
             {
@@ -438,11 +456,69 @@ namespace Orlo.Network
             TargetingSystem.Instance?.ClearTargetIfMatch(death.EntityId);
 
             // Notify player if they made the kill
-            var bootstrap = FindFirstObjectByType<GameBootstrap>();
             if (bootstrap != null && death.KillerEntityId == bootstrap.PlayerEntityId)
             {
                 NotificationUI.Instance?.Show("Kill", "Target eliminated", 0, 3f);
             }
+        }
+
+        private System.Collections.IEnumerator ShowDeathOverlay()
+        {
+            _deathOverlayActive = true;
+            _deathOverlayTimer = 10f;
+
+            // Count down every frame
+            while (_deathOverlayTimer > 0f)
+            {
+                _deathOverlayTimer -= Time.deltaTime;
+                yield return null;
+            }
+
+            _deathOverlayActive = false;
+        }
+
+        private void OnGUI()
+        {
+            if (!_deathOverlayActive) return;
+
+            float s = UIScaler.Scale;
+
+            // Full-screen dark overlay
+            GUI.color = new Color(0f, 0f, 0f, 0.7f);
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+
+            // "DEFEATED" title
+            GUI.color = new Color(0.8f, 0.15f, 0.1f);
+            var titleStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = UIScaler.ScaledFontSize(48),
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter
+            };
+            GUI.Label(new Rect(0, Screen.height * 0.35f, Screen.width, 80 * s), "DEFEATED", titleStyle);
+
+            // Respawn countdown
+            int secondsLeft = Mathf.CeilToInt(_deathOverlayTimer);
+            GUI.color = new Color(0.85f, 0.85f, 0.85f);
+            var subStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = UIScaler.ScaledFontSize(18),
+                alignment = TextAnchor.MiddleCenter
+            };
+            GUI.Label(new Rect(0, Screen.height * 0.45f, Screen.width, 40 * s),
+                $"Respawning in {secondsLeft} seconds...", subStyle);
+
+            // Hint text
+            GUI.color = new Color(0.6f, 0.6f, 0.6f);
+            var hintStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = UIScaler.ScaledFontSize(12),
+                alignment = TextAnchor.MiddleCenter
+            };
+            GUI.Label(new Rect(0, Screen.height * 0.52f, Screen.width, 30 * s),
+                "You will respawn at the nearest settlement.", hintStyle);
+
+            GUI.color = Color.white;
         }
 
         private System.Collections.IEnumerator DeathAnimation(GameObject go, ulong entityId)
@@ -675,6 +751,16 @@ namespace Orlo.Network
                 }
                 equipUI.SetEquipment(equipDict);
             }
+
+            // Refresh all equipment visuals on the player model
+            var player = GameObject.FindWithTag("Player");
+            if (player != null)
+            {
+                var visualMgr = player.GetComponent<EquipmentVisualManager>();
+                if (visualMgr == null)
+                    visualMgr = player.AddComponent<EquipmentVisualManager>();
+                visualMgr.RefreshAllVisuals();
+            }
         }
 
         private void HandleItemAdd(ProtoInventory.ItemAdd add)
@@ -762,11 +848,29 @@ namespace Orlo.Network
                     // Server confirmed an item is now equipped in this slot
                     var itemSlot = ProtoItemToSlot(changed.Item, protoSlotId);
                     equipUI.ServerEquipItem(protoSlotId, itemSlot);
+
+                    // Attach equipment visual to player model
+                    var player = GameObject.FindWithTag("Player");
+                    if (player != null)
+                    {
+                        var visualMgr = player.GetComponent<EquipmentVisualManager>();
+                        if (visualMgr == null)
+                            visualMgr = player.AddComponent<EquipmentVisualManager>();
+                        visualMgr.OnSlotEquipped(protoSlotId, itemSlot);
+                    }
                 }
                 else
                 {
                     // Server confirmed this slot is now empty
                     equipUI.ServerUnequipItem(protoSlotId);
+
+                    // Remove equipment visual from player model
+                    var player = GameObject.FindWithTag("Player");
+                    if (player != null)
+                    {
+                        var visualMgr = player.GetComponent<EquipmentVisualManager>();
+                        visualMgr?.OnSlotUnequipped((int)changed.Slot);
+                    }
                 }
             }
         }

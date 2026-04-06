@@ -43,11 +43,20 @@ namespace Orlo.Player
             Instance = this;
         }
 
+        /// <summary>Entity type of current target (parsed from name). 0=unknown, 1=player, 2=creature, 3=NPC.</summary>
+        private uint _targetEntityType;
+
+        /// <summary>Whether the current target is an NPC (entity type 3) within interaction range.</summary>
+        private bool _showNpcPrompt;
+        private float _npcInteractRange = 5f;
+
         private void Update()
         {
             HandleTargetClick();
             HandleLootProximity();
             HandleLootPickup();
+            HandleNpcProximity();
+            HandleNpcInteraction();
             UpdateTargetHealth();
 
             // Tab key to clear target
@@ -121,10 +130,22 @@ namespace Orlo.Player
             var em = EntityManager.Instance;
             _targetName = em?.GetEntityName(entityId) ?? go.name;
 
+            // Parse entity type from name (Entity_{id}_{type})
+            _targetEntityType = ParseEntityType(go.name);
+
             // Get health if available
             _hasTargetHealth = em != null && em.TryGetEntityHealth(entityId, out _targetHealth, out _targetMaxHealth);
 
-            Debug.Log($"[Target] Selected: {_targetName} (id={entityId})");
+            Debug.Log($"[Target] Selected: {_targetName} (id={entityId}, type={_targetEntityType})");
+        }
+
+        /// <summary>Parse entity type from name like "Entity_12345_3".</summary>
+        private uint ParseEntityType(string name)
+        {
+            string[] parts = name.Split('_');
+            if (parts.Length >= 3 && uint.TryParse(parts[2], out uint type))
+                return type;
+            return 0;
         }
 
         public void ClearTarget()
@@ -135,6 +156,8 @@ namespace Orlo.Player
                 TargetEntityId = 0;
                 _targetName = "";
                 _hasTargetHealth = false;
+                _targetEntityType = 0;
+                _showNpcPrompt = false;
             }
         }
 
@@ -211,12 +234,52 @@ namespace Orlo.Player
             }
         }
 
+        // ─── NPC Interaction ────────────────────────────────────────────────
+
+        /// <summary>Check if current target is an NPC within interaction range.</summary>
+        private void HandleNpcProximity()
+        {
+            _showNpcPrompt = false;
+
+            if (TargetEntityId == 0 || _targetEntityType != 3)
+                return;
+
+            // Check distance to NPC
+            var player = FindFirstObjectByType<PlayerController>();
+            if (player == null) return;
+
+            var npcGo = EntityManager.Instance?.GetEntity(TargetEntityId);
+            if (npcGo == null) return;
+
+            float dist = Vector3.Distance(player.transform.position, npcGo.transform.position);
+            _showNpcPrompt = dist <= _npcInteractRange;
+        }
+
+        /// <summary>F key interacts with targeted NPC (when no loot is nearby).</summary>
+        private void HandleNpcInteraction()
+        {
+            // Loot pickup takes priority over NPC interaction
+            if (_showLootPrompt && NearbyLootEntityId != 0)
+                return;
+
+            if (!_showNpcPrompt || TargetEntityId == 0)
+                return;
+
+            if (Input.GetKeyDown(KeyCode.F))
+            {
+                Debug.Log($"[NPC] Sending interact request for NPC entity {TargetEntityId}");
+                var data = PacketBuilder.NPCInteract(TargetEntityId);
+                NetworkManager.Instance.Send(data);
+            }
+        }
+
         // ─── OnGUI: Target Frame + Loot Prompt ─────────────────────────────
 
         private void OnGUI()
         {
             DrawTargetFrame();
             DrawLootPrompt();
+            DrawNpcPrompt();
         }
 
         /// <summary>Draw the target frame in the top-center area showing name + health.</summary>
@@ -332,6 +395,43 @@ namespace Orlo.Player
             };
             GUI.Label(new Rect(promptX, promptY, promptW, promptH),
                 $"[F] Loot {_lootPromptName}", promptStyle);
+
+            GUI.color = Color.white;
+        }
+
+        /// <summary>Draw "Press F to talk" prompt when targeting a nearby NPC.</summary>
+        private void DrawNpcPrompt()
+        {
+            // Don't show NPC prompt if loot prompt is already showing (loot takes priority)
+            if (_showLootPrompt || !_showNpcPrompt) return;
+
+            float s = UIScaler.Scale;
+            float promptW = 220f * s;
+            float promptH = 35f * s;
+            float promptX = (Screen.width - promptW) / 2f;
+            float promptY = Screen.height * 0.55f;
+
+            // Pulsing background
+            float pulse = 0.7f + Mathf.Sin(Time.time * 2f) * 0.3f;
+            GUI.color = new Color(0.05f, 0.08f, 0.12f, 0.85f * pulse);
+            GUI.DrawTexture(new Rect(promptX, promptY, promptW, promptH), Texture2D.whiteTexture);
+
+            // Cyan border (NPC color)
+            GUI.color = new Color(0.3f, 0.85f, 1f, 0.8f * pulse);
+            GUI.DrawTexture(new Rect(promptX, promptY, promptW, 2), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(promptX, promptY + promptH - 2, promptW, 2), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(promptX, promptY, 2, promptH), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(promptX + promptW - 2, promptY, 2, promptH), Texture2D.whiteTexture);
+
+            GUI.color = new Color(0.4f, 0.9f, 1f);
+            var promptStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = UIScaler.ScaledFontSize(14),
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter
+            };
+            GUI.Label(new Rect(promptX, promptY, promptW, promptH),
+                $"[F] Talk to {_targetName}", promptStyle);
 
             GUI.color = Color.white;
         }

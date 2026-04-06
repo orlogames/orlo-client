@@ -227,6 +227,15 @@ namespace Orlo.UI
         /// <summary>Check if a slot has an item equipped.</summary>
         public bool IsSlotOccupied(SlotId slot) => _equipped.ContainsKey(slot);
 
+        /// <summary>Get all equipped items as a dictionary keyed by proto slot ID (int).</summary>
+        public Dictionary<int, InventoryUI.ItemSlot> GetEquippedItems()
+        {
+            var result = new Dictionary<int, InventoryUI.ItemSlot>();
+            foreach (var kv in _equipped)
+                result[(int)kv.Key] = kv.Value;
+            return result;
+        }
+
         public bool IsVisible => _visible;
 
         public void Toggle() { _visible = !_visible; _contextMenuOpen = false; }
