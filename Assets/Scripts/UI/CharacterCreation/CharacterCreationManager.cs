@@ -223,6 +223,10 @@ namespace Orlo.UI.CharacterCreation
 
             DrawCurrentTab(contentArea);
 
+            // Continuously refresh preview while sliders are being dragged
+            // (sliders modify _data via ref, so changes are immediate)
+            RefreshPreview();
+
             // ── Error Message ──────────────────────────────────────────────
             if (!string.IsNullOrEmpty(_errorMessage))
             {

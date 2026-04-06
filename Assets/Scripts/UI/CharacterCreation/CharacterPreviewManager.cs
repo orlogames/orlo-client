@@ -29,6 +29,7 @@ namespace Orlo.UI.CharacterCreation
         private RenderTexture _renderTexture;
         private GameObject _characterGO;
         private ModelCharacter _modelCharacter;
+        private Orlo.Animation.VertexDeformer _vertexDeformer;
         private ProceduralCharacter _proceduralFallback;
         private Light _keyLight, _fillLight, _rimLight;
         private bool _usingModel = false;
@@ -61,8 +62,13 @@ namespace Orlo.UI.CharacterCreation
         {
             if (_usingModel && _modelCharacter != null && _modelCharacter.IsLoaded)
             {
-                // Real model path — just update material colors, instant
+                // Real model path — update material colors + vertex deformation
                 _modelCharacter.UpdateAppearance(data);
+
+                // Apply vertex deformation from sliders (face morphs, body shape)
+                if (_vertexDeformer != null)
+                    _vertexDeformer.ApplyAppearance(data);
+
                 return;
             }
 
@@ -253,12 +259,20 @@ namespace Orlo.UI.CharacterCreation
                 _usingModel = true;
                 _modelCharacter.SetLayer(PreviewLayer);
 
-                // Adjust camera for real model dimensions
+                // Build skeleton for the preview model
                 float modelHeight = _modelCharacter.GetModelHeight();
+                if (_modelCharacter.GetModelRoot() != null)
+                    Orlo.Animation.RuntimeRigBuilder.BuildHumanoidRig(_modelCharacter.GetModelRoot(), modelHeight);
+
+                // Initialize vertex deformer for real-time customization
+                _vertexDeformer = _characterGO.AddComponent<Orlo.Animation.VertexDeformer>();
+                _vertexDeformer.Initialize();
+
+                // Adjust camera for real model dimensions
                 _orbitTarget = new Vector3(0f, modelHeight * 0.5f, 0f);
                 _orbitDistance = modelHeight * 1.8f;
 
-                Debug.Log($"[CharacterPreview] Real model loaded (height: {modelHeight:F2}m)");
+                Debug.Log($"[CharacterPreview] Real model loaded (height: {modelHeight:F2}m) with vertex deformation");
             }
             else
             {
