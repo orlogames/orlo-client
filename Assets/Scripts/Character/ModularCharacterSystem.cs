@@ -488,13 +488,14 @@ namespace Orlo.Character
         // ─── Hair Style Swapping ──────────────────────────────────────
 
         // Hair style → asset ID mapping (0-7 male, 8-15 female)
+        // Must match filenames in generated/hair/ and HairPanel style names
         private static readonly string[] HairAssetIds =
         {
-            // Male (0-7)
+            // Male (0-7): Short, Medium, Long, Ponytail, Mohawk, Buzz, Slicked, Braided
             "hair_male_short", "hair_male_medium", "hair_male_long", "hair_male_ponytail",
             "hair_male_mohawk", "hair_male_buzz", "hair_male_slicked", "hair_male_braided",
-            // Female (8-15)
-            "hair_female_pixie", "hair_female_bob", "hair_female_long", "hair_female_ponytail",
+            // Female (8-15): Short, Medium, Long, Ponytail, Braids, Bun, Curly, Undercut
+            "hair_female_short", "hair_female_medium", "hair_female_long", "hair_female_ponytail",
             "hair_female_braids", "hair_female_bun", "hair_female_curly", "hair_female_undercut"
         };
 

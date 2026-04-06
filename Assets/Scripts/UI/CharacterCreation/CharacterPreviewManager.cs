@@ -1,12 +1,14 @@
 using UnityEngine;
 using Orlo.World;
+using Orlo.Character;
 
 namespace Orlo.UI.CharacterCreation
 {
     /// <summary>
     /// Manages a 3D character preview rendered to a RenderTexture.
     /// Creates a dedicated camera, 3-point lighting, and loads a real 3D model
-    /// via ModelCharacter (GLB from StreamingAssets) on the CharacterPreview layer.
+    /// via ModelCharacter (GLB from pak/StreamingAssets) on the CharacterPreview layer.
+    /// Uses ModularCharacterSystem for hair swapping and blendshape-driven customization.
     /// Falls back to ProceduralCharacter if the model fails to load.
     /// </summary>
     public class CharacterPreviewManager : MonoBehaviour
@@ -29,10 +31,15 @@ namespace Orlo.UI.CharacterCreation
         private RenderTexture _renderTexture;
         private GameObject _characterGO;
         private ModelCharacter _modelCharacter;
+        private ModularCharacterSystem _modularSystem;
         private Orlo.Animation.VertexDeformer _vertexDeformer;
         private ProceduralCharacter _proceduralFallback;
         private Light _keyLight, _fillLight, _rimLight;
         private bool _usingModel = false;
+
+        // --- Track current gender/race for model reloads ---
+        private int _currentGender = -1;
+        private int _currentRace = -1;
 
         // --- Focus modes ---
         public enum FocusMode { FullBody, Face, UpperBody }
@@ -50,22 +57,36 @@ namespace Orlo.UI.CharacterCreation
 
             CreateCamera();
             CreateLighting();
-            CreateCharacter();
+            // Don't create character yet — wait for first UpdateAppearance() which has gender/race
         }
 
         /// <summary>
         /// Update the character preview with new appearance data.
-        /// If using a real model: just updates material colors (instant, no GC).
-        /// If using procedural fallback: destroys and rebuilds the mesh.
+        /// Reloads the base model if gender or race changed.
+        /// Routes appearance through ModularCharacterSystem for hair/blendshapes,
+        /// and VertexDeformer for mathematical body deformation.
         /// </summary>
         public void UpdateAppearance(AppearanceData data)
         {
-            if (_usingModel && _modelCharacter != null && _modelCharacter.IsLoaded)
+            // Check if we need to reload the base model (gender/race changed)
+            if (data.Gender != _currentGender || data.Race != _currentRace)
             {
-                // Real model path — update material colors + vertex deformation
-                _modelCharacter.UpdateAppearance(data);
+                _currentGender = data.Gender;
+                _currentRace = data.Race;
+                CreateCharacter(data);
+            }
 
-                // Apply vertex deformation from sliders (face morphs, body shape)
+            if (_usingModel)
+            {
+                // Update material colors via ModelCharacter
+                if (_modelCharacter != null && _modelCharacter.IsLoaded)
+                    _modelCharacter.UpdateAppearance(data);
+
+                // Apply hair swapping + blendshapes via ModularCharacterSystem
+                if (_modularSystem != null)
+                    _modularSystem.ApplyAppearance(data);
+
+                // Apply vertex deformation (body shape morphs)
                 if (_vertexDeformer != null)
                     _vertexDeformer.ApplyAppearance(data);
 
@@ -157,6 +178,13 @@ namespace Orlo.UI.CharacterCreation
             if (_keyLight != null) DestroyImmediate(_keyLight.gameObject);
             if (_fillLight != null) DestroyImmediate(_fillLight.gameObject);
             if (_rimLight != null) DestroyImmediate(_rimLight.gameObject);
+
+            _modularSystem = null;
+            _vertexDeformer = null;
+            _modelCharacter = null;
+            _proceduralFallback = null;
+            _currentGender = -1;
+            _currentRace = -1;
         }
 
         // --- MonoBehaviour ---
@@ -243,28 +271,89 @@ namespace Orlo.UI.CharacterCreation
             return light;
         }
 
-        private void CreateCharacter()
+        /// <summary>
+        /// Resolve which base GLB model to load based on gender and race.
+        /// Falls back through: race+gender specific → gender specific → human_male_base.
+        /// </summary>
+        private string ResolveBaseModelName(int gender, int race)
         {
+            string genderStr = gender == 0 ? "male" : "female";
+            string[] raceNames = { "human", "sylvari", "korathi", "ashborn" };
+            string raceName = race >= 0 && race < raceNames.Length ? raceNames[race] : "human";
+
+            // Try race+gender specific first (e.g., "korathi_female_base")
+            string raceGender = $"{raceName}_{genderStr}_base";
+            if (ModelExists(raceGender)) return raceGender + ".glb";
+
+            // Fall back to human gender variant
+            string humanGender = $"human_{genderStr}_base";
+            if (ModelExists(humanGender)) return humanGender + ".glb";
+
+            // Try newer naming convention (base_male, base_female)
+            string baseGender = $"base_{genderStr}";
+            if (ModelExists(baseGender)) return baseGender + ".glb";
+
+            // Ultimate fallback
+            return "human_male_base.glb";
+        }
+
+        private bool ModelExists(string assetId)
+        {
+            var loader = AssetLoader.Instance;
+            if (loader != null)
+            {
+                var pakReader = loader.GetPakReader();
+                if (pakReader != null && pakReader.Contains(assetId)) return true;
+            }
+
+            // Check loose files
+            string path = System.IO.Path.Combine(Application.streamingAssetsPath, "Characters", assetId + ".glb");
+            return System.IO.File.Exists(path);
+        }
+
+        private void CreateCharacter(AppearanceData data)
+        {
+            // Destroy previous character if exists
+            if (_characterGO != null)
+            {
+                DestroyImmediate(_characterGO);
+                _characterGO = null;
+                _modelCharacter = null;
+                _modularSystem = null;
+                _vertexDeformer = null;
+                _proceduralFallback = null;
+                _usingModel = false;
+            }
+
             _characterGO = new GameObject("PreviewCharacter");
             _characterGO.transform.SetParent(transform);
             _characterGO.transform.position = Vector3.zero;
             SetLayerRecursive(_characterGO, PreviewLayer);
 
-            // Try loading real model first
+            // Resolve the correct base model for this gender/race
+            string modelFile = ResolveBaseModelName(data.Gender, data.Race);
+
+            // Try loading real model
             _modelCharacter = _characterGO.AddComponent<ModelCharacter>();
-            _modelCharacter.LoadModel("human_male_base.glb");
+            _modelCharacter.LoadModel(modelFile, data);
 
             if (_modelCharacter.IsLoaded)
             {
                 _usingModel = true;
                 _modelCharacter.SetLayer(PreviewLayer);
 
-                // Build skeleton for the preview model
                 float modelHeight = _modelCharacter.GetModelHeight();
+
+                // Build skeleton for animation
                 if (_modelCharacter.GetModelRoot() != null)
                     Orlo.Animation.RuntimeRigBuilder.BuildHumanoidRig(_modelCharacter.GetModelRoot(), modelHeight);
 
-                // Initialize vertex deformer for real-time customization
+                // Initialize ModularCharacterSystem for hair swapping + blendshapes
+                _modularSystem = _characterGO.AddComponent<ModularCharacterSystem>();
+                if (_modelCharacter.GetModelRoot() != null)
+                    _modularSystem.InitializeFromRiggedModel(_modelCharacter.GetModelRoot());
+
+                // Initialize vertex deformer for mathematical body deformation
                 _vertexDeformer = _characterGO.AddComponent<Orlo.Animation.VertexDeformer>();
                 _vertexDeformer.Initialize();
 
@@ -272,14 +361,15 @@ namespace Orlo.UI.CharacterCreation
                 _orbitTarget = new Vector3(0f, modelHeight * 0.5f, 0f);
                 _orbitDistance = modelHeight * 1.8f;
 
-                Debug.Log($"[CharacterPreview] Real model loaded (height: {modelHeight:F2}m) with vertex deformation");
+                Debug.Log($"[CharacterPreview] Loaded {modelFile} (height: {modelHeight:F2}m) " +
+                    $"with ModularCharacterSystem + VertexDeformer");
             }
             else
             {
                 // Fallback to procedural
                 Debug.LogWarning("[CharacterPreview] Falling back to procedural character");
                 _proceduralFallback = _characterGO.AddComponent<ProceduralCharacter>();
-                _proceduralFallback.Build(new CharacterSpec());
+                _proceduralFallback.Build(BuildSpecFromData(data));
                 SetLayerRecursive(_characterGO, PreviewLayer);
             }
         }

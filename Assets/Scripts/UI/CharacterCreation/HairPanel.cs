@@ -17,7 +17,7 @@ namespace Orlo.UI.CharacterCreation
 
         private static readonly string[] FemaleHairStyleNames =
         {
-            "Pixie", "Bob", "Long", "Ponytail", "Braids", "Bun", "Curly", "Undercut"
+            "Short", "Medium", "Long", "Ponytail", "Braids", "Bun", "Curly", "Undercut"
         };
 
         private static readonly string[] FacialHairNames =

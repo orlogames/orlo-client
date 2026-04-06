@@ -244,14 +244,13 @@ namespace Orlo.UI.CharacterCreation
             float navY = leftPanel.yMax - 24;
             if (_currentTab > 0 && GUI.Button(new Rect(leftPanel.x + 10, navY, 100, 24), "< Back", _buttonStyle))
             {
-                _currentTab--;
-                _errorMessage = "";
+                OnTabChanged(_currentTab - 1);
             }
             if (_currentTab < TabNames.Length - 1 &&
                 GUI.Button(new Rect(leftPanel.xMax - 110, navY, 100, 24), "Next >", _buttonStyle))
             {
                 if (ValidateCurrentTab())
-                    _currentTab++;
+                    OnTabChanged(_currentTab + 1);
             }
             if (_currentTab == TabNames.Length - 1 &&
                 GUI.Button(new Rect(leftPanel.xMax - 110, navY, 100, 24), "Create!", _selectedButtonStyle))
@@ -538,12 +537,14 @@ namespace Orlo.UI.CharacterCreation
                 switch (newTab)
                 {
                     case 1: // Face
+                    case 4: // Hair
                     case 5: // Eyes
                     case 6: // Makeup
+                    case 9: // Race Features (horns, glow, etc)
                         _preview.SetFocusMode(CharacterPreviewManager.FocusMode.Face);
                         break;
-                    case 2: // Body
                     case 0: // Race/Gender
+                    case 2: // Body
                     case 7: // Scars/Voice
                     case 8: // Tattoos
                     case 10: // Name/Skill
@@ -551,8 +552,6 @@ namespace Orlo.UI.CharacterCreation
                         _preview.SetFocusMode(CharacterPreviewManager.FocusMode.FullBody);
                         break;
                     case 3: // Skin
-                    case 4: // Hair
-                    case 9: // Race Features
                         _preview.SetFocusMode(CharacterPreviewManager.FocusMode.UpperBody);
                         break;
                 }
