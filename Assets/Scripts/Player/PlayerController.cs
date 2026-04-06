@@ -58,10 +58,19 @@ namespace Orlo.Player
             ApplyServerCorrections();
             SendMovementInput();
 
-            // Drive procedural animation from movement state
-            if (_animator == null) _animator = GetComponent<CharacterAnimator>();
-            if (_animator != null)
-                _animator.SetMovementState(_cc.velocity, _cc.isGrounded, _isSprinting);
+            // Drive animation from movement state
+            // Try Mecanim first (rigged models), fall back to procedural (legacy)
+            var mecanim = GetComponent<Orlo.Character.MecanimCharacterController>();
+            if (mecanim != null)
+            {
+                mecanim.SetMovementState(_cc.velocity, _cc.isGrounded, _isSprinting);
+            }
+            else
+            {
+                if (_animator == null) _animator = GetComponent<CharacterAnimator>();
+                if (_animator != null)
+                    _animator.SetMovementState(_cc.velocity, _cc.isGrounded, _isSprinting);
+            }
         }
 
         private void HandleMovement()

@@ -629,9 +629,44 @@ namespace Orlo
                 var modelChar = player.AddComponent<ModelCharacter>();
                 modelChar.LoadModel("human_male_base.glb");
 
-                // Attach runtime skeleton for procedural animation
+                // Initialize character system — try modular (rigged) first, fall back to procedural
+                bool useModular = false;
                 if (modelChar.IsLoaded && modelChar.GetModelRoot() != null)
-                    RuntimeRigBuilder.BuildHumanoidRig(modelChar.GetModelRoot(), modelChar.GetModelHeight());
+                {
+                    // Check if model has a skeleton (rigged by UniRig/Mixamo)
+                    var existingSMR = modelChar.GetModelRoot().GetComponentInChildren<SkinnedMeshRenderer>();
+                    if (existingSMR != null && existingSMR.bones != null && existingSMR.bones.Length > 5)
+                    {
+                        // Model is properly rigged — use modular character system + Mecanim
+                        var modular = player.AddComponent<Orlo.Character.ModularCharacterSystem>();
+                        modular.InitializeFromRiggedModel(modelChar.GetModelRoot());
+
+                        // Mecanim animation controller (replaces procedural walk cycle)
+                        var mecanim = player.AddComponent<Orlo.Character.MecanimCharacterController>();
+
+                        // Apply appearance via modular system (blendshapes + materials)
+                        modular.ApplyAppearance(new Orlo.UI.CharacterCreation.AppearanceData());
+
+                        useModular = true;
+                        Debug.Log("[Orlo] Using ModularCharacterSystem + Mecanim (rigged model detected)");
+                    }
+                }
+
+                if (!useModular)
+                {
+                    // Fallback: model is NOT rigged — use legacy procedural animation
+                    // This path will be removed once all models are rigged via UniRig
+                    if (modelChar.IsLoaded && modelChar.GetModelRoot() != null)
+                        RuntimeRigBuilder.BuildHumanoidRig(modelChar.GetModelRoot(), modelChar.GetModelHeight());
+
+                    player.AddComponent<CharacterAnimator>();
+
+                    var deformer = player.AddComponent<VertexDeformer>();
+                    deformer.Initialize();
+                    deformer.ApplyAppearance(new Orlo.UI.CharacterCreation.AppearanceData());
+
+                    Debug.LogWarning("[Orlo] Using legacy RuntimeRigBuilder (model not rigged — needs UniRig)");
+                }
 
                 // Add controller components
                 var cc = player.AddComponent<CharacterController>();
@@ -640,24 +675,13 @@ namespace Orlo
                 cc.radius = 0.3f;
                 player.AddComponent<PlayerController>();
 
-                // Add procedural animation driver (reads movement state from PlayerController)
-                player.AddComponent<CharacterAnimator>();
-
-                // Add vertex deformer for character customization
-                var deformer = player.AddComponent<VertexDeformer>();
-                deformer.Initialize();
-                // TODO: Load appearance from server CharacterSpawnResponse
-                // For now, apply default appearance
-                deformer.ApplyAppearance(new Orlo.UI.CharacterCreation.AppearanceData());
-
                 // Add hair physics if character has a Head bone
-                var headBone = player.transform.Find("Armature/Hips/Spine/Chest/Neck/Head");
-                if (headBone == null) headBone = FindDeepChild(player.transform, "Head");
+                var headBone = FindDeepChild(player.transform, "Head");
                 if (headBone != null)
                 {
                     var hairPhysics = player.AddComponent<HairPhysics>();
                     hairPhysics.Initialize(headBone, 5, 0.06f);
-                    hairPhysics.AttachLineRenderer(new Color(0.3f, 0.2f, 0.1f)); // Brown hair
+                    hairPhysics.AttachLineRenderer(new Color(0.3f, 0.2f, 0.1f));
                 }
             }
 
