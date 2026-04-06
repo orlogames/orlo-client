@@ -15,12 +15,12 @@ namespace Orlo.World
         [SerializeField] private int chunkSize = 64;
         [SerializeField] private int viewDistance = 3;
 
-        // Biome colors for splatmap blending
-        private static readonly Color GrassColor = new Color(0.25f, 0.45f, 0.15f);   // Green
-        private static readonly Color RockColor = new Color(0.42f, 0.40f, 0.38f);    // Grey
-        private static readonly Color DirtColor = new Color(0.45f, 0.32f, 0.18f);    // Brown
-        private static readonly Color SandColor = new Color(0.76f, 0.70f, 0.50f);    // Yellow-tan
-        private static readonly Color DefaultColor = new Color(0.30f, 0.42f, 0.20f); // Fallback green
+        // Biome colors for splatmap blending — warm, rich palette for golden hour lighting
+        private static readonly Color GrassColor = new Color(0.30f, 0.50f, 0.18f);   // Rich warm green
+        private static readonly Color RockColor = new Color(0.50f, 0.45f, 0.38f);    // Warm grey-brown
+        private static readonly Color DirtColor = new Color(0.48f, 0.35f, 0.22f);    // Warm brown
+        private static readonly Color SandColor = new Color(0.78f, 0.72f, 0.52f);    // Warm yellow-tan
+        private static readonly Color DefaultColor = new Color(0.32f, 0.48f, 0.20f); // Warm fallback green
 
         private readonly Dictionary<Vector2Int, TerrainChunkData> _chunks = new();
         private readonly Dictionary<Vector2Int, GameObject> _activeChunks = new();
@@ -231,6 +231,13 @@ namespace Orlo.World
         /// </summary>
         private Color GetVertexColor(TerrainChunkData data, int idx, float height, int x, int z, int res, float step)
         {
+            // Per-vertex noise for subtle color variation (avoids flat uniform look)
+            float worldPosX = x * step;
+            float worldPosZ = z * step;
+            float noiseVal = Mathf.PerlinNoise(worldPosX * 0.05f + data.Seed * 0.001f,
+                                                worldPosZ * 0.05f + data.Seed * 0.002f);
+            float variation = (noiseVal - 0.5f) * 0.08f; // +/- 4% color shift
+
             // Try splatmap first
             if (data.Splatmap != null && idx * 4 + 3 < data.Splatmap.Length)
             {
@@ -239,7 +246,12 @@ namespace Orlo.World
                 float dirt = data.Splatmap[idx * 4 + 2] / 255f;
                 float sand = data.Splatmap[idx * 4 + 3] / 255f;
 
-                return GrassColor * grass + RockColor * rock + DirtColor * dirt + SandColor * sand;
+                Color baseColor = GrassColor * grass + RockColor * rock + DirtColor * dirt + SandColor * sand;
+                // Apply per-vertex variation for visual variety
+                baseColor.r = Mathf.Clamp01(baseColor.r + variation);
+                baseColor.g = Mathf.Clamp01(baseColor.g + variation * 0.8f);
+                baseColor.b = Mathf.Clamp01(baseColor.b + variation * 0.6f);
+                return baseColor;
             }
 
             // Fallback: derive color from height and slope
@@ -256,9 +268,13 @@ namespace Orlo.World
             if (height < 1f) return SandColor;
             if (height > 40f) return Color.Lerp(DirtColor, RockColor, (height - 40f) / 40f);
 
-            // Grass with slight height variation
+            // Grass with slight height variation + per-vertex noise
             float grassBlend = Mathf.Clamp01(1f - slope * 1.5f);
-            return Color.Lerp(DirtColor, GrassColor, grassBlend);
+            Color result = Color.Lerp(DirtColor, GrassColor, grassBlend);
+            result.r = Mathf.Clamp01(result.r + variation);
+            result.g = Mathf.Clamp01(result.g + variation * 0.8f);
+            result.b = Mathf.Clamp01(result.b + variation * 0.6f);
+            return result;
         }
 
         /// <summary>

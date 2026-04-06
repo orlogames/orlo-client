@@ -5,6 +5,7 @@ using Orlo.World;
 using Orlo.Audio;
 using Orlo.UI;
 using Orlo.Animation;
+using Orlo.Rendering;
 using Orlo.UI.CharacterCreation;
 using Orlo.Proto;
 using ProtoAuth = Orlo.Proto.Auth;
@@ -610,7 +611,7 @@ namespace Orlo
                 // Remove any parent — orbit camera manages its own position
                 cam.transform.SetParent(null);
                 cam.clearFlags = CameraClearFlags.SolidColor;
-                cam.backgroundColor = new Color(0.45f, 0.65f, 0.85f); // sky blue
+                cam.backgroundColor = new Color(0.65f, 0.6f, 0.5f); // warm fog color (matches atmosphere)
 
                 // Add OrbitCamera component
                 var orbit = cam.gameObject.GetComponent<Orlo.Player.OrbitCamera>();
@@ -664,16 +665,17 @@ namespace Orlo
         /// </summary>
         private void EnsureStarterEnvironment()
         {
-            // Sun / directional light
+            // Sun / directional light — golden hour angle for warm cinematic look
             if (FindFirstObjectByType<Light>() == null)
             {
                 var sunGo = new GameObject("Sun");
                 var sun = sunGo.AddComponent<Light>();
                 sun.type = LightType.Directional;
-                sun.color = new Color(1.0f, 0.95f, 0.85f); // warm sunlight
-                sun.intensity = 1.2f;
+                sun.color = new Color(1.0f, 0.92f, 0.75f); // warm golden sun
+                sun.intensity = 1.4f;
                 sun.shadows = LightShadows.Soft;
-                sunGo.transform.rotation = Quaternion.Euler(50f, -30f, 0);
+                sun.shadowStrength = 0.85f;
+                sunGo.transform.rotation = Quaternion.Euler(35f, -45f, 0); // low golden hour angle
             }
 
             // Ground plane (200x200 flat green surface)
@@ -693,14 +695,31 @@ namespace Orlo
                 }
             }
 
-            // Ambient lighting
-            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.5f, 0.55f, 0.6f);
+            // Ambient lighting — trilight for warm golden hour atmosphere
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientGroundColor = new Color(0.4f, 0.35f, 0.25f);  // warm ground bounce
+            RenderSettings.ambientEquatorColor = new Color(0.55f, 0.5f, 0.4f);  // warm midtones
+            RenderSettings.ambientSkyColor = new Color(0.5f, 0.6f, 0.75f);      // cool sky fill
+            RenderSettings.ambientIntensity = 1.0f;
+
+            // Atmospheric fog — warm haze for depth
             RenderSettings.fog = true;
-            RenderSettings.fogColor = new Color(0.6f, 0.7f, 0.85f);
+            RenderSettings.fogColor = new Color(0.65f, 0.6f, 0.5f); // warm atmospheric haze
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogStartDistance = 80f;
-            RenderSettings.fogEndDistance = 300f;
+            RenderSettings.fogStartDistance = 50f;
+            RenderSettings.fogEndDistance = 400f;
+
+            // Enable HDR on main camera + attach post-processing
+            var mainCam = Camera.main;
+            if (mainCam != null)
+            {
+                mainCam.allowHDR = true;
+                mainCam.allowMSAA = true;
+
+                // Add bloom + color grading post-processing
+                if (mainCam.GetComponent<PostProcessSetup>() == null)
+                    mainCam.gameObject.AddComponent<PostProcessSetup>();
+            }
 
             Debug.Log("[Orlo] Fallback starter environment created");
         }
