@@ -138,35 +138,141 @@ namespace Orlo.Animation
                 new Vector3(2f, height * 1.2f, 2f));
         }
 
+        /// <summary>
+        /// Region-based bone weighting. Assigns vertices to bones based on
+        /// body region (height + lateral offset) rather than pure proximity.
+        /// This prevents the "split in half" bug where torso vertices get
+        /// assigned to leg bones due to proximity in model space.
+        /// </summary>
         private static BoneWeight ComputeBoneWeight(Vector3 worldPos, Transform[] bones)
         {
-            // Find two nearest bones
-            int best0 = 0, best1 = 1;
-            float dist0 = float.MaxValue, dist1 = float.MaxValue;
+            // Get model bounds center for relative positioning
+            Vector3 hipsPos = bones[1].position;  // Hips
+            float modelHeight = (bones[5].position.y - bones[14].position.y); // Head to foot
+            if (modelHeight < 0.1f) modelHeight = 1.8f;
 
-            for (int i = 0; i < bones.Length; i++)
+            // Normalize vertex position relative to hips
+            float relY = (worldPos.y - hipsPos.y) / modelHeight; // -0.5 (feet) to +0.5 (head)
+            float relX = (worldPos.x - hipsPos.x) / modelHeight; // lateral offset
+
+            int primary, secondary;
+            float primaryWeight;
+
+            // === Body region classification ===
+            if (relY > 0.35f)
             {
-                float d = Vector3.Distance(worldPos, bones[i].position);
-                if (d < dist0)
+                // HEAD region
+                primary = 5; // Head
+                secondary = 4; // Neck
+                primaryWeight = 0.85f;
+            }
+            else if (relY > 0.28f)
+            {
+                // NECK region
+                primary = 4; // Neck
+                secondary = 3; // Chest
+                float t = (relY - 0.28f) / 0.07f;
+                primaryWeight = 0.5f + t * 0.3f;
+            }
+            else if (relY > 0.12f)
+            {
+                // CHEST + SHOULDERS region
+                if (Mathf.Abs(relX) > 0.08f)
                 {
-                    best1 = best0; dist1 = dist0;
-                    best0 = i; dist0 = d;
+                    // Shoulder/arm area
+                    bool left = relX < 0;
+                    primary = left ? 6 : 9; // UpperArm
+                    secondary = 3; // Chest
+                    primaryWeight = Mathf.Clamp01(Mathf.Abs(relX) / 0.15f) * 0.7f + 0.15f;
                 }
-                else if (d < dist1)
+                else
                 {
-                    best1 = i; dist1 = d;
+                    primary = 3; // Chest
+                    secondary = 2; // Spine
+                    float t = (relY - 0.12f) / 0.16f;
+                    primaryWeight = 0.6f + t * 0.2f;
                 }
             }
+            else if (relY > -0.02f)
+            {
+                // SPINE / WAIST region
+                if (Mathf.Abs(relX) > 0.12f)
+                {
+                    // Arm region (lower)
+                    bool left = relX < 0;
+                    if (relY > 0.06f)
+                    {
+                        primary = left ? 7 : 10; // LowerArm
+                        secondary = left ? 6 : 9; // UpperArm
+                    }
+                    else
+                    {
+                        primary = left ? 8 : 11; // Hand
+                        secondary = left ? 7 : 10; // LowerArm
+                    }
+                    primaryWeight = 0.75f;
+                }
+                else
+                {
+                    primary = 2; // Spine
+                    secondary = 1; // Hips
+                    float t = (relY + 0.02f) / 0.14f;
+                    primaryWeight = 0.5f + t * 0.3f;
+                }
+            }
+            else if (relY > -0.18f)
+            {
+                // HIPS / UPPER LEG region
+                primary = 1; // Hips
+                if (Mathf.Abs(relX) > 0.03f)
+                {
+                    bool left = relX < 0;
+                    secondary = left ? 12 : 15; // UpperLeg
+                    float t = Mathf.Clamp01((-relY) / 0.18f);
+                    primaryWeight = 1f - t * 0.6f; // Blend toward leg as we go down
+                }
+                else
+                {
+                    secondary = 2; // Spine
+                    primaryWeight = 0.7f;
+                }
+            }
+            else if (relY > -0.35f)
+            {
+                // UPPER LEG region
+                bool left = relX < 0;
+                primary = left ? 12 : 15; // UpperLeg
+                secondary = left ? 13 : 16; // LowerLeg
+                float t = (relY + 0.18f) / (-0.17f); // 0 at top, 1 at bottom
+                primaryWeight = 0.8f - Mathf.Abs(t) * 0.3f;
+            }
+            else if (relY > -0.48f)
+            {
+                // LOWER LEG region
+                bool left = relX < 0;
+                primary = left ? 13 : 16; // LowerLeg
+                secondary = left ? 14 : 17; // Foot
+                float t = (relY + 0.35f) / (-0.13f);
+                primaryWeight = 0.75f - Mathf.Abs(t) * 0.25f;
+            }
+            else
+            {
+                // FOOT region
+                bool left = relX < 0;
+                primary = left ? 14 : 17; // Foot
+                secondary = left ? 13 : 16; // LowerLeg
+                primaryWeight = 0.9f;
+            }
 
-            // Weight by inverse distance
-            float totalDist = dist0 + dist1;
-            float w0 = totalDist > 0.001f ? 1f - (dist0 / totalDist) : 0.5f;
-            float w1 = 1f - w0;
+            // Clamp indices
+            primary = Mathf.Clamp(primary, 0, bones.Length - 1);
+            secondary = Mathf.Clamp(secondary, 0, bones.Length - 1);
+            primaryWeight = Mathf.Clamp01(primaryWeight);
 
             return new BoneWeight
             {
-                boneIndex0 = best0, weight0 = w0,
-                boneIndex1 = best1, weight1 = w1,
+                boneIndex0 = primary, weight0 = primaryWeight,
+                boneIndex1 = secondary, weight1 = 1f - primaryWeight,
                 boneIndex2 = 0, weight2 = 0,
                 boneIndex3 = 0, weight3 = 0
             };
