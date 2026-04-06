@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using Orlo.Network;
+using Orlo.Proto.Inventory;
 
 namespace Orlo.UI
 {
@@ -63,6 +64,17 @@ namespace Orlo.UI
         private float _currentWeight;
         private float _maxWeight = 100f;
         private bool _serverSynced; // true once we receive server data
+
+        // Pending equip/unequip tracking — client is a dumb terminal,
+        // we show a pending indicator until the server confirms via EquipmentChanged.
+        private HashSet<int> _pendingInventorySlots = new HashSet<int>();   // inventory slots with pending equip
+        private HashSet<int> _pendingEquipSlots = new HashSet<int>();       // equipment slots with pending unequip
+        private float _pendingPulseTimer;
+
+        // Equipment slot context menu
+        private bool _equipContextOpen;
+        private int _equipContextSlot = -1;
+        private Vector2 _equipContextPos;
 
         // Resource attribute labels (11 attrs)
         private static readonly string[] AttrLabels = {
@@ -170,13 +182,22 @@ namespace Orlo.UI
                 _slots[slotIndex] = item;
         }
 
-        /// <summary>Update equipment slot (equip/unequip).</summary>
+        /// <summary>
+        /// Update equipment slot (equip/unequip). Only called from PacketHandler
+        /// when the server sends an EquipmentChanged packet — never from client-side logic.
+        /// Clears any pending state for the affected slots.
+        /// </summary>
         public void UpdateEquipment(int equipSlot, ItemSlot item, int inventorySlot, ItemSlot inventoryItem)
         {
             if (equipSlot >= 0 && equipSlot < _equipSlots.Length)
                 _equipSlots[equipSlot] = item;
             if (inventorySlot >= 0 && inventorySlot < TotalSlots)
                 _slots[inventorySlot] = inventoryItem;
+
+            // Clear pending state — server has confirmed the change
+            _pendingInventorySlots.Remove(inventorySlot);
+            _pendingEquipSlots.Remove(equipSlot);
+
             RecalcWeight();
         }
 
@@ -205,14 +226,26 @@ namespace Orlo.UI
             {
                 _visible = !_visible;
                 _contextMenuOpen = false;
+                _equipContextOpen = false;
             }
 
-            if (_visible && Input.GetMouseButtonDown(0) && _contextMenuOpen)
+            _pendingPulseTimer += Time.deltaTime;
+
+            if (_visible && Input.GetMouseButtonDown(0))
             {
-                // Close context menu if clicking outside it
-                Rect cmRect = new Rect(_contextMenuPos.x, _contextMenuPos.y, 120, ContextOptions.Length * 24);
-                if (!cmRect.Contains(Event.current != null ? Event.current.mousePosition : (Vector2)Input.mousePosition))
-                    _contextMenuOpen = false;
+                // Close context menus if clicking outside them
+                if (_contextMenuOpen)
+                {
+                    Rect cmRect = new Rect(_contextMenuPos.x, _contextMenuPos.y, 120, ContextOptions.Length * 24);
+                    if (!cmRect.Contains(Event.current != null ? Event.current.mousePosition : (Vector2)Input.mousePosition))
+                        _contextMenuOpen = false;
+                }
+                if (_equipContextOpen)
+                {
+                    Rect ecRect = new Rect(_equipContextPos.x, _equipContextPos.y, 120, 24 + 4);
+                    if (!ecRect.Contains(Event.current != null ? Event.current.mousePosition : (Vector2)Input.mousePosition))
+                        _equipContextOpen = false;
+                }
             }
         }
 
@@ -253,16 +286,20 @@ namespace Orlo.UI
             for (int i = 0; i < EquipSlotNames.Length; i++)
             {
                 Rect slotRect = new Rect(eqX, eqY, equipPanelW - 16, SlotSize * 0.6f);
+                bool isPending = _pendingEquipSlots.Contains(i);
+
                 GUI.color = new Color(0.2f, 0.2f, 0.2f, 0.9f);
                 GUI.DrawTexture(slotRect, Texture2D.whiteTexture);
 
                 if (_equipSlots[i].Occupied)
                 {
-                    GUI.color = _equipSlots[i].RarityColor;
+                    // Dim the slot if a pending unequip is in-flight
+                    float alpha = isPending ? 0.3f + 0.15f * Mathf.Sin(_pendingPulseTimer * 4f) : 1f;
+                    GUI.color = _equipSlots[i].RarityColor * alpha;
                     Rect inner = new Rect(slotRect.x + 2, slotRect.y + 2, slotRect.width - 4, slotRect.height - 4);
                     GUI.DrawTexture(inner, Texture2D.whiteTexture);
-                    GUI.color = Color.black;
-                    GUI.Label(inner, _equipSlots[i].Name, SmallLabelCentered());
+                    GUI.color = new Color(0, 0, 0, alpha);
+                    GUI.Label(inner, isPending ? "..." : _equipSlots[i].Name, SmallLabelCentered());
 
                     // Condition bar on equipment
                     if (_equipSlots[i].MaxCondition > 0)
@@ -273,6 +310,17 @@ namespace Orlo.UI
                         GUI.DrawTexture(condBar, Texture2D.whiteTexture);
                         GUI.color = condPct > 0.5f ? Color.green : (condPct > 0.2f ? Color.yellow : Color.red);
                         GUI.DrawTexture(new Rect(condBar.x, condBar.y, condBar.width * condPct, condBar.height), Texture2D.whiteTexture);
+                    }
+
+                    // Right-click to open unequip context menu
+                    if (slotRect.Contains(Event.current.mousePosition) &&
+                        Event.current.type == EventType.MouseDown && Event.current.button == 1 &&
+                        !isPending)
+                    {
+                        _equipContextOpen = true;
+                        _equipContextSlot = i;
+                        _equipContextPos = Event.current.mousePosition;
+                        Event.current.Use();
                     }
                 }
                 else
@@ -298,6 +346,7 @@ namespace Orlo.UI
                     float sx = gx0 + col * (SlotSize + SlotPadding);
                     float sy = gy0 + row * (SlotSize + SlotPadding);
                     Rect slotRect = new Rect(sx, sy, SlotSize, SlotSize);
+                    bool isPending = _pendingInventorySlots.Contains(idx);
 
                     // Slot background
                     GUI.color = new Color(0.15f, 0.15f, 0.15f, 0.9f);
@@ -305,15 +354,18 @@ namespace Orlo.UI
 
                     if (_slots[idx].Occupied)
                     {
+                        // Dim the slot if a pending equip is in-flight
+                        float alpha = isPending ? 0.3f + 0.15f * Mathf.Sin(_pendingPulseTimer * 4f) : 1f;
+
                         // Item colored box
                         Rect inner = new Rect(sx + 3, sy + 3, SlotSize - 6, SlotSize - 6);
-                        GUI.color = _slots[idx].RarityColor * 0.6f;
+                        GUI.color = _slots[idx].RarityColor * 0.6f * alpha;
                         GUI.DrawTexture(inner, Texture2D.whiteTexture);
-                        GUI.color = Color.white;
-                        GUI.Label(inner, _slots[idx].Name, SmallLabelCentered());
+                        GUI.color = new Color(1, 1, 1, alpha);
+                        GUI.Label(inner, isPending ? "..." : _slots[idx].Name, SmallLabelCentered());
 
                         // Stack count
-                        if (_slots[idx].StackCount > 1)
+                        if (_slots[idx].StackCount > 1 && !isPending)
                         {
                             GUI.color = Color.yellow;
                             GUI.Label(new Rect(sx + SlotSize - 18, sy + SlotSize - 16, 16, 14),
@@ -338,8 +390,9 @@ namespace Orlo.UI
                     {
                         _hoverSlot = idx;
 
-                        // Right-click context menu
-                        if (Event.current.type == EventType.MouseDown && Event.current.button == 1 && _slots[idx].Occupied)
+                        // Right-click context menu (blocked while pending)
+                        if (Event.current.type == EventType.MouseDown && Event.current.button == 1 &&
+                            _slots[idx].Occupied && !isPending)
                         {
                             _contextMenuOpen = true;
                             _contextMenuSlot = idx;
@@ -371,10 +424,16 @@ namespace Orlo.UI
                 DrawTooltip(_slots[_hoverSlot]);
             }
 
-            // Context menu
+            // Context menu (inventory)
             if (_contextMenuOpen && _contextMenuSlot >= 0)
             {
                 DrawContextMenu();
+            }
+
+            // Context menu (equipment — right-click to unequip)
+            if (_equipContextOpen && _equipContextSlot >= 0)
+            {
+                DrawEquipContextMenu();
             }
         }
 
@@ -498,6 +557,50 @@ namespace Orlo.UI
             }
         }
 
+        private void DrawEquipContextMenu()
+        {
+            float cmW = 120, cmH = 28;
+            Rect bg = new Rect(_equipContextPos.x, _equipContextPos.y, cmW, cmH);
+
+            GUI.color = new Color(0.05f, 0.05f, 0.05f, 0.95f);
+            GUI.DrawTexture(bg, Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            Rect btn = new Rect(_equipContextPos.x + 2, _equipContextPos.y + 2, cmW - 4, 22);
+            if (GUI.Button(btn, "Unequip"))
+            {
+                Debug.Log($"[InventoryUI] Unequip slot {_equipContextSlot}: {_equipSlots[_equipContextSlot].Name}");
+                if (_serverSynced && !_pendingEquipSlots.Contains(_equipContextSlot))
+                {
+                    // Map equip slot index to proto enum and send
+                    var protoSlot = MapEquipIndexToProto(_equipContextSlot);
+                    if (protoSlot != Orlo.Proto.Inventory.EquipmentSlot.None)
+                    {
+                        var data = PacketBuilder.UnequipItem(protoSlot);
+                        NetworkManager.Instance?.Send(data);
+                        _pendingEquipSlots.Add(_equipContextSlot);
+                    }
+                }
+                _equipContextOpen = false;
+            }
+        }
+
+        private Orlo.Proto.Inventory.EquipmentSlot MapEquipIndexToProto(int index)
+        {
+            return index switch
+            {
+                0 => Orlo.Proto.Inventory.EquipmentSlot.Head,
+                1 => Orlo.Proto.Inventory.EquipmentSlot.Chest,
+                2 => Orlo.Proto.Inventory.EquipmentSlot.Legs,
+                3 => Orlo.Proto.Inventory.EquipmentSlot.Feet,
+                4 => Orlo.Proto.Inventory.EquipmentSlot.MainHand,
+                5 => Orlo.Proto.Inventory.EquipmentSlot.Gloves,
+                6 => Orlo.Proto.Inventory.EquipmentSlot.LeftBracer,
+                7 => Orlo.Proto.Inventory.EquipmentSlot.RightBracer,
+                _ => Orlo.Proto.Inventory.EquipmentSlot.None
+            };
+        }
+
         private void HandleContextAction(int action, int slot)
         {
             if (slot < 0 || slot >= TotalSlots || !_slots[slot].Occupied) return;
@@ -510,10 +613,18 @@ namespace Orlo.UI
                     break;
                 case 1: // Equip
                     Debug.Log($"[InventoryUI] Equip item in slot {slot}: {_slots[slot].Name}");
-                    if (_serverSynced)
+                    if (_serverSynced && !_pendingInventorySlots.Contains(slot))
                     {
                         var data = PacketBuilder.EquipItem((uint)slot);
                         NetworkManager.Instance?.Send(data);
+                        _pendingInventorySlots.Add(slot);
+                    }
+                    // Notify EquipmentUI for optimistic local update if a slot is selected
+                    if (EquipmentUI.Instance != null)
+                    {
+                        var targetSlot = EquipmentUI.Instance.GetSelectedSlot();
+                        if (targetSlot != 0)
+                            EquipmentUI.Instance.EquipItem(targetSlot, _slots[slot]);
                     }
                     break;
                 case 2: // Drop
