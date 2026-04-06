@@ -642,6 +642,16 @@ namespace Orlo
 
                 // Add procedural animation driver (reads movement state from PlayerController)
                 player.AddComponent<CharacterAnimator>();
+
+                // Add hair physics if character has a Head bone
+                var headBone = player.transform.Find("Armature/Hips/Spine/Chest/Neck/Head");
+                if (headBone == null) headBone = FindDeepChild(player.transform, "Head");
+                if (headBone != null)
+                {
+                    var hairPhysics = player.AddComponent<HairPhysics>();
+                    hairPhysics.Initialize(headBone, 5, 0.06f);
+                    hairPhysics.AttachLineRenderer(new Color(0.3f, 0.2f, 0.1f)); // Brown hair
+                }
             }
 
             player.tag = "Player";
@@ -830,6 +840,20 @@ namespace Orlo
                 if (_weatherController != null && _weatherController.IsOvercast)
                     _godRaysEffect.SetGodRayFactor(0f);
             }
+        }
+
+        /// <summary>
+        /// Recursively search for a child transform by name.
+        /// </summary>
+        private static Transform FindDeepChild(Transform parent, string name)
+        {
+            foreach (Transform child in parent)
+            {
+                if (child.name == name) return child;
+                var found = FindDeepChild(child, name);
+                if (found != null) return found;
+            }
+            return null;
         }
 
         private void OnDestroy()

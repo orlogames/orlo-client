@@ -5,8 +5,9 @@ using Orlo.UI;
 namespace Orlo.World
 {
     /// <summary>
-    /// Manages 3D equipment visuals on a character. Attaches procedurally-generated
-    /// equipment meshes to the character's bone hierarchy when equipment changes.
+    /// Manages 3D equipment visuals on a character. Tries to load GLB models via
+    /// AssetLoader first, falls back to procedurally-generated equipment meshes.
+    /// Parents loaded models to the correct bone on the character skeleton.
     /// Add this component to the player GameObject.
     /// </summary>
     public class EquipmentVisualManager : MonoBehaviour
@@ -15,12 +16,13 @@ namespace Orlo.World
         private readonly Dictionary<int, GameObject> _attachedVisuals = new();
 
         // Bone name mapping for equipment slots (proto EquipmentSlot enum value -> bone name)
+        // Uses bone names from RuntimeRigBuilder's humanoid rig hierarchy.
         private static readonly Dictionary<int, string> SlotToBone = new()
         {
             { 1,  "Head" },         // Head
             { 2,  "Chest" },        // Chest
             { 3,  "Hips" },         // Legs
-            { 4,  "LeftLowerLeg" }, // Feet (approximate)
+            { 4,  "RightFoot" },    // Feet (primary foot bone)
             { 5,  "LeftHand" },     // Gloves (approximate)
             { 6,  "LeftLowerArm" }, // LeftBracer
             { 7,  "RightLowerArm" },// RightBracer
@@ -36,6 +38,15 @@ namespace Orlo.World
             { 17, "RightHand" }     // TwoHands weapon
         };
 
+        // Slots that spawn mirrored visuals on paired bones (e.g., feet on both sides)
+        private static readonly Dictionary<int, string> SlotToMirrorBone = new()
+        {
+            { 4, "LeftFoot" },      // Feet — mirror visual on left foot
+        };
+
+        /// <summary>Mirrored visuals for symmetric slots like feet.</summary>
+        private readonly Dictionary<int, GameObject> _mirrorVisuals = new();
+
         /// <summary>
         /// Refresh all equipment visuals based on current EquipmentUI state.
         /// Call after login/zone change when full equipment state arrives.
@@ -49,6 +60,13 @@ namespace Orlo.World
                     Destroy(kv.Value);
             }
             _attachedVisuals.Clear();
+
+            foreach (var kv in _mirrorVisuals)
+            {
+                if (kv.Value != null)
+                    Destroy(kv.Value);
+            }
+            _mirrorVisuals.Clear();
 
             // Re-attach from EquipmentUI state
             var equipUI = EquipmentUI.Instance;
@@ -96,8 +114,10 @@ namespace Orlo.World
                 return;
             }
 
-            // Generate the appropriate equipment mesh
-            GameObject visual = CreateVisualForSlot(protoSlotId, item);
+            // Try GLB model first, fall back to procedural
+            GameObject visual = TryLoadGlbVisual(item);
+            if (visual == null)
+                visual = CreateProceduralVisual(protoSlotId, item);
             if (visual == null) return;
 
             // Attach to bone
@@ -108,6 +128,24 @@ namespace Orlo.World
 
             _attachedVisuals[protoSlotId] = visual;
             Debug.Log($"[EquipVisual] Attached {item.Name} to slot {protoSlotId} ({bone.name})");
+
+            // Handle mirrored slots (e.g., feet — spawn on both sides)
+            if (SlotToMirrorBone.TryGetValue(protoSlotId, out string mirrorBoneName))
+            {
+                Transform mirrorBone = FindBoneRecursive(transform, mirrorBoneName);
+                if (mirrorBone != null)
+                {
+                    GameObject mirrorVisual = TryLoadGlbVisual(item);
+                    if (mirrorVisual == null)
+                        mirrorVisual = CreateProceduralVisual(protoSlotId, item);
+                    if (mirrorVisual != null)
+                    {
+                        ProceduralEquipment.AttachToBone(mirrorVisual, mirrorBone);
+                        ApplySlotOffset(mirrorVisual, protoSlotId);
+                        _mirrorVisuals[protoSlotId] = mirrorVisual;
+                    }
+                }
+            }
         }
 
         private void RemoveVisualForSlot(int protoSlotId)
@@ -118,6 +156,45 @@ namespace Orlo.World
                     Destroy(existing);
                 _attachedVisuals.Remove(protoSlotId);
             }
+
+            if (_mirrorVisuals.TryGetValue(protoSlotId, out var mirror))
+            {
+                if (mirror != null)
+                    Destroy(mirror);
+                _mirrorVisuals.Remove(protoSlotId);
+            }
+        }
+
+        /// <summary>
+        /// Try to load a GLB model for the item via AssetLoader.
+        /// Returns an instantiated GameObject or null if no GLB exists.
+        /// </summary>
+        private GameObject TryLoadGlbVisual(InventoryUI.ItemSlot item)
+        {
+            if (AssetLoader.Instance == null) return null;
+
+            // Try loading by item name converted to asset ID (lowercase, underscored)
+            string assetId = item.Name.ToLowerInvariant().Replace(' ', '_');
+            var model = AssetLoader.Instance.TryLoadModel(assetId);
+            if (model != null)
+            {
+                Debug.Log($"[EquipVisual] Loaded GLB model for '{item.Name}' (assetId={assetId})");
+                return model;
+            }
+
+            // Also try with item ID if available
+            if (item.ItemId > 0)
+            {
+                string idAsset = $"item_{item.ItemId}";
+                model = AssetLoader.Instance.TryLoadModel(idAsset);
+                if (model != null)
+                {
+                    Debug.Log($"[EquipVisual] Loaded GLB model for item ID {item.ItemId}");
+                    return model;
+                }
+            }
+
+            return null;
         }
 
         private Transform FindBoneForSlot(int protoSlotId)
@@ -142,7 +219,10 @@ namespace Orlo.World
             return null;
         }
 
-        private GameObject CreateVisualForSlot(int protoSlotId, InventoryUI.ItemSlot item)
+        /// <summary>
+        /// Create a procedural equipment visual as fallback when no GLB model exists.
+        /// </summary>
+        private GameObject CreateProceduralVisual(int protoSlotId, InventoryUI.ItemSlot item)
         {
             // Determine style from rarity
             EquipmentStyle style = item.Rarity switch
@@ -197,6 +277,10 @@ namespace Orlo.World
                 case 12: // Backpack — offset behind chest
                     visual.transform.localPosition = new Vector3(0, 0, -0.2f);
                     break;
+                case 4: // Feet — slight downward offset to sit on foot bone
+                    visual.transform.localPosition = new Vector3(0, -0.02f, 0);
+                    visual.transform.localScale = Vector3.one * 0.8f;
+                    break;
             }
         }
 
@@ -208,6 +292,13 @@ namespace Orlo.World
                     Destroy(kv.Value);
             }
             _attachedVisuals.Clear();
+
+            foreach (var kv in _mirrorVisuals)
+            {
+                if (kv.Value != null)
+                    Destroy(kv.Value);
+            }
+            _mirrorVisuals.Clear();
         }
     }
 }

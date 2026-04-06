@@ -41,6 +41,15 @@ namespace Orlo.UI
         // Tooltip
         private int _hoverSlot = -1;
 
+        // Double-click detection
+        private float _lastClickTime;
+        private int _lastClickSlot = -1;
+        private const float DoubleClickThreshold = 0.3f;
+
+        // Auto-equip tooltip
+        private float _autoEquipTooltipTimer;
+        private string _autoEquipTooltipText;
+
         // Item data — populated by server or test data
         public struct ItemSlot
         {
@@ -397,6 +406,16 @@ namespace Orlo.UI
                         GUI.color = new Color(1, 1, 1, alpha);
                         GUI.Label(inner, isPending ? "..." : _slots[idx].Name, SmallLabelCentered());
 
+                        // Mini item type icon (top-left corner)
+                        Color iconColor;
+                        string iconChar;
+                        GetItemTypeIcon(_slots[idx], out iconColor, out iconChar);
+                        Rect iconBg = new Rect(sx + 3, sy + 3, 14, 14);
+                        GUI.color = iconColor * 0.8f * alpha;
+                        GUI.DrawTexture(iconBg, Texture2D.whiteTexture);
+                        GUI.color = new Color(1, 1, 1, alpha);
+                        GUI.Label(iconBg, iconChar, MiniIconLabel());
+
                         // Stack count
                         if (_slots[idx].StackCount > 1 && !isPending)
                         {
@@ -422,6 +441,25 @@ namespace Orlo.UI
                     if (slotRect.Contains(Event.current.mousePosition))
                     {
                         _hoverSlot = idx;
+
+                        if (Event.current.type == EventType.MouseDown && Event.current.button == 0 &&
+                            _slots[idx].Occupied && !isPending)
+                        {
+                            // Double-click detection for auto-equip
+                            float now = Time.realtimeSinceStartup;
+                            if (_lastClickSlot == idx && (now - _lastClickTime) < DoubleClickThreshold)
+                            {
+                                AutoEquipItem(idx);
+                                _lastClickSlot = -1;
+                                _lastClickTime = 0;
+                                Event.current.Use();
+                            }
+                            else
+                            {
+                                _lastClickSlot = idx;
+                                _lastClickTime = now;
+                            }
+                        }
 
                         // Right-click context menu (blocked while pending)
                         if (Event.current.type == EventType.MouseDown && Event.current.button == 1 &&
@@ -450,6 +488,20 @@ namespace Orlo.UI
             GUI.DrawTexture(new Rect(gx0, barY, barW * pct, 16), Texture2D.whiteTexture);
             GUI.color = Color.white;
             GUI.Label(barBg, $"Weight: {_currentWeight:F1} / {_maxWeight:F1}", SmallLabelCentered());
+
+            // Auto-equip tooltip
+            if (_autoEquipTooltipTimer > 0)
+            {
+                _autoEquipTooltipTimer -= Time.deltaTime;
+                float tooltipAlpha = Mathf.Clamp01(_autoEquipTooltipTimer * 2f);
+                Vector2 mp = Event.current.mousePosition;
+                Rect tipRect = new Rect(mp.x + 12, mp.y - 20, 90, 20);
+                GUI.color = new Color(0.1f, 0.4f, 0.1f, 0.85f * tooltipAlpha);
+                GUI.DrawTexture(tipRect, Texture2D.whiteTexture);
+                GUI.color = new Color(1, 1, 1, tooltipAlpha);
+                GUI.Label(tipRect, _autoEquipTooltipText, SmallLabelCentered());
+                GUI.color = Color.white;
+            }
 
             // Tooltip
             if (_hoverSlot >= 0 && _slots[_hoverSlot].Occupied && !_contextMenuOpen)
@@ -721,6 +773,163 @@ namespace Orlo.UI
             return baseColor;
         }
 
+        // ─── Double-click auto-equip ────────────────────────────────────────
+
+        /// <summary>
+        /// Auto-equip an inventory item by double-clicking. Determines the target
+        /// equipment slot from the item name/type and sends an EquipItemRequest.
+        /// </summary>
+        private void AutoEquipItem(int inventorySlot)
+        {
+            if (inventorySlot < 0 || inventorySlot >= TotalSlots) return;
+            if (!_slots[inventorySlot].Occupied) return;
+            if (!_serverSynced) return;
+            if (_pendingInventorySlots.Contains(inventorySlot)) return;
+
+            var targetSlot = ResolveEquipSlotFromItem(_slots[inventorySlot]);
+            if (targetSlot == Orlo.Proto.Inventory.EquipmentSlot.None)
+            {
+                Debug.Log($"[InventoryUI] Cannot auto-equip '{_slots[inventorySlot].Name}' — no matching slot");
+                return;
+            }
+
+            Debug.Log($"[InventoryUI] Auto-equip slot {inventorySlot}: {_slots[inventorySlot].Name} -> {targetSlot}");
+            var data = PacketBuilder.EquipItem((uint)inventorySlot, targetSlot);
+            NetworkManager.Instance?.Send(data);
+            _pendingInventorySlots.Add(inventorySlot);
+
+            _autoEquipTooltipText = "Equipping...";
+            _autoEquipTooltipTimer = 1.2f;
+        }
+
+        /// <summary>
+        /// Resolve the best equipment slot for an item based on its name keywords.
+        /// </summary>
+        private static Orlo.Proto.Inventory.EquipmentSlot ResolveEquipSlotFromItem(ItemSlot item)
+        {
+            string name = item.Name.ToLowerInvariant();
+
+            // Head
+            if (name.Contains("helmet") || name.Contains("helm") || name.Contains("head") || name.Contains("hood"))
+                return Orlo.Proto.Inventory.EquipmentSlot.Head;
+
+            // Chest
+            if (name.Contains("chest") || name.Contains("chestplate") || name.Contains("armor") || name.Contains("vest") || name.Contains("tunic"))
+                return Orlo.Proto.Inventory.EquipmentSlot.Chest;
+
+            // Legs
+            if (name.Contains("legs") || name.Contains("leggings") || name.Contains("pants") || name.Contains("greaves"))
+                return Orlo.Proto.Inventory.EquipmentSlot.Legs;
+
+            // Feet
+            if (name.Contains("boots") || name.Contains("feet") || name.Contains("shoes"))
+                return Orlo.Proto.Inventory.EquipmentSlot.Feet;
+
+            // Gloves
+            if (name.Contains("gloves") || name.Contains("hands") || name.Contains("gauntlets"))
+                return Orlo.Proto.Inventory.EquipmentSlot.Gloves;
+
+            // Shoulders
+            if (name.Contains("shoulder") || name.Contains("pauldron"))
+                return Orlo.Proto.Inventory.EquipmentSlot.Shoulders;
+
+            // Belt
+            if (name.Contains("belt") || name.Contains("sash"))
+                return Orlo.Proto.Inventory.EquipmentSlot.Belt;
+
+            // Backpack / Cloak
+            if (name.Contains("backpack") || name.Contains("back") || name.Contains("cloak") || name.Contains("cape"))
+                return Orlo.Proto.Inventory.EquipmentSlot.Backpack;
+
+            // Bracer / Wrist
+            if (name.Contains("bracer") || name.Contains("wrist") || name.Contains("bracelet"))
+                return Orlo.Proto.Inventory.EquipmentSlot.LeftBracer;
+
+            // Two-handed weapons
+            if (name.Contains("rifle") || name.Contains("hammer") || name.Contains("staff") || name.Contains("greataxe") || name.Contains("greatsword"))
+                return Orlo.Proto.Inventory.EquipmentSlot.TwoHands;
+
+            // Right-hand weapons (melee)
+            if (name.Contains("sword") || name.Contains("blade") || name.Contains("weapon") || name.Contains("knife") || name.Contains("axe") || name.Contains("dagger") || name.Contains("mace"))
+                return Orlo.Proto.Inventory.EquipmentSlot.RightHand;
+
+            // Left-hand weapons (ranged / off-hand)
+            if (name.Contains("pistol") || name.Contains("gun") || name.Contains("ranged") || name.Contains("shield"))
+                return Orlo.Proto.Inventory.EquipmentSlot.LeftHand;
+
+            return Orlo.Proto.Inventory.EquipmentSlot.None;
+        }
+
+        // ─── Mini item type icons ───────────────────────────────────────────
+
+        /// <summary>
+        /// Get a color and character icon for an item based on its name/category.
+        /// </summary>
+        private static void GetItemTypeIcon(ItemSlot item, out Color color, out string icon)
+        {
+            string name = item.Name.ToLowerInvariant();
+
+            // Weapons (orange, "W")
+            if (name.Contains("sword") || name.Contains("blade") || name.Contains("weapon") ||
+                name.Contains("knife") || name.Contains("pistol") || name.Contains("gun") ||
+                name.Contains("rifle") || name.Contains("hammer") || name.Contains("staff") ||
+                name.Contains("axe") || name.Contains("dagger") || name.Contains("mace") ||
+                name.Contains("bow"))
+            {
+                color = new Color(1.0f, 0.6f, 0.2f); // orange
+                icon = "W";
+                return;
+            }
+
+            // Armor (steel blue, "A")
+            if (name.Contains("helmet") || name.Contains("helm") || name.Contains("chest") ||
+                name.Contains("armor") || name.Contains("legs") || name.Contains("leggings") ||
+                name.Contains("boots") || name.Contains("gloves") || name.Contains("shield") ||
+                name.Contains("shoulder") || name.Contains("bracer") || name.Contains("belt") ||
+                name.Contains("backpack") || name.Contains("cloak") || name.Contains("hood") ||
+                name.Contains("gauntlets") || name.Contains("greaves"))
+            {
+                color = new Color(0.45f, 0.6f, 0.8f); // steel blue
+                icon = "A";
+                return;
+            }
+
+            // Consumables (green, "C")
+            if (name.Contains("potion") || name.Contains("food") || name.Contains("drink") ||
+                name.Contains("stim") || name.Contains("med") || name.Contains("salve") ||
+                name.Contains("elixir") || name.Contains("pill"))
+            {
+                color = new Color(0.3f, 0.8f, 0.3f); // green
+                icon = "C";
+                return;
+            }
+
+            // Tools (purple, "T")
+            if (name.Contains("tool") || name.Contains("wrench") || name.Contains("scanner") ||
+                name.Contains("tmd") || name.Contains("survey") || name.Contains("pick") ||
+                name.Contains("harvester"))
+            {
+                color = new Color(0.7f, 0.4f, 0.9f); // purple
+                icon = "T";
+                return;
+            }
+
+            // Resources (brown, "R")
+            if (name.Contains("ore") || name.Contains("scale") || name.Contains("bone") ||
+                name.Contains("hide") || name.Contains("wood") || name.Contains("crystal") ||
+                name.Contains("fragment") || name.Contains("sinew") || name.Contains("mineral") ||
+                item.ResourceAttrs != null)
+            {
+                color = new Color(0.6f, 0.4f, 0.2f); // brown
+                icon = "R";
+                return;
+            }
+
+            // Default — misc (grey, "?")
+            color = new Color(0.5f, 0.5f, 0.5f);
+            icon = "?";
+        }
+
         // ─── Shared styles ──────────────────────────────────────────────────
 
         private GUIStyle SmallLabel()
@@ -731,6 +940,11 @@ namespace Orlo.UI
         private GUIStyle SmallLabelCentered()
         {
             return new GUIStyle(GUI.skin.label) { fontSize = 9, alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.white }, wordWrap = true };
+        }
+
+        private GUIStyle MiniIconLabel()
+        {
+            return new GUIStyle(GUI.skin.label) { fontSize = 9, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.white } };
         }
 
         private GUIStyle BoldLabel()
