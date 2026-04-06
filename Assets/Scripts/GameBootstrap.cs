@@ -270,11 +270,13 @@ namespace Orlo
             var pd = ProgressiveDisclosure.Instance;
             if (pd == null) return;
 
-            // Level 3 unlocks
+            // Level 1 unlocks (always visible)
+            // Minimap is essential navigation — no level gate
+            // Inventory is core gameplay — available immediately
             if (InventoryUI.Instance != null)
-                pd.Register(InventoryUI.Instance, "Inventory", 3);
+                pd.Register(InventoryUI.Instance, "Inventory", 1);
             if (FindFirstObjectByType<MinimapUI>() is MinimapUI minimap)
-                pd.Register(minimap, "Minimap", 3);
+                pd.Register(minimap, "Minimap", 1);
 
             // Level 5 unlocks
             if (FindFirstObjectByType<CraftingUI>() is CraftingUI crafting)
