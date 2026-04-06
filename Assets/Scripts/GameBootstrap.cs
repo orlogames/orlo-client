@@ -643,6 +643,13 @@ namespace Orlo
                 // Add procedural animation driver (reads movement state from PlayerController)
                 player.AddComponent<CharacterAnimator>();
 
+                // Add vertex deformer for character customization
+                var deformer = player.AddComponent<VertexDeformer>();
+                deformer.Initialize();
+                // TODO: Load appearance from server CharacterSpawnResponse
+                // For now, apply default appearance
+                deformer.ApplyAppearance(new Orlo.UI.CharacterCreation.AppearanceData());
+
                 // Add hair physics if character has a Head bone
                 var headBone = player.transform.Find("Armature/Hips/Spine/Chest/Neck/Head");
                 if (headBone == null) headBone = FindDeepChild(player.transform, "Head");
