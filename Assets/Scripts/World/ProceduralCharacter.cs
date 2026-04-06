@@ -19,18 +19,26 @@ namespace Orlo.World
     }
 
     /// <summary>
-    /// Equipment slots for character gear.
+    /// Equipment slots for character gear (SWG-style 15 wearable slots).
+    /// Values match proto EquipmentSlot enum (minus the NONE=0 sentinel).
     /// </summary>
     public enum EquipmentSlot
     {
-        Head,
-        Chest,
-        Legs,
-        Feet,
-        MainHand,
-        OffHand,
-        Back,
-        Shoulders
+        Head,           // Hat / helmet
+        Chest,          // Undershirt / vest
+        Legs,           // Underlegs / pants
+        Feet,           // Shoes / boots
+        Gloves,         // Gloves
+        LeftBracer,     // Left forearm bracer
+        RightBracer,    // Right forearm bracer
+        LeftBicep,      // Left upper-arm armor
+        RightBicep,     // Right upper-arm armor
+        Shoulders,      // Shoulder pads / pauldrons
+        Belt,           // Belt / utility belt
+        Backpack,       // Backpack / cloak
+        LeftWrist,      // Left wrist accessory
+        RightWrist,     // Right wrist accessory
+        MainHand        // Primary weapon
     }
 
     /// <summary>
@@ -383,14 +391,21 @@ namespace Orlo.World
         {
             switch (slot)
             {
-                case EquipmentSlot.Head: return GetBone(BoneHead);
-                case EquipmentSlot.Chest: return GetBone(BoneChest);
-                case EquipmentSlot.Legs: return GetBone(BoneHips);
-                case EquipmentSlot.Feet: return GetBone(BoneLeftFoot); // Placeholder
-                case EquipmentSlot.MainHand: return GetBone(BoneRightHand);
-                case EquipmentSlot.OffHand: return GetBone(BoneLeftHand);
-                case EquipmentSlot.Back: return GetBone(BoneSpine);
-                case EquipmentSlot.Shoulders: return GetBone(BoneChest);
+                case EquipmentSlot.Head:         return GetBone(BoneHead);
+                case EquipmentSlot.Chest:        return GetBone(BoneChest);
+                case EquipmentSlot.Legs:         return GetBone(BoneHips);
+                case EquipmentSlot.Feet:         return GetBone(BoneLeftFoot);  // TODO: dual-foot attach
+                case EquipmentSlot.Gloves:       return GetBone(BoneLeftHand);  // TODO: dual-hand attach
+                case EquipmentSlot.LeftBracer:   return GetBone(BoneLeftLowerArm);
+                case EquipmentSlot.RightBracer:  return GetBone(BoneRightLowerArm);
+                case EquipmentSlot.LeftBicep:    return GetBone(BoneLeftUpperArm);
+                case EquipmentSlot.RightBicep:   return GetBone(BoneRightUpperArm);
+                case EquipmentSlot.Shoulders:    return GetBone(BoneChest);     // offset up at attach time
+                case EquipmentSlot.Belt:         return GetBone(BoneHips);      // offset at attach time
+                case EquipmentSlot.Backpack:     return GetBone(BoneSpine);
+                case EquipmentSlot.LeftWrist:    return GetBone(BoneLeftLowerArm);  // offset at attach time
+                case EquipmentSlot.RightWrist:   return GetBone(BoneRightLowerArm); // offset at attach time
+                case EquipmentSlot.MainHand:     return GetBone(BoneRightHand);
                 default: return null;
             }
         }
