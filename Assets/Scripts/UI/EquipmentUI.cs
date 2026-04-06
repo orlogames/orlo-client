@@ -36,14 +36,16 @@ namespace Orlo.UI
             Backpack = 12,
             LeftWrist = 13,
             RightWrist = 14,
-            MainHand = 15
+            LeftHand = 15,
+            RightHand = 16,
+            TwoHands = 17
         }
 
         private static readonly SlotId[] AllSlots = {
             SlotId.Head, SlotId.Chest, SlotId.Legs, SlotId.Feet, SlotId.Gloves,
             SlotId.LeftBracer, SlotId.RightBracer, SlotId.LeftBicep, SlotId.RightBicep,
             SlotId.Shoulders, SlotId.Belt, SlotId.Backpack, SlotId.LeftWrist,
-            SlotId.RightWrist, SlotId.MainHand
+            SlotId.RightWrist, SlotId.RightHand
         };
 
         private static readonly Dictionary<SlotId, string> SlotLabels = new()
@@ -62,7 +64,7 @@ namespace Orlo.UI
             { SlotId.Backpack, "Backpack" },
             { SlotId.LeftWrist, "L.Wrist" },
             { SlotId.RightWrist, "R.Wrist" },
-            { SlotId.MainHand, "Weapon" }
+            { SlotId.RightHand, "R.Hand" }
         };
 
         // Slot layout — relative positions within the paper-doll area
@@ -90,7 +92,7 @@ namespace Orlo.UI
             { SlotId.Legs,        new Vector2(2,    4) },     // center
             { SlotId.Backpack,    new Vector2(4,    4) },     // right
             { SlotId.Feet,        new Vector2(2,    5) },     // center bottom
-            { SlotId.MainHand,    new Vector2(2,    6) },     // below feet
+            { SlotId.RightHand,    new Vector2(2,    6) },     // below feet
         };
 
         // Equipment data — keyed by slot ID
@@ -131,7 +133,7 @@ namespace Orlo.UI
                 Occupied = true, Name = "Iron Helm", Description = "Basic head armor. +12 Armor.",
                 RarityColor = Color.white, Weight = 2f, StackCount = 1, Condition = 0.85f, MaxCondition = 1f
             };
-            _equipped[SlotId.MainHand] = new InventoryUI.ItemSlot
+            _equipped[SlotId.RightHand] = new InventoryUI.ItemSlot
             {
                 Occupied = true, Name = "Iron Sword", Description = "A sturdy blade. 15-22 Kinetic damage.",
                 RarityColor = new Color(0.4f, 0.6f, 1f), Weight = 3.5f, StackCount = 1, Condition = 1f, MaxCondition = 1f
@@ -147,44 +149,57 @@ namespace Orlo.UI
 
         // ─── Public API ─────────────────────────────────────────────────────
 
-        /// <summary>Equip an item in a specific slot. Called by InventoryUI or server response.</summary>
-        public void EquipItem(SlotId slot, InventoryUI.ItemSlot item)
+        /// <summary>
+        /// Server-confirmed equip: update display for a specific slot.
+        /// ONLY called from PacketHandler when the server sends EquipmentChanged.
+        /// Never call this from client-side user actions.
+        /// </summary>
+        public void ServerEquipItem(SlotId slot, InventoryUI.ItemSlot item)
         {
             item.Occupied = true;
             _equipped[slot] = item;
+            _pendingSlots.Remove(slot);
             RecalcStats();
         }
 
-        /// <summary>Equip item using integer slot ID (matches proto enum).</summary>
-        public void EquipItem(int slotId, InventoryUI.ItemSlot item)
+        /// <summary>Server-confirmed equip using integer slot ID (matches proto enum).</summary>
+        public void ServerEquipItem(int slotId, InventoryUI.ItemSlot item)
         {
             if (System.Enum.IsDefined(typeof(SlotId), slotId))
-                EquipItem((SlotId)slotId, item);
+                ServerEquipItem((SlotId)slotId, item);
         }
 
-        /// <summary>Unequip item from slot. Returns the item that was there.</summary>
-        public InventoryUI.ItemSlot UnequipItem(SlotId slot)
+        /// <summary>
+        /// Server-confirmed unequip: remove item from display.
+        /// ONLY called from PacketHandler when the server sends EquipmentChanged with empty item.
+        /// </summary>
+        public void ServerUnequipItem(SlotId slot)
         {
-            if (_equipped.TryGetValue(slot, out var item))
-            {
-                _equipped.Remove(slot);
-                RecalcStats();
-                return item;
-            }
-            return default;
+            _equipped.Remove(slot);
+            _pendingSlots.Remove(slot);
+            RecalcStats();
+        }
+
+        /// <summary>Server-confirmed unequip using integer slot ID.</summary>
+        public void ServerUnequipItem(int slotId)
+        {
+            if (System.Enum.IsDefined(typeof(SlotId), slotId))
+                ServerUnequipItem((SlotId)slotId);
         }
 
         /// <summary>Clear all equipment (on zone change, death, etc.).</summary>
         public void ClearAll()
         {
             _equipped.Clear();
+            _pendingSlots.Clear();
             RecalcStats();
         }
 
-        /// <summary>Set all equipment from server data (login, zone change).</summary>
+        /// <summary>Set all equipment from server data (login, zone change). Clears pending states.</summary>
         public void SetEquipment(Dictionary<int, InventoryUI.ItemSlot> items)
         {
             _equipped.Clear();
+            _pendingSlots.Clear();
             foreach (var kv in items)
             {
                 if (System.Enum.IsDefined(typeof(SlotId), kv.Key))
@@ -196,6 +211,15 @@ namespace Orlo.UI
             }
             RecalcStats();
         }
+
+        /// <summary>Clear all pending states (on disconnect, full resync, etc.).</summary>
+        public void ClearPendingStates()
+        {
+            _pendingSlots.Clear();
+        }
+
+        /// <summary>Check if a slot is waiting for server confirmation.</summary>
+        public bool IsSlotPending(SlotId slot) => _pendingSlots.Contains(slot);
 
         /// <summary>Get the currently selected empty slot (for equip-from-inventory).</summary>
         public SlotId GetSelectedSlot() => _selectedSlot;
@@ -259,6 +283,8 @@ namespace Orlo.UI
                 _visible = !_visible;
                 _contextMenuOpen = false;
             }
+
+            _pendingPulseTimer += Time.deltaTime;
 
             if (_visible && Input.GetMouseButtonDown(0) && _contextMenuOpen)
             {
@@ -339,6 +365,7 @@ namespace Orlo.UI
         {
             bool occupied = _equipped.TryGetValue(slotId, out var item) && item.Occupied;
             bool selected = _selectedSlot == slotId;
+            bool isPending = _pendingSlots.Contains(slotId);
 
             // Slot background
             if (selected && !occupied)
@@ -347,26 +374,37 @@ namespace Orlo.UI
                 GUI.color = new Color(0.12f, 0.12f, 0.16f, 0.9f);
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
 
-            // Border
-            GUI.color = occupied ? new Color(0.4f, 0.4f, 0.5f) : new Color(0.25f, 0.25f, 0.3f);
+            // Border — pulse yellow if pending
+            if (isPending)
+            {
+                float pulse = 0.4f + 0.3f * Mathf.Sin(_pendingPulseTimer * 4f);
+                GUI.color = new Color(0.8f, 0.7f, 0.2f, pulse);
+            }
+            else
+            {
+                GUI.color = occupied ? new Color(0.4f, 0.4f, 0.5f) : new Color(0.25f, 0.25f, 0.3f);
+            }
             DrawBorder(rect, 1);
 
             if (occupied)
             {
+                // Dim the slot if a pending unequip/equip is in-flight
+                float alpha = isPending ? 0.3f + 0.15f * Mathf.Sin(_pendingPulseTimer * 4f) : 1f;
+
                 // Rarity-colored inner box
                 Rect inner = new Rect(rect.x + 2, rect.y + 2, rect.width - 4, rect.height - 16);
                 Color rarityCol = item.RarityColor;
                 if (AccessibilityManager.Instance != null)
                     rarityCol = AccessibilityManager.Instance.RemapColor(rarityCol);
-                GUI.color = rarityCol * 0.5f;
+                GUI.color = rarityCol * 0.5f * alpha;
                 GUI.DrawTexture(inner, Texture2D.whiteTexture);
 
-                // Item name
-                GUI.color = Color.white;
-                GUI.Label(inner, item.Name, SmallLabelCentered());
+                // Item name (show "..." while pending)
+                GUI.color = new Color(1, 1, 1, alpha);
+                GUI.Label(inner, isPending ? "..." : item.Name, SmallLabelCentered());
 
                 // Condition bar
-                if (item.MaxCondition > 0)
+                if (item.MaxCondition > 0 && !isPending)
                 {
                     float condPct = Mathf.Clamp01(item.Condition / item.MaxCondition);
                     Rect condBar = new Rect(rect.x + 2, rect.y + rect.height - 14, rect.width - 4, 3);
@@ -377,7 +415,7 @@ namespace Orlo.UI
                 }
 
                 // Slot label below condition bar
-                GUI.color = new Color(0.6f, 0.6f, 0.6f);
+                GUI.color = new Color(0.6f, 0.6f, 0.6f, alpha);
                 Rect labelRect = new Rect(rect.x, rect.y + rect.height - 12, rect.width, 12);
                 GUI.Label(labelRect, SlotLabels[slotId], TinyLabelCentered());
             }
@@ -390,12 +428,12 @@ namespace Orlo.UI
 
             GUI.color = Color.white;
 
-            // Interaction
+            // Interaction — blocked while pending
             if (rect.Contains(Event.current.mousePosition))
             {
                 _hoverSlot = slotId;
 
-                if (Event.current.type == EventType.MouseDown)
+                if (Event.current.type == EventType.MouseDown && !isPending)
                 {
                     if (Event.current.button == 1 && occupied)
                     {
@@ -598,20 +636,19 @@ namespace Orlo.UI
         private void HandleUnequip(SlotId slot)
         {
             if (!_equipped.ContainsKey(slot)) return;
+            if (_pendingSlots.Contains(slot)) return; // Already pending
 
-            Debug.Log($"[EquipmentUI] Unequip slot {slot}: {_equipped[slot].Name}");
+            Debug.Log($"[EquipmentUI] Unequip request for slot {slot}: {_equipped[slot].Name}");
 
-            // Send unequip packet
+            // Send unequip packet to server — do NOT modify local state.
+            // Client is a dumb terminal: wait for EquipmentChanged from server.
             var protoSlot = MapSlotToProto(slot);
             if (protoSlot != ProtoInventory.EquipmentSlot.None)
             {
                 var data = PacketBuilder.UnequipItem(protoSlot);
                 NetworkManager.Instance?.Send(data);
+                _pendingSlots.Add(slot);
             }
-
-            // Optimistic local update — server will confirm via EquipmentChanged
-            _equipped.Remove(slot);
-            RecalcStats();
         }
 
         private ProtoInventory.EquipmentSlot MapSlotToProto(SlotId slot)
@@ -632,7 +669,7 @@ namespace Orlo.UI
                 SlotId.Backpack    => ProtoInventory.EquipmentSlot.Backpack,
                 SlotId.LeftWrist   => ProtoInventory.EquipmentSlot.LeftWrist,
                 SlotId.RightWrist  => ProtoInventory.EquipmentSlot.RightWrist,
-                SlotId.MainHand    => ProtoInventory.EquipmentSlot.MainHand,
+                SlotId.RightHand    => ProtoInventory.EquipmentSlot.RightHand,
                 _                  => ProtoInventory.EquipmentSlot.None
             };
         }

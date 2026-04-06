@@ -124,6 +124,10 @@ namespace Orlo.UI
         {
             _serverSynced = true;
 
+            // Full resync — clear all pending states
+            _pendingInventorySlots.Clear();
+            _pendingEquipSlots.Clear();
+
             // Clear all slots
             _slots = new ItemSlot[TotalSlots];
             _equipSlots = new ItemSlot[EquipSlotNames.Length];
@@ -593,7 +597,7 @@ namespace Orlo.UI
                 1 => Orlo.Proto.Inventory.EquipmentSlot.Chest,
                 2 => Orlo.Proto.Inventory.EquipmentSlot.Legs,
                 3 => Orlo.Proto.Inventory.EquipmentSlot.Feet,
-                4 => Orlo.Proto.Inventory.EquipmentSlot.MainHand,
+                4 => Orlo.Proto.Inventory.EquipmentSlot.RightHand,
                 5 => Orlo.Proto.Inventory.EquipmentSlot.Gloves,
                 6 => Orlo.Proto.Inventory.EquipmentSlot.LeftBracer,
                 7 => Orlo.Proto.Inventory.EquipmentSlot.RightBracer,
@@ -612,19 +616,14 @@ namespace Orlo.UI
                     // TODO: Send UseItem packet when proto message is defined
                     break;
                 case 1: // Equip
-                    Debug.Log($"[InventoryUI] Equip item in slot {slot}: {_slots[slot].Name}");
+                    Debug.Log($"[InventoryUI] Equip request for slot {slot}: {_slots[slot].Name}");
                     if (_serverSynced && !_pendingInventorySlots.Contains(slot))
                     {
+                        // Send equip request to server — do NOT modify local state.
+                        // Client is a dumb terminal: wait for EquipmentChanged from server.
                         var data = PacketBuilder.EquipItem((uint)slot);
                         NetworkManager.Instance?.Send(data);
                         _pendingInventorySlots.Add(slot);
-                    }
-                    // Notify EquipmentUI for optimistic local update if a slot is selected
-                    if (EquipmentUI.Instance != null)
-                    {
-                        var targetSlot = EquipmentUI.Instance.GetSelectedSlot();
-                        if (targetSlot != 0)
-                            EquipmentUI.Instance.EquipItem(targetSlot, _slots[slot]);
                     }
                     break;
                 case 2: // Drop
@@ -640,6 +639,13 @@ namespace Orlo.UI
                     // TODO: Open split dialog to choose quantity and target slot
                     break;
             }
+        }
+
+        /// <summary>Clear all pending states. Called on disconnect or full inventory resync.</summary>
+        public void ClearPendingStates()
+        {
+            _pendingInventorySlots.Clear();
+            _pendingEquipSlots.Clear();
         }
 
         private void DrawTitleBar(Rect rect, string title)
