@@ -153,8 +153,12 @@ namespace Orlo.World
                 Vector3 worldPos = chunkWorldPos + new Vector3(lx, height, lz);
                 float treeHeight = Mathf.Lerp(minTreeHeight, maxTreeHeight, (float)rng.NextDouble());
                 int archetype = rng.Next(3); // 0=pine, 1=oak, 2=palm
+                float yRot = (float)rng.NextDouble() * 360f;
 
-                var tree = BuildTree(worldPos, treeHeight, archetype, rng);
+                // Try loading real GLB model first, fall back to procedural
+                var tree = TryLoadTreeModel(worldPos, treeHeight, archetype, yRot);
+                if (tree == null)
+                    tree = BuildTree(worldPos, treeHeight, archetype, rng);
                 details.Trees.Add(tree);
             }
 
@@ -231,6 +235,50 @@ namespace Orlo.World
                     if (r != null) Destroy(r);
 
             _chunkDetails.Remove(coord);
+        }
+
+        // Map archetype to GLB asset IDs
+        private static readonly string[][] TreeAssetIds = new[]
+        {
+            new[] { "tree_frontier_pine", "settlement_pine" },           // pine
+            new[] { "tree_frontier_broadleaf" },                         // oak/broadleaf
+            new[] { "tree_frontier_pine", "tree_frontier_broadleaf" },   // palm (fallback to pine/broadleaf)
+        };
+
+        private GameObject TryLoadTreeModel(Vector3 position, float height, int archetype, float yRotation)
+        {
+            if (AssetLoader.Instance == null) return null;
+
+            var candidates = TreeAssetIds[Mathf.Clamp(archetype, 0, TreeAssetIds.Length - 1)];
+            foreach (var assetId in candidates)
+            {
+                var go = AssetLoader.Instance.TryLoadModel(assetId);
+                if (go != null)
+                {
+                    go.transform.position = position;
+                    go.transform.rotation = Quaternion.Euler(0, yRotation, 0);
+                    // Scale to match desired tree height (models are ~2-3m, we want 4-10m)
+                    float modelHeight = GetModelHeight(go);
+                    if (modelHeight > 0.1f)
+                    {
+                        float scale = height / modelHeight;
+                        go.transform.localScale = Vector3.one * scale;
+                    }
+                    go.name = $"Tree_{assetId}";
+                    return go;
+                }
+            }
+            return null;
+        }
+
+        private static float GetModelHeight(GameObject go)
+        {
+            var renderers = go.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) return 2f;
+            Bounds bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++)
+                bounds.Encapsulate(renderers[i].bounds);
+            return bounds.size.y;
         }
 
         private GameObject BuildTree(Vector3 position, float height, int archetype, System.Random rng)
