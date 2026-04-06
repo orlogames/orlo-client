@@ -68,10 +68,16 @@ namespace Orlo.UI
 
         private void ExecuteMove(uint moveId)
         {
-            // Need a target — for now, use nearest entity or raycast
-            // Send to server and let it validate range
-            var data = PacketBuilder.MartialMove(0, moveId); // target 0 = auto-target
+            // Use the selected target from TargetingSystem, or 0 for auto-target
+            ulong targetId = Player.TargetingSystem.Instance != null
+                ? Player.TargetingSystem.Instance.TargetEntityId
+                : 0;
+
+            var data = PacketBuilder.MartialMove(targetId, moveId);
             NetworkManager.Instance.Send(data);
+
+            if (targetId == 0)
+                Debug.Log($"[Combat] MartialMove #{moveId} — auto-target (no selection)");
         }
 
         private void OnGUI()

@@ -294,6 +294,22 @@ namespace Orlo.Network
             var rot = new Quaternion(spawn.Transform.Rotation.X, spawn.Transform.Rotation.Y,
                                      spawn.Transform.Rotation.Z, spawn.Transform.Rotation.W);
             EntityManager.Instance.SpawnEntity(spawn.EntityId.Id, spawn.EntityType, spawn.AssetId, pos, rot);
+
+            // Track entity name for targeting display
+            string displayName = !string.IsNullOrEmpty(spawn.AssetId) ? spawn.AssetId : $"Entity {spawn.EntityType}";
+            // Clean up asset IDs like "creature_stalker" to "Stalker"
+            if (displayName.Contains("_"))
+            {
+                string[] parts = displayName.Split('_');
+                displayName = parts.Length > 1 ? CapitalizeFirst(parts[parts.Length - 1]) : CapitalizeFirst(parts[0]);
+            }
+            EntityManager.Instance.SetEntityName(spawn.EntityId.Id, displayName);
+        }
+
+        private static string CapitalizeFirst(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s;
+            return char.ToUpper(s[0]) + s.Substring(1);
         }
 
         private void HandleEntityDespawn(ProtoWorld.EntityDespawn despawn)
@@ -401,15 +417,22 @@ namespace Orlo.Network
         {
             Debug.Log($"[Combat] Entity {death.EntityId} died (killed by {death.KillerEntityId})");
 
-            // Show death text above the dying entity
             var go = EntityManager.Instance?.GetEntity(death.EntityId);
             if (go != null)
             {
                 CombatFeedback.Instance?.ShowFloatingText(go.transform.position, "DEAD", Color.gray);
+
+                // Play death animation: fall over and fade out
+                StartCoroutine(DeathAnimation(go, death.EntityId));
+            }
+            else
+            {
+                // Entity not found, just schedule cleanup
+                StartCoroutine(DespawnAfterDelay(death.EntityId, 5f));
             }
 
-            // Despawn after brief pause so the player sees the death
-            StartCoroutine(DespawnAfterDelay(death.EntityId, 2f));
+            // Clear target if the dead entity was our target
+            TargetingSystem.Instance?.ClearTargetIfMatch(death.EntityId);
 
             // Notify player if they made the kill
             var bootstrap = FindFirstObjectByType<GameBootstrap>();
@@ -417,6 +440,77 @@ namespace Orlo.Network
             {
                 NotificationUI.Instance?.Show("Kill", "Target eliminated", 0, 3f);
             }
+        }
+
+        private System.Collections.IEnumerator DeathAnimation(GameObject go, ulong entityId)
+        {
+            if (go == null) yield break;
+
+            // Phase 1: Fall over (rotate 90 degrees on X axis over 0.5s)
+            float fallDuration = 0.5f;
+            float elapsed = 0f;
+            Quaternion startRot = go.transform.rotation;
+            Quaternion endRot = startRot * Quaternion.Euler(90f, 0f, 0f);
+
+            while (elapsed < fallDuration && go != null)
+            {
+                elapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(elapsed / fallDuration);
+                // Ease out for natural fall
+                t = 1f - (1f - t) * (1f - t);
+                go.transform.rotation = Quaternion.Slerp(startRot, endRot, t);
+                yield return null;
+            }
+
+            // Phase 2: Hold corpse visible, then fade out over last 1.5s of the 5s total
+            float holdTime = 3f;
+            yield return new UnityEngine.WaitForSeconds(holdTime);
+
+            // Phase 3: Fade out
+            float fadeDuration = 1.5f;
+            elapsed = 0f;
+            var renderers = go != null ? go.GetComponentsInChildren<Renderer>() : null;
+
+            // Store original colors and switch materials to transparent mode
+            if (renderers != null)
+            {
+                foreach (var r in renderers)
+                {
+                    foreach (var mat in r.materials)
+                    {
+                        mat.SetFloat("_Mode", 3); // Transparent
+                        mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                        mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                        mat.SetInt("_ZWrite", 0);
+                        mat.DisableKeyword("_ALPHATEST_ON");
+                        mat.EnableKeyword("_ALPHABLEND_ON");
+                        mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                        mat.renderQueue = 3000;
+                    }
+                }
+            }
+
+            while (elapsed < fadeDuration && go != null)
+            {
+                elapsed += Time.deltaTime;
+                float alpha = 1f - Mathf.Clamp01(elapsed / fadeDuration);
+                if (renderers != null)
+                {
+                    foreach (var r in renderers)
+                    {
+                        foreach (var mat in r.materials)
+                        {
+                            var c = mat.color;
+                            c.a = alpha;
+                            mat.color = c;
+                        }
+                    }
+                }
+                yield return null;
+            }
+
+            // Final despawn
+            EntityManager.Instance?.DespawnEntity(entityId);
         }
 
         private System.Collections.IEnumerator DespawnAfterDelay(ulong entityId, float delay)
@@ -427,13 +521,17 @@ namespace Orlo.Network
 
         private void HandleLootDrop(ProtoCombat.LootDrop loot)
         {
-            // LootDrop spawns a world loot entity — show a pickup prompt
-            Debug.Log($"[Combat] Loot dropped at entity {loot.LootEntityId} (table {loot.LootTableId})");
+            Debug.Log($"[Combat] Loot dropped: entity={loot.LootEntityId} table={loot.LootTableId}");
 
             var pos = new Vector3(loot.Position.X, loot.Position.Y, loot.Position.Z);
+
+            // Spawn a visible glowing loot entity in the world
+            EntityManager.Instance?.SpawnLootEntity(loot.LootEntityId, pos, "Loot");
+
+            // Minimap marker
             FindFirstObjectByType<MinimapUI>()?.AddMarker(pos, "loot", "Loot", Color.yellow);
 
-            NotificationUI.Instance?.Show("Loot", "Loot dropped nearby — walk over to collect", 0, 5f);
+            NotificationUI.Instance?.Show("Loot", "Loot dropped nearby — press F to pick up", 0, 5f);
         }
 
         // ─── Inventory / Social / Progression stub handlers ─────────────────
@@ -561,6 +659,19 @@ namespace Orlo.Network
             }
 
             inv.SetItems(items, equipment, update.TotalWeight, update.MaxWeight);
+
+            // Sync the paper-doll EquipmentUI with the full server state
+            var equipUI = EquipmentUI.Instance;
+            if (equipUI != null)
+            {
+                var equipDict = new Dictionary<int, InventoryUI.ItemSlot>();
+                foreach (var eq in update.Equipment)
+                {
+                    int protoSlotId = (int)eq.Slot;
+                    equipDict[protoSlotId] = ProtoItemToSlot(eq.Item, protoSlotId);
+                }
+                equipUI.SetEquipment(equipDict);
+            }
         }
 
         private void HandleItemAdd(ProtoInventory.ItemAdd add)
@@ -573,11 +684,32 @@ namespace Orlo.Network
             var slot = ProtoItemToSlot(add.Item, (int)add.SlotIndex);
             inv.AddItem((int)add.SlotIndex, slot, add.TotalWeight);
 
-            // Show notification
+            // Show notification with item name
             string name = add.Item?.Metadata != null && add.Item.Metadata.ContainsKey("name")
                 ? add.Item.Metadata["name"]
                 : $"Item #{add.Item?.ItemId}";
-            NotificationUI.Instance?.Show("Item Received", $"+{add.Item?.Quantity} {name}", 0, 3f);
+            uint qty = add.Item?.Quantity ?? 1;
+            NotificationUI.Instance?.Show("Item Received",
+                qty > 1 ? $"Received: {name} x{qty}" : $"Received: {name}", 0, 3f);
+
+            // Flash the inventory icon to alert the player
+            inv.FlashNewItem();
+
+            // Show floating "+item" text at player position
+            var bootstrap = FindFirstObjectByType<GameBootstrap>();
+            if (bootstrap != null)
+            {
+                var playerGo = EntityManager.Instance?.GetEntity(bootstrap.PlayerEntityId);
+                if (playerGo != null)
+                {
+                    CombatFeedback.Instance?.ShowFloatingText(
+                        playerGo.transform.position,
+                        qty > 1 ? $"+{qty} {name}" : $"+{name}",
+                        new Color(0.3f, 1f, 0.3f));
+                }
+            }
+
+            Debug.Log($"[Inventory] Pickup sound would play here for: {name}");
         }
 
         private void HandleItemRemove(ProtoInventory.ItemRemove remove)
@@ -606,22 +738,56 @@ namespace Orlo.Network
         {
             Debug.Log($"[Inventory] Equipment changed: slot={changed.Slot} inv_slot={changed.InventorySlot}");
 
+            // Update the inline equipment panel in InventoryUI
             var inv = InventoryUI.Instance;
-            if (inv == null) return;
+            if (inv != null)
+            {
+                int equipIdx = MapEquipSlotToIndex(changed.Slot);
+                var equipItem = ProtoItemToSlot(changed.Item, equipIdx);
+                var invItem = ProtoItemToSlot(changed.InventoryItem, (int)changed.InventorySlot);
+                inv.UpdateEquipment(equipIdx, equipItem, (int)changed.InventorySlot, invItem);
+            }
 
-            int equipIdx = MapEquipSlotToIndex(changed.Slot);
-            var equipItem = ProtoItemToSlot(changed.Item, equipIdx);
-            var invItem = ProtoItemToSlot(changed.InventoryItem, (int)changed.InventorySlot);
-            inv.UpdateEquipment(equipIdx, equipItem, (int)changed.InventorySlot, invItem);
+            // Update the paper-doll EquipmentUI (server-authoritative: this is the ONLY
+            // place where equipment display state is mutated based on server confirmation)
+            var equipUI = EquipmentUI.Instance;
+            if (equipUI != null)
+            {
+                int protoSlotId = (int)changed.Slot;
+                if (changed.Item != null && changed.Item.ItemId != 0)
+                {
+                    // Server confirmed an item is now equipped in this slot
+                    var itemSlot = ProtoItemToSlot(changed.Item, protoSlotId);
+                    equipUI.ServerEquipItem(protoSlotId, itemSlot);
+                }
+                else
+                {
+                    // Server confirmed this slot is now empty
+                    equipUI.ServerUnequipItem(protoSlotId);
+                }
+            }
         }
 
         private void HandleLootPickup(ProtoInventory.LootPickup pickup)
         {
+            ulong lootId = pickup.LootEntity?.Id ?? 0;
             var pos = new Vector3(pickup.Position.X, pickup.Position.Y, pickup.Position.Z);
-            Debug.Log($"[Inventory] Loot pickup: entity={pickup.LootEntity?.Id} at {pos} ({pickup.Items.Count} items)");
+            Debug.Log($"[Inventory] Loot pickup confirmed: entity={lootId} ({pickup.Items.Count} items)");
 
-            FindFirstObjectByType<MinimapUI>()?.AddMarker(pos, "loot", "Loot", Color.yellow);
-            NotificationUI.Instance?.Show("Loot", "Loot available nearby", 0, 4f);
+            // Remove the loot entity from the world (if not already removed optimistically)
+            if (lootId != 0)
+                EntityManager.Instance?.DespawnLootEntity(lootId);
+
+            // Show what was picked up
+            foreach (var item in pickup.Items)
+            {
+                string name = item?.Metadata != null && item.Metadata.ContainsKey("name")
+                    ? item.Metadata["name"]
+                    : $"Item #{item?.ItemId}";
+                uint qty = item?.Quantity ?? 1;
+                NotificationUI.Instance?.Show("Looted",
+                    qty > 1 ? $"{name} x{qty}" : name, 0, 3f);
+            }
         }
 
         /// <summary>Convert a proto ItemStack to InventoryUI.ItemSlot.</summary>

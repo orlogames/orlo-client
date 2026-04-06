@@ -23,6 +23,8 @@ namespace Orlo.World
         private readonly Dictionary<ulong, GameObject> _entities = new();
         private readonly Dictionary<ulong, (float current, float max)> _entityHealth = new();
         private readonly Dictionary<ulong, Vector3> _entityPrevPos = new();
+        private readonly HashSet<ulong> _lootEntities = new();
+        private readonly Dictionary<ulong, string> _entityNames = new();
 
         private void Awake()
         {
@@ -103,6 +105,82 @@ namespace Orlo.World
             return go;
         }
 
+        /// <summary>Spawn a loot entity with a glowing visual at the given position.</summary>
+        public void SpawnLootEntity(ulong lootEntityId, Vector3 position, string lootName)
+        {
+            if (_entities.ContainsKey(lootEntityId))
+            {
+                Debug.LogWarning($"[Entity] Duplicate loot spawn for {lootEntityId}");
+                return;
+            }
+
+            var go = new GameObject($"Loot_{lootEntityId}");
+            go.transform.position = position;
+
+            // Create a glowing sphere as the loot bag visual
+            var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            sphere.transform.SetParent(go.transform, false);
+            sphere.transform.localScale = Vector3.one * 0.4f;
+            sphere.transform.localPosition = Vector3.up * 0.2f;
+
+            // Set up glowing gold material
+            var renderer = sphere.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                var mat = new Material(Shader.Find("Standard") ?? Shader.Find("Orlo/EntityFallback"));
+                mat.color = new Color(1f, 0.85f, 0.2f);
+                mat.SetFloat("_Metallic", 0.8f);
+                mat.SetFloat("_Smoothness", 0.9f);
+                if (mat.HasProperty("_EmissionColor"))
+                {
+                    mat.EnableKeyword("_EMISSION");
+                    mat.SetColor("_EmissionColor", new Color(1f, 0.7f, 0.1f) * 2f);
+                }
+                renderer.material = mat;
+            }
+
+            // Add a point light for glow effect
+            var light = new GameObject("LootGlow").AddComponent<Light>();
+            light.transform.SetParent(go.transform, false);
+            light.transform.localPosition = Vector3.up * 0.5f;
+            light.type = LightType.Point;
+            light.color = new Color(1f, 0.85f, 0.3f);
+            light.intensity = 1.5f;
+            light.range = 4f;
+
+            // Add the pulsing glow component
+            go.AddComponent<LootPulse>();
+
+            _entities[lootEntityId] = go;
+            _lootEntities.Add(lootEntityId);
+            _entityNames[lootEntityId] = lootName ?? "Loot";
+        }
+
+        public void DespawnLootEntity(ulong lootEntityId)
+        {
+            _lootEntities.Remove(lootEntityId);
+            _entityNames.Remove(lootEntityId);
+            DespawnEntity(lootEntityId);
+        }
+
+        public bool IsLootEntity(ulong entityId) => _lootEntities.Contains(entityId);
+
+        /// <summary>Get all active loot entity IDs.</summary>
+        public IEnumerable<ulong> GetLootEntityIds() => _lootEntities;
+
+        /// <summary>Get display name for an entity (set on spawn or via name tracking).</summary>
+        public string GetEntityName(ulong entityId)
+        {
+            return _entityNames.TryGetValue(entityId, out var name) ? name : null;
+        }
+
+        /// <summary>Set display name for an entity.</summary>
+        public void SetEntityName(ulong entityId, string name)
+        {
+            if (!string.IsNullOrEmpty(name))
+                _entityNames[entityId] = name;
+        }
+
         public void UpdateEntityHealth(ulong entityId, float current, float max)
         {
             if (max > 0)
@@ -119,6 +197,43 @@ namespace Orlo.World
             }
             current = 0; max = 0;
             return false;
+        }
+
+        /// <summary>Get all entity IDs (for raycast targeting).</summary>
+        public IEnumerable<KeyValuePair<ulong, GameObject>> GetAllEntities() => _entities;
+    }
+
+    /// <summary>
+    /// Pulsing glow effect for loot entities on the ground.
+    /// Scales the object up/down and pulses the light intensity.
+    /// </summary>
+    public class LootPulse : MonoBehaviour
+    {
+        private Light _light;
+        private float _baseIntensity = 1.5f;
+        private float _time;
+
+        private void Start()
+        {
+            _light = GetComponentInChildren<Light>();
+        }
+
+        private void Update()
+        {
+            _time += Time.deltaTime;
+            // Gentle bob up and down
+            float bob = Mathf.Sin(_time * 2f) * 0.05f;
+            var pos = transform.position;
+            // Only modify the visual child, not root (to keep pickup distance stable)
+            if (transform.childCount > 0)
+                transform.GetChild(0).localPosition = new Vector3(0, 0.2f + bob, 0);
+
+            // Pulse light
+            if (_light != null)
+                _light.intensity = _baseIntensity + Mathf.Sin(_time * 3f) * 0.5f;
+
+            // Slow rotation
+            transform.Rotate(Vector3.up, 45f * Time.deltaTime, Space.World);
         }
     }
 }

@@ -215,6 +215,13 @@ namespace Orlo
                 go.AddComponent<CombatFeedback>();
             }
 
+            // Targeting system (click-to-target + loot pickup)
+            if (Player.TargetingSystem.Instance == null)
+            {
+                var go = new GameObject("TargetingSystem");
+                go.AddComponent<Player.TargetingSystem>();
+            }
+
             if (ScreenEffects.Instance == null)
             {
                 var go = new GameObject("ScreenEffects");

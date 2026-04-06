@@ -151,6 +151,16 @@ namespace Orlo.UI
         }
 
         /// <summary>Add or update item at a specific inventory slot.</summary>
+        // Flash effect when new items arrive
+        private float _flashTimer;
+        private const float FlashDuration = 1.5f;
+
+        /// <summary>Trigger an inventory icon flash to indicate new items arrived.</summary>
+        public void FlashNewItem()
+        {
+            _flashTimer = FlashDuration;
+        }
+
         public void AddItem(int slotIndex, ItemSlot item, float totalWeight)
         {
             _serverSynced = true;
@@ -255,6 +265,25 @@ namespace Orlo.UI
 
         private void OnGUI()
         {
+            // Flash indicator when inventory is closed and new items arrived
+            if (_flashTimer > 0)
+            {
+                _flashTimer -= Time.deltaTime;
+                float pulse = Mathf.Abs(Mathf.Sin(_flashTimer * 4f));
+                float s = UIScaler.Scale;
+                var iconRect = new Rect(Screen.width - 140 * s, Screen.height - 40 * s, 130 * s, 30 * s);
+                GUI.color = new Color(1f, 0.85f, 0.2f, 0.5f + pulse * 0.5f);
+                GUI.DrawTexture(iconRect, Texture2D.whiteTexture);
+                GUI.color = Color.white;
+                var flashStyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = UIScaler.ScaledFontSize(13),
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter
+                };
+                GUI.Label(iconRect, "NEW ITEM [I]", flashStyle);
+            }
+
             if (!_visible) return;
 
             float equipPanelW = 120f;
