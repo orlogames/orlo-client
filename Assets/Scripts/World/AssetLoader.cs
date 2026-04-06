@@ -263,8 +263,16 @@ namespace Orlo.World
         {
             var root = new GameObject($"Model_{assetId}");
 
+            // GLB models from Meshy are authored with Z-up; apply rotation correction
+            root.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+
             Bounds combinedBounds = default;
             bool boundsInitialized = false;
+
+            // Get a working shader (Resources first, then fallbacks)
+            var shader = Resources.Load<Shader>("Shaders/EntityFallback")
+                ?? Shader.Find("Standard")
+                ?? Shader.Find("Legacy Shaders/Diffuse");
 
             foreach (var entry in cached.entries)
             {
@@ -275,7 +283,7 @@ namespace Orlo.World
                 mf.sharedMesh = entry.mesh;
 
                 var mr = child.AddComponent<MeshRenderer>();
-                var mat = new Material(Shader.Find("Standard"));
+                var mat = shader != null ? new Material(shader) : new Material(Shader.Find("Hidden/InternalErrorShader"));
                 mat.color = entry.baseColor;
                 if (entry.texture != null)
                     mat.mainTexture = entry.texture;
