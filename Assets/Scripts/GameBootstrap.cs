@@ -247,6 +247,13 @@ namespace Orlo
                 go.AddComponent<LeaderboardUI>();
             }
 
+            // Chat window (always visible)
+            if (FindFirstObjectByType<ChatUI>() == null)
+            {
+                var go = new GameObject("ChatUI");
+                go.AddComponent<ChatUI>();
+            }
+
             // Register UIs with progressive disclosure system
             // Level 1: movement + combat bar (always visible)
             // Level 3: inventory + minimap
@@ -546,6 +553,22 @@ namespace Orlo
                 var tmGo = new GameObject("TerrainManager");
                 tmGo.AddComponent<TerrainManager>();
                 Debug.Log("[Orlo] TerrainManager created");
+            }
+
+            // ChunkStreamer — handles background chunk loading/unloading and server requests
+            if (ChunkStreamer.Instance == null)
+            {
+                var csGo = new GameObject("ChunkStreamer");
+                csGo.AddComponent<ChunkStreamer>();
+                Debug.Log("[Orlo] ChunkStreamer created");
+            }
+
+            // TerrainDetailGenerator — places trees, rocks, grass on terrain chunks
+            if (TerrainDetailGenerator.Instance == null)
+            {
+                var tdGo = new GameObject("TerrainDetailGenerator");
+                tdGo.AddComponent<TerrainDetailGenerator>();
+                Debug.Log("[Orlo] TerrainDetailGenerator created — vegetation will appear on terrain");
             }
 
             // Initialize skybox and atmosphere
