@@ -13,8 +13,8 @@ namespace Orlo.World
         public float BodyWidth = 0.4f;
         public float LimbThickness = 0.12f;
         public Color SkinColor = new Color(0.85f, 0.7f, 0.55f);
-        public Color ShirtColor = new Color(0.3f, 0.3f, 0.6f);
-        public Color PantsColor = new Color(0.25f, 0.2f, 0.15f);
+        public Color ShirtColor = new Color(0.85f, 0.7f, 0.55f);  // defaults to skin (naked torso)
+        public Color PantsColor = new Color(0.15f, 0.12f, 0.1f);  // dark underwear
         public string Archetype = "humanoid"; // humanoid, stocky, slender
     }
 
@@ -167,6 +167,8 @@ namespace Orlo.World
             var parts = new List<(Mesh mesh, Matrix4x4 transform, string boneName, Color color)>();
 
             // Torso — main body cylinder from hips to chest
+            // Uses ShirtColor which defaults to SkinColor for naked characters,
+            // or a clothing color when equipment is worn
             float torsoHeight = h * 0.3f;
             var torso = ProceduralMeshBuilder.BuildCylinder(bw * 0.45f, bw * 0.5f, torsoHeight, 8);
             parts.Add((torso, Matrix4x4.identity, BoneSpine, _spec.ShirtColor));
@@ -180,10 +182,10 @@ namespace Orlo.World
             var neck = ProceduralMeshBuilder.BuildCylinder(lt * 0.5f, lt * 0.5f, h * 0.04f, 6);
             parts.Add((neck, Matrix4x4.Translate(GetBoneWorldOffset(BoneNeck)), BoneNeck, _spec.SkinColor));
 
-            // Arms
+            // Arms — bare skin (upper arm color matches shirt for sleeved equipment later)
             float armLen = h * 0.16f;
-            AddLimbParts(parts, BoneLeftUpperArm, BoneLeftLowerArm, lt * 0.4f, armLen, _spec.ShirtColor, _spec.SkinColor);
-            AddLimbParts(parts, BoneRightUpperArm, BoneRightLowerArm, lt * 0.4f, armLen, _spec.ShirtColor, _spec.SkinColor);
+            AddLimbParts(parts, BoneLeftUpperArm, BoneLeftLowerArm, lt * 0.4f, armLen, _spec.SkinColor, _spec.SkinColor);
+            AddLimbParts(parts, BoneRightUpperArm, BoneRightLowerArm, lt * 0.4f, armLen, _spec.SkinColor, _spec.SkinColor);
 
             // Hands
             float handR = lt * 0.35f;
@@ -192,16 +194,16 @@ namespace Orlo.World
             var rightHand = ProceduralMeshBuilder.BuildSphere(handR, 5, 6);
             parts.Add((rightHand, Matrix4x4.Translate(GetBoneWorldOffset(BoneRightHand)), BoneRightHand, _spec.SkinColor));
 
-            // Legs
+            // Legs — upper legs use PantsColor (underwear area), lower legs are bare skin
             float legLen = h * 0.25f;
-            AddLimbParts(parts, BoneLeftUpperLeg, BoneLeftLowerLeg, lt * 0.45f, legLen, _spec.PantsColor, _spec.PantsColor);
-            AddLimbParts(parts, BoneRightUpperLeg, BoneRightLowerLeg, lt * 0.45f, legLen, _spec.PantsColor, _spec.PantsColor);
+            AddLimbParts(parts, BoneLeftUpperLeg, BoneLeftLowerLeg, lt * 0.45f, legLen, _spec.PantsColor, _spec.SkinColor);
+            AddLimbParts(parts, BoneRightUpperLeg, BoneRightLowerLeg, lt * 0.45f, legLen, _spec.PantsColor, _spec.SkinColor);
 
-            // Feet
+            // Feet — bare skin (footwear color applied when boots/shoes equipped)
             var leftFoot = ProceduralMeshBuilder.BuildBox(new Vector3(lt * 0.8f, lt * 0.3f, lt * 1.2f));
-            parts.Add((leftFoot, Matrix4x4.Translate(GetBoneWorldOffset(BoneLeftFoot)), BoneLeftFoot, new Color(0.2f, 0.15f, 0.1f)));
+            parts.Add((leftFoot, Matrix4x4.Translate(GetBoneWorldOffset(BoneLeftFoot)), BoneLeftFoot, _spec.SkinColor));
             var rightFoot = ProceduralMeshBuilder.BuildBox(new Vector3(lt * 0.8f, lt * 0.3f, lt * 1.2f));
-            parts.Add((rightFoot, Matrix4x4.Translate(GetBoneWorldOffset(BoneRightFoot)), BoneRightFoot, new Color(0.2f, 0.15f, 0.1f)));
+            parts.Add((rightFoot, Matrix4x4.Translate(GetBoneWorldOffset(BoneRightFoot)), BoneRightFoot, _spec.SkinColor));
 
             // Build the combined skinned mesh
             BuildCombinedSkinnedMesh(parts);

@@ -469,13 +469,16 @@ namespace Orlo.World
             var go = new GameObject($"Player_{assetId}");
             go.transform.SetPositionAndRotation(position, rotation);
 
+            // Naked default — skin-colored torso, dark underwear only.
+            // Equipment visuals override these colors when gear is equipped.
+            var skinColor = new Color(0.85f, 0.7f, 0.55f);
             var spec = new CharacterSpec
             {
                 Height = 1.8f,
                 BodyWidth = 0.4f,
-                SkinColor = new Color(0.85f, 0.7f, 0.55f),
-                ShirtColor = new Color(0.2f, 0.35f, 0.6f),
-                PantsColor = new Color(0.2f, 0.2f, 0.25f),
+                SkinColor = skinColor,
+                ShirtColor = skinColor,                         // bare torso (matches skin)
+                PantsColor = new Color(0.15f, 0.12f, 0.1f),    // dark underwear
                 Archetype = "humanoid"
             };
 
