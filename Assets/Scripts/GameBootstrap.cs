@@ -6,6 +6,7 @@ using Orlo.Audio;
 using Orlo.UI;
 using Orlo.Animation;
 using Orlo.Rendering;
+using Orlo.VFX;
 using Orlo.UI.CharacterCreation;
 using Orlo.Proto;
 using ProtoAuth = Orlo.Proto.Auth;
@@ -741,6 +742,10 @@ namespace Orlo
                 // Add god rays (volumetric light shafts through clouds)
                 if (mainCam.GetComponent<GodRaysEffect>() == null)
                     mainCam.gameObject.AddComponent<GodRaysEffect>();
+
+                // Add golden hour dust motes (floating particles in god ray shafts)
+                if (mainCam.GetComponent<GoldenHourParticles>() == null)
+                    mainCam.gameObject.AddComponent<GoldenHourParticles>();
             }
 
             Debug.Log("[Orlo] Fallback starter environment created");

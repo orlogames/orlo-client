@@ -666,15 +666,8 @@ namespace Orlo.World
                 frag.AddComponent<MeshRenderer>().material = fragMat;
             }
 
-            // Purple point light
-            var lightGo = new GameObject("Light");
-            lightGo.transform.SetParent(go.transform);
-            lightGo.transform.localPosition = new Vector3(0, 2.5f, 0);
-            var light = lightGo.AddComponent<Light>();
-            light.type = LightType.Point;
-            light.color = new Color(0.6f, 0.2f, 0.9f);
-            light.intensity = 2.0f;
-            light.range = 8f;
+            // VFX: pulsing crystal glow, teal base glow, upward mote particles
+            go.AddComponent<NexusCrystalVFX>();
 
             return go;
         }
