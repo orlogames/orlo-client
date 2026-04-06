@@ -271,6 +271,15 @@ namespace Orlo.UI
                     }
                     break;
 
+                case "/respawn":
+                case "/home":
+                case "/threshold":
+                    // Teleport to Threshold nexus (512, 20, 510)
+                    Network.NetworkManager.Instance?.Send(
+                        Network.PacketBuilder.AdminTeleport(512f, 20f, 510f));
+                    AddSystemMessage("Returning to Threshold...");
+                    break;
+
                 case "/hudlock":
                     if (HUDLayout.Instance != null)
                     {
@@ -290,7 +299,7 @@ namespace Orlo.UI
                     break;
 
                 case "/help":
-                    AddSystemMessage("Commands: /w /g /p /tp /setspeed /fly /god /spawn /creatures /pos /hudlock /hudreset /help");
+                    AddSystemMessage("Commands: /w /g /p /tp /fly /setspeed /god /spawn /creatures /respawn /pos /hudlock /hudreset /help");
                     break;
 
                 default:
