@@ -37,6 +37,7 @@ namespace Orlo.Player
         private float _pitch = 15f;
         private float _targetDistance;
         private float _currentDistance;
+        private bool _lmbHeld;
         private bool _rmbHeld;
 
         private void Start()
@@ -64,22 +65,39 @@ namespace Orlo.Player
 
         private void HandleInput()
         {
+            bool wasLmb = _lmbHeld;
             bool wasRmb = _rmbHeld;
+            _lmbHeld = Input.GetMouseButton(0);
             _rmbHeld = Input.GetMouseButton(1);
 
-            // Lock/unlock cursor
-            if (_rmbHeld && !wasRmb)
+            bool anyMouseHeld = _lmbHeld || _rmbHeld;
+            bool anyMouseWasHeld = wasLmb || wasRmb;
+
+            // Lock/unlock cursor when any mouse button is held for camera control
+            if (anyMouseHeld && !anyMouseWasHeld)
             {
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
             }
-            else if (!_rmbHeld && wasRmb)
+            else if (!anyMouseHeld && anyMouseWasHeld)
             {
                 Cursor.lockState = CursorLockMode.None;
                 Cursor.visible = true;
             }
 
-            // Orbit rotation (RMB held)
+            // LMB: freelook (orbit camera without turning character)
+            if (_lmbHeld)
+            {
+                float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
+                float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
+
+                _yaw += mouseX;
+                _pitch -= mouseY;
+                _pitch = Mathf.Clamp(_pitch, minPitch, maxPitch);
+                // Character does NOT rotate — camera orbits freely
+            }
+
+            // RMB: orbit + turn character to match camera
             if (_rmbHeld)
             {
                 float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
@@ -90,6 +108,12 @@ namespace Orlo.Player
                 _pitch = Mathf.Clamp(_pitch, minPitch, maxPitch);
 
                 // Turn character to match camera horizontal rotation
+                target.rotation = Quaternion.Euler(0, _yaw, 0);
+            }
+
+            // LMB+RMB: auto-run forward
+            if (_lmbHeld && _rmbHeld)
+            {
                 target.rotation = Quaternion.Euler(0, _yaw, 0);
             }
 
@@ -104,6 +128,11 @@ namespace Orlo.Player
             // Smooth zoom
             _currentDistance = Mathf.Lerp(_currentDistance, _targetDistance, Time.deltaTime * zoomSmoothing);
         }
+
+        /// <summary>
+        /// Whether LMB is held (freelook without character turn).
+        /// </summary>
+        public bool IsFreelooking => _lmbHeld && !_rmbHeld;
 
         private void UpdatePosition()
         {

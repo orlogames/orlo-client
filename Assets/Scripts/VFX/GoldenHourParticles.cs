@@ -135,12 +135,38 @@ namespace Orlo.VFX
             var mat = new Material(shader);
             mat.SetColor("_Color", Color.white);
 
+            // Generate a soft circle texture so particles aren't squares
+            mat.mainTexture = CreateSoftCircleTexture(32);
+
             // Alpha blended for soft dust look
             mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
             mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
             mat.renderQueue = 3000;
 
             return mat;
+        }
+
+        /// <summary>
+        /// Creates a procedural soft circle texture for particle rendering.
+        /// </summary>
+        private static Texture2D CreateSoftCircleTexture(int size)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            tex.filterMode = FilterMode.Bilinear;
+            tex.wrapMode = TextureWrapMode.Clamp;
+            float center = (size - 1) * 0.5f;
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dist = Vector2.Distance(new Vector2(x, y), new Vector2(center, center)) / center;
+                    float alpha = Mathf.Clamp01(1f - dist * dist);
+                    alpha *= alpha; // Extra softness
+                    tex.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+                }
+            }
+            tex.Apply();
+            return tex;
         }
     }
 }

@@ -284,7 +284,8 @@ namespace Orlo.Rendering
             // Each star = 1 quad (4 verts, 6 indices)
             var vertices = new Vector3[totalCount * 4];
             var colors = new Color[totalCount * 4];
-            var uvs = new Vector2[totalCount * 4];
+            var uvs = new Vector2[totalCount * 4];   // Quad corner UVs for circle falloff
+            var uv2s = new Vector2[totalCount * 4];  // Twinkle phase + brightness
             var indices = new int[totalCount * 6];
 
             for (int i = 0; i < totalCount; i++)
@@ -321,12 +322,18 @@ namespace Orlo.Rendering
                 colors[vi + 2] = c;
                 colors[vi + 3] = c;
 
-                // UV: x=twinkle phase, y=brightness
-                Vector2 uv = new Vector2(starTwinklePhase[i], starBrightness[i]);
-                uvs[vi + 0] = uv;
-                uvs[vi + 1] = uv;
-                uvs[vi + 2] = uv;
-                uvs[vi + 3] = uv;
+                // UV: quad corner coordinates for soft circle falloff in shader
+                uvs[vi + 0] = new Vector2(0f, 0f);
+                uvs[vi + 1] = new Vector2(1f, 0f);
+                uvs[vi + 2] = new Vector2(1f, 1f);
+                uvs[vi + 3] = new Vector2(0f, 1f);
+
+                // UV2: x=twinkle phase, y=brightness (per-star data)
+                Vector2 starData = new Vector2(starTwinklePhase[i], starBrightness[i]);
+                uv2s[vi + 0] = starData;
+                uv2s[vi + 1] = starData;
+                uv2s[vi + 2] = starData;
+                uv2s[vi + 3] = starData;
 
                 int ii = i * 6;
                 // Front-facing from inside the sphere (CW winding when viewed from inside)
@@ -346,6 +353,7 @@ namespace Orlo.Rendering
             starMesh.vertices = vertices;
             starMesh.colors = colors;
             starMesh.uv = uvs;
+            starMesh.uv2 = uv2s;
             starMesh.triangles = indices;
             starMesh.bounds = new Bounds(Vector3.zero, Vector3.one * DomeRadius * 2f);
 

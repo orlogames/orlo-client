@@ -25,31 +25,37 @@ Shader "Orlo/Stars"
             {
                 float4 vertex : POSITION;
                 float4 color : COLOR;
-                float2 uv : TEXCOORD0;
+                float2 uv : TEXCOORD0;     // quad corner UVs (0-1)
+                float2 uv2 : TEXCOORD1;    // x=twinkle phase, y=brightness
             };
 
             struct v2f
             {
                 float4 pos : SV_POSITION;
                 float4 color : COLOR;
-                float2 uv : TEXCOORD0;
+                float2 quadUV : TEXCOORD0;  // for circle falloff
             };
 
             v2f vert(appdata v)
             {
                 v2f o;
                 o.pos = UnityObjectToClipPos(v.vertex);
-                // uv.x = twinkle phase, uv.y = base brightness
-                float twinkle = sin(_Time2 * 1.5 + v.uv.x * 6.2831) * 0.15 + 0.85;
-                float alpha = v.uv.y * _NightFactor * twinkle;
+                o.quadUV = v.uv;
+                // uv2.x = twinkle phase, uv2.y = base brightness
+                float twinkle = sin(_Time2 * 1.5 + v.uv2.x * 6.2831) * 0.15 + 0.85;
+                float alpha = v.uv2.y * _NightFactor * twinkle;
                 o.color = float4(v.color.rgb * alpha, alpha);
-                o.uv = v.uv;
                 return o;
             }
 
             fixed4 frag(v2f i) : SV_Target
             {
-                return i.color;
+                // Soft circle falloff — distance from quad center
+                float2 centered = i.quadUV - 0.5;
+                float dist = length(centered) * 2.0; // 0 at center, 1 at edge
+                float glow = saturate(1.0 - dist * dist); // Quadratic falloff
+                glow *= glow; // Extra softness
+                return i.color * glow;
             }
             ENDCG
         }
