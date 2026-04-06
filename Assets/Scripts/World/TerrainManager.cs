@@ -37,17 +37,19 @@ namespace Orlo.World
 
         private void Awake()
         {
-            // Create terrain material — custom vertex-color shader (won't be stripped from builds)
-            var terrainShader = Shader.Find("Orlo/TerrainVertexColor");
+            // Load custom shader from Resources/ (immune to stripping, uses Resources.Load not Shader.Find)
+            var terrainShader = Resources.Load<Shader>("Shaders/TerrainVertexColor");
             if (terrainShader == null)
-            {
-                Debug.LogWarning("[TerrainManager] Orlo/TerrainVertexColor shader not found, falling back to Standard");
+                terrainShader = Shader.Find("Orlo/TerrainVertexColor");
+            if (terrainShader == null)
                 terrainShader = Shader.Find("Standard");
-            }
+            if (terrainShader == null)
+                terrainShader = Shader.Find("Legacy Shaders/Diffuse"); // Always available
+
             _terrainMat = new Material(terrainShader);
             _terrainMat.color = Color.white;
             _terrainMat.SetFloat("_Glossiness", 0.05f);
-            Debug.Log("[TerrainManager] Initialized with terrain material");
+            Debug.Log($"[TerrainManager] Initialized with shader: {terrainShader?.name ?? "NULL"}");
         }
 
         private void Update()

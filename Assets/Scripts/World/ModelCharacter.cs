@@ -87,7 +87,9 @@ namespace Orlo.World
                     meshFilter.mesh = meshData.mesh;
 
                     var meshRenderer = meshGO.AddComponent<MeshRenderer>();
-                    var shader = Shader.Find("Orlo/EntityFallback") ?? Shader.Find("Standard");
+                    var shader = Resources.Load<Shader>("Shaders/EntityFallback")
+                        ?? Shader.Find("Standard")
+                        ?? Shader.Find("Legacy Shaders/Diffuse");
                     var mat = new Material(shader);
                     mat.color = meshData.baseColor;
                     if (meshData.texture != null)
