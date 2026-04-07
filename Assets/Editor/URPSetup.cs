@@ -78,32 +78,44 @@ public static class URPSetup
 
     private static void ConfigureURPAsset(UniversalRenderPipelineAsset asset)
     {
-        // HDR
-        asset.supportsHDR = true;
+        // URP 17 made many properties read-only in code.
+        // Use SerializedObject to set them via the editor API.
+        var so = new SerializedObject(asset);
 
-        // Shadows
-        asset.supportsMainLightShadows = true;
-        asset.mainLightShadowmapResolution = 2048;
-        asset.shadowDistance = 150f;
-        asset.shadowCascadeCount = 4;
+        SetBool(so, "m_SupportsHDR", true);
+        SetBool(so, "m_MainLightShadowsSupported", true);
+        SetInt(so, "m_MainLightShadowmapResolution", 2048);
+        SetFloat(so, "m_ShadowDistance", 150f);
+        SetInt(so, "m_ShadowCascadeCount", 4);
+        SetInt(so, "m_AdditionalLightsRenderingMode", 1); // 1 = PerPixel
+        SetInt(so, "m_AdditionalLightsPerObjectLimit", 8);
+        SetInt(so, "m_MSAA", 4);
+        SetFloat(so, "m_RenderScale", 1f);
+        SetBool(so, "m_SupportsCameraDepthTexture", true);
+        SetBool(so, "m_SupportsCameraOpaqueTexture", true);
 
-        // Additional lights
-        asset.supportsAdditionalLights = true;
-        asset.maxAdditionalLightsCount = 8;
-        asset.additionalLightsRenderingMode = LightRenderingMode.PerPixel;
+        so.ApplyModifiedPropertiesWithoutUndo();
 
-        // Anti-aliasing
-        asset.msaaSampleCount = 4;
+        Debug.Log("[URPSetup] Configured URP via SerializedObject: HDR, Shadows, " +
+                  "AdditionalLights, MSAA 4x, DepthTex, OpaqueTex");
+    }
 
-        // Rendering
-        asset.renderScale = 1f;
+    private static void SetBool(SerializedObject so, string prop, bool val)
+    {
+        var p = so.FindProperty(prop);
+        if (p != null) p.boolValue = val;
+    }
 
-        // Depth texture (needed for fog, SSAO, soft particles)
-        asset.supportsCameraDepthTexture = true;
-        asset.supportsCameraOpaqueTexture = true;
+    private static void SetInt(SerializedObject so, string prop, int val)
+    {
+        var p = so.FindProperty(prop);
+        if (p != null) p.intValue = val;
+    }
 
-        Debug.Log("[URPSetup] Configured URP: HDR=on, Shadows=4-cascade@2048, " +
-                  "AdditionalLights=8@PerPixel, MSAA=4x, DepthTex=on, OpaqueTex=on");
+    private static void SetFloat(SerializedObject so, string prop, float val)
+    {
+        var p = so.FindProperty(prop);
+        if (p != null) p.floatValue = val;
     }
 
     private static void AddSSAOFeature(UniversalRendererData rendererData)
