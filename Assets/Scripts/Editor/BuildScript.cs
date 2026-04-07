@@ -1,6 +1,8 @@
 using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using System;
 using System.Linq;
 
@@ -36,6 +38,73 @@ public class BuildScript
         return BuildTarget.StandaloneWindows64;
     }
 
+    /// <summary>
+    /// Ensure URP pipeline asset exists and is assigned to GraphicsSettings.
+    /// Without this, batch-mode builds use Built-in pipeline and all URP shaders are null (pink).
+    /// </summary>
+    private static void EnsureURPPipeline()
+    {
+        if (GraphicsSettings.currentRenderPipeline != null)
+        {
+            Debug.Log($"[BuildScript] URP already assigned: {GraphicsSettings.currentRenderPipeline.name}");
+            return;
+        }
+
+        Debug.Log("[BuildScript] No render pipeline assigned — creating URP assets...");
+
+        const string settingsPath = "Assets/Settings";
+        const string rendererPath = settingsPath + "/URPRenderer.asset";
+        const string assetPath = settingsPath + "/URPAsset.asset";
+
+        if (!AssetDatabase.IsValidFolder(settingsPath))
+            AssetDatabase.CreateFolder("Assets", "Settings");
+
+        // Create renderer
+        var renderer = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(rendererPath);
+        if (renderer == null)
+        {
+            renderer = ScriptableObject.CreateInstance<UniversalRendererData>();
+            AssetDatabase.CreateAsset(renderer, rendererPath);
+        }
+
+        // Create pipeline asset
+        var urpAsset = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(assetPath);
+        if (urpAsset == null)
+        {
+            urpAsset = UniversalRenderPipelineAsset.Create(renderer);
+            AssetDatabase.CreateAsset(urpAsset, assetPath);
+        }
+
+        // Configure via SerializedObject (URP 17 properties are read-only)
+        var so = new SerializedObject(urpAsset);
+        SetProp(so, "m_SupportsHDR", true);
+        SetProp(so, "m_MainLightShadowsSupported", true);
+        SetProp(so, "m_MainLightShadowmapResolution", 2048);
+        SetProp(so, "m_ShadowDistance", 150f);
+        SetProp(so, "m_ShadowCascadeCount", 4);
+        SetProp(so, "m_AdditionalLightsRenderingMode", 1);
+        SetProp(so, "m_AdditionalLightsPerObjectLimit", 8);
+        SetProp(so, "m_MSAA", 4);
+        SetProp(so, "m_RenderScale", 1f);
+        SetProp(so, "m_SupportsCameraDepthTexture", true);
+        SetProp(so, "m_SupportsCameraOpaqueTexture", true);
+        so.ApplyModifiedPropertiesWithoutUndo();
+
+        // Assign to graphics settings
+        GraphicsSettings.defaultRenderPipeline = urpAsset;
+        QualitySettings.renderPipeline = urpAsset;
+
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[BuildScript] URP pipeline created and assigned: {urpAsset.name}");
+    }
+
+    private static void SetProp(SerializedObject so, string name, bool val)
+    { var p = so.FindProperty(name); if (p != null) p.boolValue = val; }
+    private static void SetProp(SerializedObject so, string name, int val)
+    { var p = so.FindProperty(name); if (p != null) p.intValue = val; }
+    private static void SetProp(SerializedObject so, string name, float val)
+    { var p = so.FindProperty(name); if (p != null) p.floatValue = val; }
+
     [MenuItem("Build/Build Game")]
     public static void Build()
     {
@@ -69,6 +138,9 @@ public class BuildScript
             if (!buildPath.EndsWith(".exe"))
                 buildPath += ".exe";
         }
+
+        // Ensure URP pipeline is assigned before building
+        EnsureURPPipeline();
 
         Debug.Log($"[BuildScript] Building {target} to {buildPath} with {scenes.Length} scenes");
 
