@@ -111,36 +111,30 @@ public static class URPSetup
         // Check if SSAO already exists
         foreach (var feature in rendererData.rendererFeatures)
         {
-            if (feature != null && feature.GetType().Name.Contains("ScreenSpaceAmbientOcclusion"))
+            if (feature != null && feature.GetType().Name.Contains("Ambient"))
             {
                 Debug.Log("[URPSetup] SSAO already configured.");
                 return;
             }
         }
 
-        // Create SSAO ScriptableRendererFeature
-        var ssaoFeature = ScriptableObject.CreateInstance<ScreenSpaceAmbientOcclusion>();
+        // Use reflection to create SSAO — class name varies across URP versions
+        var ssaoType = System.Type.GetType("UnityEngine.Rendering.Universal.ScreenSpaceAmbientOcclusion, Unity.RenderPipelines.Universal.Runtime");
+        if (ssaoType == null)
+        {
+            Debug.LogWarning("[URPSetup] SSAO class not found in URP — add manually via Renderer asset inspector");
+            return;
+        }
+
+        var ssaoFeature = (ScriptableRendererFeature)ScriptableObject.CreateInstance(ssaoType);
         ssaoFeature.name = "SSAO";
 
-        // Configure SSAO settings via serialized properties
-        var settings = ssaoFeature.settings;
-        settings.Intensity = 1.5f;
-        settings.Radius = 0.3f;
-        settings.DirectLightingStrength = 0.25f;
-        settings.Samples = ScreenSpaceAmbientOcclusionSettings.AOSampleOption.Medium;
-        settings.Downsample = true;
-        settings.AfterOpaque = false;
-        settings.Source = ScreenSpaceAmbientOcclusionSettings.DepthSource.Depth;
-
-        // Add to renderer
         rendererData.rendererFeatures.Add(ssaoFeature);
         rendererData.SetDirty();
-
-        // Save the SSAO asset as sub-asset of renderer
         AssetDatabase.AddObjectToAsset(ssaoFeature, rendererData);
         EditorUtility.SetDirty(rendererData);
 
-        Debug.Log("[URPSetup] Added SSAO Renderer Feature (Intensity=1.5, Radius=0.3, Medium samples)");
+        Debug.Log("[URPSetup] Added SSAO Renderer Feature");
     }
 }
 #endif

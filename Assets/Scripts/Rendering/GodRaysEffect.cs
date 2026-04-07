@@ -20,10 +20,14 @@ namespace Orlo.Rendering
         [SerializeField] private float rayIntensity = 1.3f;
         [SerializeField] private float maxIntensity = 1.5f;
 
-        /// <summary>
-        /// CloudRenderer calls this to modulate ray visibility with cloud density.
-        /// </summary>
+        /// <summary>Stub — god ray factor from cloud density.</summary>
         public void SetCloudFactor(float factor) { }
+
+        /// <summary>Stub — god ray factor (0-1).</summary>
+        public void SetGodRayFactor(float factor) { }
+
+        /// <summary>Stub — whether sun is above horizon.</summary>
+        public void SetSunAboveHorizon(bool above) { }
 
         private void Awake()
         {
