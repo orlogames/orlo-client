@@ -97,11 +97,8 @@ namespace Orlo.World
                     meshFilter.mesh = meshData.mesh;
 
                     var meshRenderer = meshGO.AddComponent<MeshRenderer>();
-                    // Use Standard shader for full PBR support (force-included via GraphicsSettings)
-                    var shader = Shader.Find("Standard")
-                        ?? Resources.Load<Shader>("Shaders/EntityFallback")
-                        ?? Shader.Find("Legacy Shaders/Diffuse");
-                    var mat = new Material(shader);
+                    // Use URP Lit shader for full PBR support
+                    var mat = new Material(Orlo.Rendering.OrloShaders.Lit);
                     AssetLoader.ApplyPbrMaterial(mat, meshData.material);
                     meshRenderer.material = mat;
                 }

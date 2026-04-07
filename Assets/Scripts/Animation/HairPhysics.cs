@@ -129,7 +129,7 @@ namespace Orlo.Animation
             lr.positionCount = segmentCount + 1;
             lr.startWidth = startWidth;
             lr.endWidth = endWidth;
-            lr.material = new Material(Shader.Find("Sprites/Default"));
+            lr.material = new Material(Orlo.Rendering.OrloShaders.SpritesDefault);
             lr.startColor = color;
             lr.endColor = new Color(color.r, color.g, color.b, 0.3f);
             lr.useWorldSpace = true;

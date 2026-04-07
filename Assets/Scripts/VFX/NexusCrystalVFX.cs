@@ -150,14 +150,12 @@ namespace Orlo.VFX
         private Material CreateMoteMaterial()
         {
             // Use additive particle shader for glowing motes
-            var shader = Shader.Find("Particles/Standard Unlit");
-            if (shader == null)
-                shader = Shader.Find("Legacy Shaders/Particles/Additive");
-            if (shader == null)
-                shader = Shader.Find("Standard");
-
+            var shader = Orlo.Rendering.OrloShaders.ParticlesUnlit;
             var mat = new Material(shader);
-            mat.SetColor("_Color", Color.white);
+            if (mat.HasProperty("_BaseColor"))
+                mat.SetColor("_BaseColor", Color.white);
+            else
+                mat.SetColor("_Color", Color.white);
             mat.mainTexture = CreateSoftGlowTexture(32);
 
             // Try to set additive blending

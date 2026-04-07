@@ -127,15 +127,12 @@ namespace Orlo.World
             var renderer = sphere.GetComponent<Renderer>();
             if (renderer != null)
             {
-                var mat = new Material(Shader.Find("Standard") ?? Shader.Find("Orlo/EntityFallback"));
-                mat.color = new Color(1f, 0.85f, 0.2f);
+                var mat = Orlo.Rendering.OrloShaders.CreateEmissive(
+                    new Color(1f, 0.85f, 0.2f),
+                    new Color(1f, 0.7f, 0.1f), 2f);
                 mat.SetFloat("_Metallic", 0.8f);
-                mat.SetFloat("_Smoothness", 0.9f);
-                if (mat.HasProperty("_EmissionColor"))
-                {
-                    mat.EnableKeyword("_EMISSION");
-                    mat.SetColor("_EmissionColor", new Color(1f, 0.7f, 0.1f) * 2f);
-                }
+                if (mat.HasProperty("_Smoothness"))
+                    mat.SetFloat("_Smoothness", 0.9f);
                 renderer.material = mat;
             }
 

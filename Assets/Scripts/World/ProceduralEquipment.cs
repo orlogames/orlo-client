@@ -28,30 +28,16 @@ namespace Orlo.World
         {
             if (_metalMaterial != null) return;
 
-            var standard = Shader.Find("Standard");
+            _metalMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.7f, 0.7f, 0.75f), 0.8f, 0.6f);
 
-            _metalMaterial = new Material(standard);
-            _metalMaterial.color = new Color(0.7f, 0.7f, 0.75f);
-            _metalMaterial.SetFloat("_Metallic", 0.8f);
-            _metalMaterial.SetFloat("_Smoothness", 0.6f);
+            _woodMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.4f, 0.28f, 0.12f), 0f, 0.2f);
 
-            _woodMaterial = new Material(standard);
-            _woodMaterial.color = new Color(0.4f, 0.28f, 0.12f);
-            _woodMaterial.SetFloat("_Metallic", 0f);
-            _woodMaterial.SetFloat("_Smoothness", 0.2f);
+            _leatherMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.35f, 0.2f, 0.1f), 0f, 0.15f);
 
-            _leatherMaterial = new Material(standard);
-            _leatherMaterial.color = new Color(0.35f, 0.2f, 0.1f);
-            _leatherMaterial.SetFloat("_Metallic", 0f);
-            _leatherMaterial.SetFloat("_Smoothness", 0.15f);
-
-            _crystalMaterial = new Material(standard);
-            _crystalMaterial.color = new Color(0.3f, 0.6f, 0.9f, 0.8f);
+            _crystalMaterial = Orlo.Rendering.OrloShaders.CreateTransparent(new Color(0.3f, 0.6f, 0.9f, 0.8f));
             _crystalMaterial.SetFloat("_Metallic", 0.3f);
-            _crystalMaterial.SetFloat("_Smoothness", 0.9f);
-            _crystalMaterial.SetOverrideTag("RenderType", "Transparent");
-            _crystalMaterial.SetFloat("_Mode", 3f); // Transparent
-            _crystalMaterial.renderQueue = 3000;
+            if (_crystalMaterial.HasProperty("_Smoothness"))
+                _crystalMaterial.SetFloat("_Smoothness", 0.9f);
             _crystalMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
             _crystalMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
             _crystalMaterial.SetInt("_ZWrite", 0);

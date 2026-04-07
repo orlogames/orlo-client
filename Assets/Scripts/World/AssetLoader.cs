@@ -269,11 +269,8 @@ namespace Orlo.World
             Bounds combinedBounds = default;
             bool boundsInitialized = false;
 
-            // Use Standard shader for GLB models (supports PBR textures from Meshy)
-            // Standard shader is always included via GraphicsSettings.asset
-            var shader = Shader.Find("Standard")
-                ?? Resources.Load<Shader>("Shaders/EntityFallback")
-                ?? Shader.Find("Legacy Shaders/Diffuse");
+            // Use URP Lit shader for GLB models (supports PBR textures from Meshy)
+            var shader = Orlo.Rendering.OrloShaders.Lit;
 
             foreach (var entry in cached.entries)
             {
@@ -284,7 +281,7 @@ namespace Orlo.World
                 mf.sharedMesh = entry.mesh;
 
                 var mr = child.AddComponent<MeshRenderer>();
-                var mat = shader != null ? new Material(shader) : new Material(Shader.Find("Hidden/InternalErrorShader"));
+                var mat = new Material(shader);
                 ApplyPbrMaterial(mat, entry.material);
                 mr.material = mat;
 
@@ -312,30 +309,41 @@ namespace Orlo.World
         }
 
         /// <summary>
-        /// Apply all PBR material properties from parsed glTF data to a Unity Standard shader material.
+        /// Apply all PBR material properties from parsed glTF data to a URP Lit material.
         /// Public static so ModelCharacter can reuse this.
+        /// URP Lit property names: _BaseColor, _BaseMap, _Metallic, _Smoothness,
+        /// _BumpMap, _BumpScale, _EmissionColor, _EmissionMap, _Surface, _Blend
         /// </summary>
         public static void ApplyPbrMaterial(Material mat, MaterialData data)
         {
-            // Base color
-            mat.color = data.baseColor;
+            // Base color — URP uses _BaseColor, Built-in uses _Color
+            if (mat.HasProperty("_BaseColor"))
+                mat.SetColor("_BaseColor", data.baseColor);
+            else
+                mat.color = data.baseColor;
 
-            // Albedo texture
+            // Albedo texture — URP uses _BaseMap, Built-in uses _MainTex
             if (data.albedoTex != null)
-                mat.mainTexture = data.albedoTex;
+            {
+                if (mat.HasProperty("_BaseMap"))
+                    mat.SetTexture("_BaseMap", data.albedoTex);
+                else
+                    mat.mainTexture = data.albedoTex;
+            }
 
-            // Metallic + smoothness (Standard shader uses smoothness = 1 - roughness)
+            // Metallic + smoothness
+            // URP uses _Smoothness directly (not _Glossiness)
+            float smoothness = 1f - data.roughness;
             mat.SetFloat("_Metallic", data.metallic);
-            mat.SetFloat("_GlossMapScale", 1f);
-            mat.SetFloat("_Glossiness", 1f - data.roughness);
+            if (mat.HasProperty("_Smoothness"))
+                mat.SetFloat("_Smoothness", smoothness);
+            if (mat.HasProperty("_Glossiness"))
+                mat.SetFloat("_Glossiness", smoothness);
 
-            // Metallic-roughness texture (green channel = roughness, blue channel = metallic in glTF)
-            // Unity Standard shader expects metallic in R and smoothness in A of _MetallicGlossMap
+            // Metallic-roughness texture
             if (data.metallicRoughnessTex != null)
             {
                 mat.SetTexture("_MetallicGlossMap", data.metallicRoughnessTex);
-                // When a metallic map is present, the shader reads metallic from the texture
-                // Set metallic to 1 so the texture controls the actual value
                 mat.SetFloat("_Metallic", 1f);
             }
 
@@ -359,17 +367,25 @@ namespace Orlo.World
                     mat.SetTexture("_EmissionMap", data.emissiveTex);
             }
 
-            // Transparency
+            // Transparency — URP uses _Surface property (0=Opaque, 1=Transparent)
             if (data.isTransparent)
             {
-                mat.SetFloat("_Mode", 3f); // Transparent
+                if (mat.HasProperty("_Surface"))
+                {
+                    // URP transparency mode
+                    mat.SetFloat("_Surface", 1f); // Transparent
+                    mat.SetFloat("_Blend", 0f);   // Alpha blend
+                    mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                }
+                else
+                {
+                    // Built-in fallback
+                    mat.SetFloat("_Mode", 3f);
+                }
                 mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
                 mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
                 mat.SetInt("_ZWrite", 0);
-                mat.DisableKeyword("_ALPHATEST_ON");
-                mat.EnableKeyword("_ALPHABLEND_ON");
-                mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-                mat.renderQueue = 3000; // Transparent queue
+                mat.renderQueue = 3000;
             }
         }
 

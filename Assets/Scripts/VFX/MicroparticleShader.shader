@@ -11,7 +11,13 @@ Shader "Hidden/MicroparticleRender"
 
     SubShader
     {
-        Tags { "Queue"="Transparent" "RenderType"="Transparent" "IgnoreProjector"="True" }
+        Tags
+        {
+            "Queue" = "Transparent"
+            "RenderType" = "Transparent"
+            "RenderPipeline" = "UniversalPipeline"
+            "IgnoreProjector" = "True"
+        }
         LOD 100
 
         Pass
@@ -20,13 +26,13 @@ Shader "Hidden/MicroparticleRender"
             ZWrite Off
             Cull Off
 
-            CGPROGRAM
+            HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
             #pragma multi_compile_instancing
             #pragma target 4.5
 
-            #include "UnityCG.cginc"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
             struct Particle
             {
@@ -41,18 +47,24 @@ Shader "Hidden/MicroparticleRender"
             };
 
             StructuredBuffer<Particle> _Particles;
-            sampler2D _MainTex;
+            TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
 
-            struct v2f
+            struct Varyings
             {
-                float4 pos : SV_POSITION;
+                float4 positionCS : SV_POSITION;
                 float2 uv  : TEXCOORD0;
                 float4 color : COLOR;
             };
 
-            v2f vert(appdata_full v, uint instanceID : SV_InstanceID)
+            struct Attributes
             {
-                v2f o;
+                float4 positionOS : POSITION;
+                float2 uv : TEXCOORD0;
+            };
+
+            Varyings vert(Attributes input, uint instanceID : SV_InstanceID)
+            {
+                Varyings output;
 
                 Particle p = _Particles[instanceID];
 
@@ -62,30 +74,30 @@ Shader "Hidden/MicroparticleRender"
                 float3 camUp    = UNITY_MATRIX_V[1].xyz;
 
                 float size = p.size;
-                float3 vertexOffset = (v.vertex.x * camRight + v.vertex.y * camUp) * size;
+                float3 vertexOffset = (input.positionOS.x * camRight + input.positionOS.y * camUp) * size;
                 float3 finalPos = worldPos + vertexOffset;
 
-                o.pos = mul(UNITY_MATRIX_VP, float4(finalPos, 1.0));
-                o.uv = v.texcoord;
-                o.color = p.color;
+                output.positionCS = mul(UNITY_MATRIX_VP, float4(finalPos, 1.0));
+                output.uv = input.uv;
+                output.color = p.color;
 
-                return o;
+                return output;
             }
 
-            fixed4 frag(v2f i) : SV_Target
+            half4 frag(Varyings input) : SV_Target
             {
                 // Soft circular particle with glow falloff
-                float2 center = i.uv - 0.5;
+                float2 center = input.uv - 0.5;
                 float dist = length(center) * 2.0;
                 float alpha = saturate(1.0 - dist * dist);
 
                 // Core glow (brighter center)
                 float core = exp(-dist * dist * 8.0);
-                float3 color = i.color.rgb * (0.5 + core * 0.5);
+                float3 color = input.color.rgb * (0.5 + core * 0.5);
 
-                return fixed4(color, alpha * i.color.a);
+                return half4(color, alpha * input.color.a);
             }
-            ENDCG
+            ENDHLSL
         }
     }
     Fallback Off

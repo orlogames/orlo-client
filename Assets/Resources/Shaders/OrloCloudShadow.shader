@@ -11,55 +11,69 @@ Shader "Orlo/CloudShadow"
     }
     SubShader
     {
-        Tags { "Queue"="Transparent-100" "RenderType"="Transparent" "IgnoreProjector"="True" }
+        Tags
+        {
+            "Queue" = "Transparent-100"
+            "RenderType" = "Transparent"
+            "RenderPipeline" = "UniversalPipeline"
+            "IgnoreProjector" = "True"
+        }
         Blend DstColor Zero
         ZWrite Off
         Cull Off
 
         Pass
         {
-            CGPROGRAM
+            Name "CloudShadowPass"
+            Tags { "LightMode" = "UniversalForward" }
+
+            HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #include "UnityCG.cginc"
+            #pragma target 3.0
 
-            sampler2D _NoiseTex;
-            float4 _UVOffset;
-            float _Threshold;
-            float _Softness;
-            float _Density;
-            float _ShadowStrength;
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            struct appdata
+            TEXTURE2D(_NoiseTex); SAMPLER(sampler_NoiseTex);
+
+            CBUFFER_START(UnityPerMaterial)
+                float4 _UVOffset;
+                float _Threshold;
+                float _Softness;
+                float _Density;
+                float _ShadowStrength;
+            CBUFFER_END
+
+            struct Attributes
             {
-                float4 vertex : POSITION;
+                float4 positionOS : POSITION;
                 float2 uv : TEXCOORD0;
             };
 
-            struct v2f
+            struct Varyings
             {
-                float4 pos : SV_POSITION;
+                float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
             };
 
-            v2f vert(appdata v)
+            Varyings vert(Attributes input)
             {
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
-                o.uv = v.uv;
-                return o;
+                Varyings output;
+                output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                output.uv = input.uv;
+                return output;
             }
 
-            half4 frag(v2f i) : SV_Target
+            half4 frag(Varyings input) : SV_Target
             {
-                float2 uv = i.uv + _UVOffset.xy;
-                float noise = tex2D(_NoiseTex, uv).r;
+                float2 uv = input.uv + _UVOffset.xy;
+                float noise = SAMPLE_TEXTURE2D(_NoiseTex, sampler_NoiseTex, uv).r;
                 float adjustedThreshold = lerp(0.7, 0.15, _Density);
                 float cloudShape = saturate((noise - adjustedThreshold) / max(_Softness, 0.001));
                 float shadow = 1.0 - cloudShape * _ShadowStrength;
                 return half4(shadow, shadow, shadow, 1);
             }
-            ENDCG
+            ENDHLSL
         }
     }
     Fallback Off

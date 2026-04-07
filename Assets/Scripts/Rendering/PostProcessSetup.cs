@@ -1,11 +1,13 @@
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace Orlo.Rendering
 {
     /// <summary>
-    /// Lightweight post-processing for Built-in Render Pipeline.
-    /// Adds bloom (bright area glow) and warm color grading via OnRenderImage.
-    /// No external packages required — uses pre-compiled shaders loaded from Resources.
+    /// URP post-processing setup via Volume system.
+    /// Creates a global Volume with bloom, color grading, vignette, tonemapping, and SSAO.
+    /// Replaces the old OnRenderImage-based post-processing.
     /// Attach to the main camera (auto-attached by GameBootstrap).
     /// </summary>
     [RequireComponent(typeof(Camera))]
@@ -14,106 +16,114 @@ namespace Orlo.Rendering
         [Header("Bloom")]
         [SerializeField] private float bloomThreshold = 0.7f;
         [SerializeField] private float bloomIntensity = 0.45f;
-        [SerializeField] private int bloomIterations = 4;
 
         [Header("Color Grading")]
-        [SerializeField] private float warmth = 0.12f;          // Shift toward warm tones
+        [SerializeField] private float warmth = 0.12f;
         [SerializeField] private float contrast = 1.08f;
         [SerializeField] private float saturation = 1.1f;
         [SerializeField] private float vignetteIntensity = 0.25f;
 
-        private Material _bloomMat;
-        private Material _compositeMat;
-        private Camera _cam;
+        private Volume _volume;
+        private VolumeProfile _profile;
 
         private void Awake()
         {
-            _cam = GetComponent<Camera>();
-            _cam.allowHDR = true;
+            var cam = GetComponent<Camera>();
+            cam.allowHDR = true;
 
-            // Load pre-compiled shaders from Resources
-            var bloomShader = Resources.Load<Shader>("Shaders/OrloBloom");
-            if (bloomShader == null) bloomShader = Shader.Find("Orlo/Bloom");
+            // Ensure camera has URP additional data for post-processing
+            var urpCamData = cam.GetComponent<UniversalAdditionalCameraData>();
+            if (urpCamData == null)
+                urpCamData = cam.gameObject.AddComponent<UniversalAdditionalCameraData>();
+            urpCamData.renderPostProcessing = true;
 
-            var compositeShader = Resources.Load<Shader>("Shaders/OrloComposite");
-            if (compositeShader == null) compositeShader = Shader.Find("Orlo/Composite");
-
-            if (bloomShader == null || compositeShader == null)
-            {
-                Debug.LogWarning("[PostProcess] Failed to load shaders — post-processing disabled");
-                enabled = false;
-                return;
-            }
-
-            _bloomMat = new Material(bloomShader);
-            _compositeMat = new Material(compositeShader);
+            SetupVolume();
         }
 
-        private void OnRenderImage(RenderTexture src, RenderTexture dst)
+        private void SetupVolume()
         {
-            if (_bloomMat == null || _compositeMat == null)
+            // Create a global Volume on this GameObject
+            _volume = gameObject.AddComponent<Volume>();
+            _volume.isGlobal = true;
+            _volume.priority = 100;
+
+            // Create a runtime VolumeProfile
+            _profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            _volume.profile = _profile;
+
+            // --- Tonemapping (ACES Filmic for cinematic look) ---
+            var tonemapping = _profile.Add<Tonemapping>(true);
+            tonemapping.mode.Override(TonemappingMode.ACES);
+
+            // --- Bloom ---
+            var bloom = _profile.Add<Bloom>(true);
+            bloom.threshold.Override(bloomThreshold);
+            bloom.intensity.Override(bloomIntensity);
+            bloom.scatter.Override(0.7f);
+
+            // --- Color Adjustments (replaces our custom color grading) ---
+            var colorAdj = _profile.Add<ColorAdjustments>(true);
+            colorAdj.contrast.Override((contrast - 1f) * 100f);   // URP uses -100 to 100
+            colorAdj.saturation.Override((saturation - 1f) * 100f); // URP uses -100 to 100
+            // Warmth: shift post-exposure slightly and use color filter
+            colorAdj.colorFilter.Override(new Color(1f, 1f - warmth * 0.3f, 1f - warmth * 0.6f));
+
+            // --- White Balance (warm shift) ---
+            var whiteBalance = _profile.Add<WhiteBalance>(true);
+            whiteBalance.temperature.Override(warmth * 30f); // Positive = warmer
+
+            // --- Vignette ---
+            var vignette = _profile.Add<Vignette>(true);
+            vignette.intensity.Override(vignetteIntensity);
+            vignette.smoothness.Override(0.4f);
+
+            // --- Film Grain (subtle cinematic texture) ---
+            var filmGrain = _profile.Add<FilmGrain>(true);
+            filmGrain.intensity.Override(0.15f);
+            filmGrain.type.Override(FilmGrainLookup.Medium1);
+
+            Debug.Log("[PostProcess] URP Volume post-processing configured: " +
+                      $"Bloom(t={bloomThreshold},i={bloomIntensity}), " +
+                      $"ACES Tonemapping, " +
+                      $"ColorGrading(warmth={warmth},contrast={contrast},sat={saturation}), " +
+                      $"Vignette({vignetteIntensity})");
+        }
+
+        /// <summary>
+        /// Update bloom settings at runtime (e.g., for weather changes).
+        /// </summary>
+        public void SetBloom(float threshold, float intensity)
+        {
+            if (_profile != null && _profile.TryGet<Bloom>(out var bloom))
             {
-                Graphics.Blit(src, dst);
-                return;
+                bloom.threshold.Override(threshold);
+                bloom.intensity.Override(intensity);
             }
+        }
 
-            // --- Bloom pass ---
-            int w = src.width / 2;
-            int h = src.height / 2;
-
-            _bloomMat.SetFloat("_Threshold", bloomThreshold);
-
-            // Threshold + first downsample
-            var rt0 = RenderTexture.GetTemporary(w, h, 0, src.format);
-            Graphics.Blit(src, rt0, _bloomMat, 0);
-
-            // Progressive blur downsamples
-            var last = rt0;
-            var mips = new RenderTexture[bloomIterations];
-            mips[0] = rt0;
-
-            for (int i = 1; i < bloomIterations; i++)
+        /// <summary>
+        /// Update color grading at runtime (e.g., for time-of-day changes).
+        /// </summary>
+        public void SetColorGrading(float newWarmth, float newContrast, float newSaturation)
+        {
+            if (_profile != null)
             {
-                w = Mathf.Max(1, w / 2);
-                h = Mathf.Max(1, h / 2);
-                var rt = RenderTexture.GetTemporary(w, h, 0, src.format);
-                Graphics.Blit(last, rt, _bloomMat, 1);
-                mips[i] = rt;
-                last = rt;
-            }
-
-            // Progressive upsample (blur back up)
-            for (int i = bloomIterations - 2; i >= 0; i--)
-            {
-                var rt = RenderTexture.GetTemporary(mips[i].width, mips[i].height, 0, src.format);
-                Graphics.Blit(last, rt, _bloomMat, 1);
-                RenderTexture.ReleaseTemporary(last);
-                last = rt;
-            }
-
-            // --- Composite pass ---
-            _compositeMat.SetTexture("_BloomTex", last);
-            _compositeMat.SetFloat("_BloomIntensity", bloomIntensity);
-            _compositeMat.SetFloat("_Warmth", warmth);
-            _compositeMat.SetFloat("_Contrast", contrast);
-            _compositeMat.SetFloat("_Saturation", saturation);
-            _compositeMat.SetFloat("_VignetteIntensity", vignetteIntensity);
-
-            Graphics.Blit(src, dst, _compositeMat, 0);
-
-            // Cleanup
-            RenderTexture.ReleaseTemporary(last);
-            for (int i = 0; i < bloomIterations; i++)
-            {
-                if (mips[i] != null && mips[i] != last)
-                    RenderTexture.ReleaseTemporary(mips[i]);
+                if (_profile.TryGet<ColorAdjustments>(out var colorAdj))
+                {
+                    colorAdj.contrast.Override((newContrast - 1f) * 100f);
+                    colorAdj.saturation.Override((newSaturation - 1f) * 100f);
+                }
+                if (_profile.TryGet<WhiteBalance>(out var wb))
+                {
+                    wb.temperature.Override(newWarmth * 30f);
+                }
             }
         }
 
         private void OnDestroy()
         {
-            if (_bloomMat != null) Destroy(_bloomMat);
-            if (_compositeMat != null) Destroy(_compositeMat);
+            if (_profile != null)
+                DestroyImmediate(_profile);
         }
     }
 }

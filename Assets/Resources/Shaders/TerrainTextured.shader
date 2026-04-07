@@ -2,7 +2,7 @@ Shader "Orlo/TerrainTextured"
 {
     Properties
     {
-        _Glossiness ("Smoothness", Range(0,1)) = 0.05
+        _Smoothness ("Smoothness", Range(0,1)) = 0.05
         _GrassTex ("Grass", 2D) = "white" {}
         _RockTex  ("Rock",  2D) = "white" {}
         _DirtTex  ("Dirt",  2D) = "white" {}
@@ -17,61 +17,184 @@ Shader "Orlo/TerrainTextured"
 
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
+        Tags
+        {
+            "RenderType" = "Opaque"
+            "RenderPipeline" = "UniversalPipeline"
+            "Queue" = "Geometry"
+        }
         LOD 200
 
-        CGPROGRAM
-        #pragma surface surf Standard fullforwardshadows vertex:vert
-        #pragma target 3.0
-
-        sampler2D _GrassTex, _RockTex, _DirtTex, _SandTex;
-        sampler2D _GrassNorm, _RockNorm, _DirtNorm, _SandNorm;
-        half _Glossiness;
-        float _TexScale;
-        half _NormalStrength;
-
-        struct Input
+        Pass
         {
-            float4 vertColor;
-            float3 worldPos;
-        };
+            Name "ForwardLit"
+            Tags { "LightMode" = "UniversalForward" }
 
-        void vert(inout appdata_full v, out Input o)
-        {
-            UNITY_INITIALIZE_OUTPUT(Input, o);
-            o.vertColor = v.color;
+            HLSLPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #pragma target 3.0
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
+            #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
+            #pragma multi_compile _ _SHADOWS_SOFT
+            #pragma multi_compile_fog
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+
+            TEXTURE2D(_GrassTex); SAMPLER(sampler_GrassTex);
+            TEXTURE2D(_RockTex);  SAMPLER(sampler_RockTex);
+            TEXTURE2D(_DirtTex);  SAMPLER(sampler_DirtTex);
+            TEXTURE2D(_SandTex);  SAMPLER(sampler_SandTex);
+            TEXTURE2D(_GrassNorm); SAMPLER(sampler_GrassNorm);
+            TEXTURE2D(_RockNorm);  SAMPLER(sampler_RockNorm);
+            TEXTURE2D(_DirtNorm);  SAMPLER(sampler_DirtNorm);
+            TEXTURE2D(_SandNorm);  SAMPLER(sampler_SandNorm);
+
+            CBUFFER_START(UnityPerMaterial)
+                half _Smoothness;
+                float _TexScale;
+                half _NormalStrength;
+            CBUFFER_END
+
+            struct Attributes
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS   : NORMAL;
+                float4 tangentOS  : TANGENT;
+                float4 color      : COLOR;
+            };
+
+            struct Varyings
+            {
+                float4 positionCS  : SV_POSITION;
+                float3 positionWS  : TEXCOORD0;
+                float3 normalWS    : TEXCOORD1;
+                float4 tangentWS   : TEXCOORD2;
+                float4 vertColor   : TEXCOORD3;
+                float  fogFactor   : TEXCOORD4;
+                float4 shadowCoord : TEXCOORD5;
+            };
+
+            Varyings vert(Attributes input)
+            {
+                Varyings output;
+
+                VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
+                VertexNormalInputs normalInput = GetVertexNormalInputs(input.normalOS, input.tangentOS);
+
+                output.positionCS = vertexInput.positionCS;
+                output.positionWS = vertexInput.positionWS;
+                output.normalWS = normalInput.normalWS;
+                output.tangentWS = float4(normalInput.tangentWS, input.tangentOS.w);
+                output.vertColor = input.color;
+                output.fogFactor = ComputeFogFactor(vertexInput.positionCS.z);
+                output.shadowCoord = GetShadowCoord(vertexInput);
+
+                return output;
+            }
+
+            half3 UnpackNormalScale(half4 packedNormal, half scale)
+            {
+                half3 normal;
+                normal.xy = (packedNormal.wy * 2.0 - 1.0) * scale;
+                normal.z = sqrt(1.0 - saturate(dot(normal.xy, normal.xy)));
+                return normal;
+            }
+
+            half4 frag(Varyings input) : SV_Target
+            {
+                float2 uv = input.positionWS.xz * _TexScale;
+
+                // Splatmap weights from vertex color (R=grass, G=rock, B=dirt, A=sand)
+                half gw = input.vertColor.r;
+                half rw = input.vertColor.g;
+                half dw = input.vertColor.b;
+                half sw = input.vertColor.a;
+
+                // Sample and blend albedo textures
+                half3 albedo = SAMPLE_TEXTURE2D(_GrassTex, sampler_GrassTex, uv).rgb * gw
+                             + SAMPLE_TEXTURE2D(_RockTex,  sampler_RockTex,  uv).rgb * rw
+                             + SAMPLE_TEXTURE2D(_DirtTex,  sampler_DirtTex,  uv).rgb * dw
+                             + SAMPLE_TEXTURE2D(_SandTex,  sampler_SandTex,  uv).rgb * sw;
+
+                // Sample and blend normal maps
+                half3 grassN = UnpackNormalScale(SAMPLE_TEXTURE2D(_GrassNorm, sampler_GrassNorm, uv), _NormalStrength);
+                half3 rockN  = UnpackNormalScale(SAMPLE_TEXTURE2D(_RockNorm,  sampler_RockNorm,  uv), _NormalStrength);
+                half3 dirtN  = UnpackNormalScale(SAMPLE_TEXTURE2D(_DirtNorm,  sampler_DirtNorm,  uv), _NormalStrength);
+                half3 sandN  = UnpackNormalScale(SAMPLE_TEXTURE2D(_SandNorm,  sampler_SandNorm,  uv), _NormalStrength);
+
+                half3 blendedNormalTS = normalize(grassN * gw + rockN * rw + dirtN * dw + sandN * sw);
+
+                // Transform normal from tangent to world space
+                half3 bitangentWS = cross(input.normalWS, input.tangentWS.xyz) * input.tangentWS.w;
+                half3x3 TBN = half3x3(input.tangentWS.xyz, bitangentWS, input.normalWS);
+                half3 normalWS = normalize(mul(blendedNormalTS, TBN));
+
+                // Set up PBR surface data
+                InputData inputData = (InputData)0;
+                inputData.positionWS = input.positionWS;
+                inputData.normalWS = normalWS;
+                inputData.viewDirectionWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
+                inputData.shadowCoord = input.shadowCoord;
+                inputData.fogCoord = input.fogFactor;
+                inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionCS);
+
+                SurfaceData surfaceData = (SurfaceData)0;
+                surfaceData.albedo = albedo;
+                surfaceData.metallic = 0;
+                surfaceData.smoothness = _Smoothness;
+                surfaceData.normalTS = blendedNormalTS;
+                surfaceData.occlusion = 1;
+                surfaceData.alpha = 1;
+
+                half4 color = UniversalFragmentPBR(inputData, surfaceData);
+                color.rgb = MixFog(color.rgb, input.fogFactor);
+
+                return color;
+            }
+            ENDHLSL
         }
 
-        void surf(Input IN, inout SurfaceOutputStandard o)
+        // Shadow caster pass for casting shadows
+        Pass
         {
-            float2 uv = IN.worldPos.xz * _TexScale;
+            Name "ShadowCaster"
+            Tags { "LightMode" = "ShadowCaster" }
 
-            // Splatmap weights from vertex color (R=grass, G=rock, B=dirt, A=sand)
-            half gw = IN.vertColor.r;
-            half rw = IN.vertColor.g;
-            half dw = IN.vertColor.b;
-            half sw = IN.vertColor.a;
+            ZWrite On
+            ZTest LEqual
+            ColorMask 0
 
-            // Sample albedo textures and blend
-            half3 col = tex2D(_GrassTex, uv).rgb * gw
-                      + tex2D(_RockTex,  uv).rgb * rw
-                      + tex2D(_DirtTex,  uv).rgb * dw
-                      + tex2D(_SandTex,  uv).rgb * sw;
+            HLSLPROGRAM
+            #pragma vertex ShadowPassVertex
+            #pragma fragment ShadowPassFragment
+            #pragma target 3.0
 
-            // Sample normal maps and blend
-            half3 nrm = UnpackNormal(tex2D(_GrassNorm, uv)) * gw
-                      + UnpackNormal(tex2D(_RockNorm,  uv)) * rw
-                      + UnpackNormal(tex2D(_DirtNorm,  uv)) * dw
-                      + UnpackNormal(tex2D(_SandNorm,  uv)) * sw;
-
-            o.Albedo = col;
-            o.Normal = normalize(half3(nrm.xy * _NormalStrength, nrm.z));
-            o.Metallic = 0;
-            o.Smoothness = _Glossiness;
-            o.Alpha = 1;
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/Shaders/ShadowCasterPass.hlsl"
+            ENDHLSL
         }
-        ENDCG
+
+        // Depth pass for depth prepass
+        Pass
+        {
+            Name "DepthOnly"
+            Tags { "LightMode" = "DepthOnly" }
+
+            ZWrite On
+            ColorMask R
+
+            HLSLPROGRAM
+            #pragma vertex DepthOnlyVertex
+            #pragma fragment DepthOnlyFragment
+            #pragma target 3.0
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/Shaders/DepthOnlyPass.hlsl"
+            ENDHLSL
+        }
     }
 
-    Fallback "Diffuse"
+    Fallback "Universal Render Pipeline/Lit"
 }

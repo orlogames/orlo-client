@@ -781,9 +781,7 @@ namespace Orlo
                 var renderer = ground.GetComponent<Renderer>();
                 if (renderer != null)
                 {
-                    var mat = new Material(Shader.Find("Standard"));
-                    mat.color = new Color(0.35f, 0.55f, 0.25f); // earthy green
-                    renderer.material = mat;
+                    renderer.material = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.35f, 0.55f, 0.25f));
                 }
             }
 

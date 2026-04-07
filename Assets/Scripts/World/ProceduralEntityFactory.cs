@@ -50,27 +50,15 @@ namespace Orlo.World
             }
         }
 
-        /// <summary>Get a shader that won't be null in builds.</summary>
-        private static Shader _cachedFallbackShader;
+        /// <summary>Get the URP Lit shader via centralized lookup.</summary>
         private static Shader GetFallbackShader()
         {
-            if (_cachedFallbackShader != null) return _cachedFallbackShader;
-            _cachedFallbackShader = Resources.Load<Shader>("Shaders/EntityFallback");
-            if (_cachedFallbackShader == null) _cachedFallbackShader = Shader.Find("Orlo/EntityFallback");
-            if (_cachedFallbackShader == null) _cachedFallbackShader = Shader.Find("Standard");
-            if (_cachedFallbackShader == null) _cachedFallbackShader = Shader.Find("Legacy Shaders/Diffuse");
-            return _cachedFallbackShader;
+            return Orlo.Rendering.OrloShaders.Lit;
         }
 
         private static Material MakeMat(Color color)
         {
-            var shader = GetFallbackShader();
-            if (shader == null)
-            {
-                Debug.LogError("[EntityFactory] All shader lookups failed!");
-                return new Material(Shader.Find("Hidden/InternalErrorShader")) { color = color };
-            }
-            return new Material(shader) { color = color };
+            return Orlo.Rendering.OrloShaders.CreateLit(color);
         }
 
         // Known settlement asset IDs that have dedicated procedural builders

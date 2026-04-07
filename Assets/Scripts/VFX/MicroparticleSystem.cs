@@ -447,10 +447,8 @@ namespace Orlo.VFX
             var shader = Shader.Find("Hidden/MicroparticleRender");
             if (shader == null)
             {
-                // Fallback to a simple additive particle shader
-                shader = Shader.Find("Particles/Standard Unlit");
-                if (shader == null)
-                    shader = Shader.Find("Standard");
+                // Fallback to URP particles shader
+                shader = Orlo.Rendering.OrloShaders.ParticlesUnlit;
             }
             var mat = new Material(shader);
             mat.enableInstancing = true;

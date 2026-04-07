@@ -29,14 +29,10 @@ namespace Orlo.World
             GenerateWaterMesh();
 
             // Create a simple water material
-            var mat = new Material(Shader.Find("Standard"));
-            mat.color = new Color(0.15f, 0.32f, 0.45f, 0.65f);  // Warmer blue-grey for golden hour reflections
+            var mat = Orlo.Rendering.OrloShaders.CreateTransparent(new Color(0.15f, 0.32f, 0.45f, 0.65f));
             mat.SetFloat("_Metallic", 0.85f);
-            mat.SetFloat("_Glossiness", 0.92f);
-            mat.SetFloat("_Mode", 3); // Transparent
-            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            mat.SetInt("_ZWrite", 0);
+            if (mat.HasProperty("_Smoothness"))
+                mat.SetFloat("_Smoothness", 0.92f);
             mat.DisableKeyword("_ALPHATEST_ON");
             mat.EnableKeyword("_ALPHABLEND_ON");
             mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");

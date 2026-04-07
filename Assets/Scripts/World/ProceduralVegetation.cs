@@ -128,29 +128,23 @@ namespace Orlo.World
 
         private void BuildMaterials()
         {
-            var standard = Shader.Find("Standard");
-
-            _grassMaterial = new Material(standard);
-            _grassMaterial.color = new Color(0.22f, 0.52f, 0.14f);
+            _grassMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.22f, 0.52f, 0.14f));
             _grassMaterial.enableInstancing = true;
             _grassMaterial.EnableKeyword("_ALPHATEST_ON");
-            _grassMaterial.SetFloat("_Mode", 1f);
+            if (_grassMaterial.HasProperty("_AlphaClip"))
+                _grassMaterial.SetFloat("_AlphaClip", 1f);
             _grassMaterial.renderQueue = 2450;
 
-            _treeTrunkMaterial = new Material(standard);
-            _treeTrunkMaterial.color = new Color(0.35f, 0.22f, 0.1f);
+            _treeTrunkMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.35f, 0.22f, 0.1f), 0f, 0.3f);
             _treeTrunkMaterial.enableInstancing = true;
 
-            _pineCanopyMaterial = new Material(standard);
-            _pineCanopyMaterial.color = new Color(0.1f, 0.35f, 0.08f);
+            _pineCanopyMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.1f, 0.35f, 0.08f), 0f, 0.1f);
             _pineCanopyMaterial.enableInstancing = true;
 
-            _oakCanopyMaterial = new Material(standard);
-            _oakCanopyMaterial.color = new Color(0.15f, 0.45f, 0.12f);
+            _oakCanopyMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.15f, 0.45f, 0.12f), 0f, 0.1f);
             _oakCanopyMaterial.enableInstancing = true;
 
-            _palmCanopyMaterial = new Material(standard);
-            _palmCanopyMaterial.color = new Color(0.18f, 0.5f, 0.15f);
+            _palmCanopyMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.18f, 0.5f, 0.15f), 0f, 0.1f);
             _palmCanopyMaterial.enableInstancing = true;
         }
 

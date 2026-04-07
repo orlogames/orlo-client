@@ -89,13 +89,10 @@ namespace Orlo.World
             var renderer = _meshObj.GetComponent<Renderer>();
             if (renderer != null)
             {
-                _mat = new Material(Shader.Find("Standard"));
+                _mat = Orlo.Rendering.OrloShaders.CreateEmissive(_baseColor, _baseColor, 0.4f);
                 _mat.SetFloat("_Metallic", 0.3f);
-                _mat.SetFloat("_Glossiness", 0.7f);
-                _mat.color = _baseColor;
-                // Enable emission for glow
-                _mat.EnableKeyword("_EMISSION");
-                _mat.SetColor("_EmissionColor", _baseColor * 0.4f);
+                if (_mat.HasProperty("_Smoothness"))
+                    _mat.SetFloat("_Smoothness", 0.7f);
                 renderer.material = _mat;
             }
 
@@ -114,8 +111,8 @@ namespace Orlo.World
             var glowRenderer = glow.GetComponent<Renderer>();
             if (glowRenderer != null)
             {
-                var glowMat = new Material(Shader.Find("Standard"));
-                glowMat.SetFloat("_Mode", 3); // Transparent
+                var glowMat = Orlo.Rendering.OrloShaders.CreateTransparent(Color.white);
+                // URP transparency already configured by CreateTransparent
                 glowMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
                 glowMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
                 glowMat.SetInt("_ZWrite", 0);

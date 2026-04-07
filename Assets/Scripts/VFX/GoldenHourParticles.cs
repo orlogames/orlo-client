@@ -126,14 +126,12 @@ namespace Orlo.VFX
 
         private Material CreateDustMoteMaterial()
         {
-            var shader = Shader.Find("Particles/Standard Unlit");
-            if (shader == null)
-                shader = Shader.Find("Legacy Shaders/Particles/Alpha Blended");
-            if (shader == null)
-                shader = Shader.Find("Standard");
-
+            var shader = Orlo.Rendering.OrloShaders.ParticlesUnlit;
             var mat = new Material(shader);
-            mat.SetColor("_Color", Color.white);
+            if (mat.HasProperty("_BaseColor"))
+                mat.SetColor("_BaseColor", Color.white);
+            else
+                mat.SetColor("_Color", Color.white);
 
             // Generate a soft circle texture so particles aren't squares
             mat.mainTexture = CreateSoftCircleTexture(32);

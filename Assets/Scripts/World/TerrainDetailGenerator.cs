@@ -59,30 +59,16 @@ namespace Orlo.World
 
         private void InitializeMaterials()
         {
-            // Use Standard shader with EntityFallback as safe fallback
-            var standard = Shader.Find("Standard");
-            if (standard == null)
-            {
-                standard = Resources.Load<Shader>("Shaders/EntityFallback");
-                if (standard == null) standard = Shader.Find("Legacy Shaders/Diffuse");
-            }
+            _treeTrunkMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.35f, 0.22f, 0.1f), 0f, 0.1f);
 
-            _treeTrunkMaterial = new Material(standard);
-            _treeTrunkMaterial.color = new Color(0.35f, 0.22f, 0.1f);
-            _treeTrunkMaterial.SetFloat("_Glossiness", 0.1f);
+            _treeCanopyMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.15f, 0.45f, 0.12f), 0f, 0.05f);
 
-            _treeCanopyMaterial = new Material(standard);
-            _treeCanopyMaterial.color = new Color(0.15f, 0.45f, 0.12f);
-            _treeCanopyMaterial.SetFloat("_Glossiness", 0.05f);
+            _rockMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.5f, 0.48f, 0.45f), 0f, 0.2f);
 
-            _rockMaterial = new Material(standard);
-            _rockMaterial.color = new Color(0.5f, 0.48f, 0.45f);
-            _rockMaterial.SetFloat("_Glossiness", 0.2f);
-
-            _grassMaterial = new Material(standard);
-            _grassMaterial.color = new Color(0.2f, 0.55f, 0.15f);
+            _grassMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.2f, 0.55f, 0.15f));
             _grassMaterial.EnableKeyword("_ALPHATEST_ON");
-            _grassMaterial.SetFloat("_Mode", 1f); // Cutout
+            if (_grassMaterial.HasProperty("_AlphaClip"))
+                _grassMaterial.SetFloat("_AlphaClip", 1f);
             _grassMaterial.renderQueue = 2450;
             _grassMaterial.enableInstancing = true;
 

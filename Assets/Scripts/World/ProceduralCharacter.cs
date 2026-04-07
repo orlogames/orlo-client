@@ -321,7 +321,7 @@ namespace Orlo.World
             _skinnedRenderer.rootBone = _bones[BoneRoot];
 
             // Material with vertex colors
-            var mat2 = new Material(Shader.Find("Standard"));
+            var mat2 = new Material(Orlo.Rendering.OrloShaders.Lit);
             // Enable vertex color support (particles/standard unlit would be better but Standard works)
             _skinnedRenderer.material = mat2;
 

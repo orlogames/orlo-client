@@ -7,57 +7,66 @@ Shader "Orlo/Stars"
     }
     SubShader
     {
-        Tags { "Queue"="Background+10" "RenderType"="Transparent" "IgnoreProjector"="True" }
+        Tags
+        {
+            "Queue" = "Background+10"
+            "RenderType" = "Transparent"
+            "RenderPipeline" = "UniversalPipeline"
+            "IgnoreProjector" = "True"
+        }
         Pass
         {
             Blend One One
             ZWrite Off
             Cull Front
-            CGPROGRAM
+
+            HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #include "UnityCG.cginc"
+            #pragma target 3.0
 
-            float _NightFactor;
-            float _Time2;
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            struct appdata
+            CBUFFER_START(UnityPerMaterial)
+                float _NightFactor;
+                float _Time2;
+            CBUFFER_END
+
+            struct Attributes
             {
-                float4 vertex : POSITION;
+                float4 positionOS : POSITION;
                 float4 color : COLOR;
-                float2 uv : TEXCOORD0;     // quad corner UVs (0-1)
-                float2 uv2 : TEXCOORD1;    // x=twinkle phase, y=brightness
+                float2 uv : TEXCOORD0;
+                float2 uv2 : TEXCOORD1;
             };
 
-            struct v2f
+            struct Varyings
             {
-                float4 pos : SV_POSITION;
+                float4 positionCS : SV_POSITION;
                 float4 color : COLOR;
-                float2 quadUV : TEXCOORD0;  // for circle falloff
+                float2 quadUV : TEXCOORD0;
             };
 
-            v2f vert(appdata v)
+            Varyings vert(Attributes input)
             {
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
-                o.quadUV = v.uv;
-                // uv2.x = twinkle phase, uv2.y = base brightness
-                float twinkle = sin(_Time2 * 1.5 + v.uv2.x * 6.2831) * 0.15 + 0.85;
-                float alpha = v.uv2.y * _NightFactor * twinkle;
-                o.color = float4(v.color.rgb * alpha, alpha);
-                return o;
+                Varyings output;
+                output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                output.quadUV = input.uv;
+                float twinkle = sin(_Time2 * 1.5 + input.uv2.x * 6.2831) * 0.15 + 0.85;
+                float alpha = input.uv2.y * _NightFactor * twinkle;
+                output.color = float4(input.color.rgb * alpha, alpha);
+                return output;
             }
 
-            fixed4 frag(v2f i) : SV_Target
+            half4 frag(Varyings input) : SV_Target
             {
-                // Soft circle falloff — distance from quad center
-                float2 centered = i.quadUV - 0.5;
-                float dist = length(centered) * 2.0; // 0 at center, 1 at edge
-                float glow = saturate(1.0 - dist * dist); // Quadratic falloff
-                glow *= glow; // Extra softness
-                return i.color * glow;
+                float2 centered = input.quadUV - 0.5;
+                float dist = length(centered) * 2.0;
+                float glow = saturate(1.0 - dist * dist);
+                glow *= glow;
+                return input.color * glow;
             }
-            ENDCG
+            ENDHLSL
         }
     }
 }
