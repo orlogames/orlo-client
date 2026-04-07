@@ -302,6 +302,20 @@ namespace Orlo.Network
                                      spawn.Transform.Rotation.Z, spawn.Transform.Rotation.W);
             EntityManager.Instance.SpawnEntity(spawn.EntityId.Id, spawn.EntityType, spawn.AssetId, pos, rot);
 
+            // Apply scale if server sent it (trees have scale_variation 0.8-1.3)
+            if (spawn.Transform.Scale != null)
+            {
+                float sx = spawn.Transform.Scale.X;
+                float sy = spawn.Transform.Scale.Y;
+                float sz = spawn.Transform.Scale.Z;
+                if (sx > 0.01f || sy > 0.01f || sz > 0.01f)
+                {
+                    var go = EntityManager.Instance.GetEntity(spawn.EntityId.Id);
+                    if (go != null)
+                        go.transform.localScale = new Vector3(sx, sy, sz);
+                }
+            }
+
             // Track entity name for targeting display
             string displayName = !string.IsNullOrEmpty(spawn.AssetId) ? spawn.AssetId : $"Entity {spawn.EntityType}";
             // Clean up asset IDs like "creature_stalker" to "Stalker"
