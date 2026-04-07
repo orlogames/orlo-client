@@ -9,7 +9,7 @@ namespace Orlo.World
     /// </summary>
     public static class TerrainTextures
     {
-        private const int Size = 256;
+        private const int Size = 512;
 
         public static Texture2D GrassTex { get; private set; }
         public static Texture2D RockTex { get; private set; }

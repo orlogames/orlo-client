@@ -59,6 +59,10 @@ public static class URPSetup
         // Configure URP settings for our game
         ConfigureURPAsset(urpAsset);
 
+        // Add SSAO renderer feature
+        try { AddSSAOFeature(rendererData); } catch (System.Exception e)
+        { Debug.LogWarning("[URPSetup] Could not add SSAO: " + e.Message); }
+
         // Assign to Graphics Settings
         GraphicsSettings.defaultRenderPipeline = urpAsset;
         QualitySettings.renderPipeline = urpAsset;
@@ -94,8 +98,49 @@ public static class URPSetup
         // Rendering
         asset.renderScale = 1f;
 
+        // Depth texture (needed for fog, SSAO, soft particles)
+        asset.supportsCameraDepthTexture = true;
+        asset.supportsCameraOpaqueTexture = true;
+
         Debug.Log("[URPSetup] Configured URP: HDR=on, Shadows=4-cascade@2048, " +
-                  "AdditionalLights=8@PerPixel, MSAA=4x");
+                  "AdditionalLights=8@PerPixel, MSAA=4x, DepthTex=on, OpaqueTex=on");
+    }
+
+    private static void AddSSAOFeature(UniversalRendererData rendererData)
+    {
+        // Check if SSAO already exists
+        foreach (var feature in rendererData.rendererFeatures)
+        {
+            if (feature != null && feature.GetType().Name.Contains("ScreenSpaceAmbientOcclusion"))
+            {
+                Debug.Log("[URPSetup] SSAO already configured.");
+                return;
+            }
+        }
+
+        // Create SSAO ScriptableRendererFeature
+        var ssaoFeature = ScriptableObject.CreateInstance<ScreenSpaceAmbientOcclusion>();
+        ssaoFeature.name = "SSAO";
+
+        // Configure SSAO settings via serialized properties
+        var settings = ssaoFeature.settings;
+        settings.Intensity = 1.5f;
+        settings.Radius = 0.3f;
+        settings.DirectLightingStrength = 0.25f;
+        settings.Samples = ScreenSpaceAmbientOcclusionSettings.AOSampleOption.Medium;
+        settings.Downsample = true;
+        settings.AfterOpaque = false;
+        settings.Source = ScreenSpaceAmbientOcclusionSettings.DepthSource.Depth;
+
+        // Add to renderer
+        rendererData.rendererFeatures.Add(ssaoFeature);
+        rendererData.SetDirty();
+
+        // Save the SSAO asset as sub-asset of renderer
+        AssetDatabase.AddObjectToAsset(ssaoFeature, rendererData);
+        EditorUtility.SetDirty(rendererData);
+
+        Debug.Log("[URPSetup] Added SSAO Renderer Feature (Intensity=1.5, Radius=0.3, Medium samples)");
     }
 }
 #endif

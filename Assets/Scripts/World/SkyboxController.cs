@@ -130,12 +130,12 @@ namespace Orlo.World
             RenderSettings.ambientGroundColor = new Color(0.4f, 0.35f, 0.25f);          // Warm ground bounce
             RenderSettings.ambientIntensity = 1.0f;
 
-            // Atmospheric fog — warm haze for depth and golden hour feel
+            // Atmospheric fog — exponential squared for natural falloff
+            // PostProcessSetup.SetupFog() now manages fog via URP Volume integration
             RenderSettings.fog = true;
-            RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = new Color(0.65f, 0.6f, 0.5f);                    // Warm atmospheric haze
-            RenderSettings.fogStartDistance = 50f;
-            RenderSettings.fogEndDistance = 400f;
+            RenderSettings.fogMode = FogMode.ExponentialSquared;
+            RenderSettings.fogDensity = 0.012f;
+            RenderSettings.fogColor = new Color(0.6f, 0.5f, 0.35f);                    // Warm golden hour haze
 
             // Sun — golden hour directional light, low angle, deep shadows
             if (directionalLight != null)

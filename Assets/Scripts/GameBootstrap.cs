@@ -178,6 +178,16 @@ namespace Orlo
                 go.AddComponent<WaterPlane>();
             }
 
+            // Settlement lighting (reflection probes, light cookies, fill lights)
+            if (Orlo.Rendering.SettlementLighting.Instance == null)
+            {
+                var go = new GameObject("SettlementLighting");
+                go.AddComponent<Orlo.Rendering.SettlementLighting>();
+                // Activate for Threshold settlement (player spawns here)
+                go.GetComponent<Orlo.Rendering.SettlementLighting>()
+                    .SetupSettlementLighting(new Vector3(512f, 0f, 512f));
+            }
+
             // Audio manager
             if (AudioManager.Instance == null)
             {

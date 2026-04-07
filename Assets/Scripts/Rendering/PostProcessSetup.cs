@@ -23,6 +23,15 @@ namespace Orlo.Rendering
         [SerializeField] private float saturation = 1.1f;
         [SerializeField] private float vignetteIntensity = 0.25f;
 
+        [Header("Fog")]
+        [SerializeField] private Color fogColorDay = new Color(0.6f, 0.5f, 0.35f, 1f);
+        [SerializeField] private Color fogColorNight = new Color(0.03f, 0.03f, 0.06f, 1f);
+        [SerializeField] private float fogDensity = 0.012f;
+
+        [Header("Depth of Field")]
+        [SerializeField] private bool enableDOF = false;
+        [SerializeField] private float dofFocusDistance = 15f;
+
         private Volume _volume;
         private VolumeProfile _profile;
 
@@ -82,11 +91,28 @@ namespace Orlo.Rendering
             filmGrain.intensity.Override(0.15f);
             filmGrain.type.Override(FilmGrainLookup.Medium1);
 
-            Debug.Log("[PostProcess] URP Volume post-processing configured: " +
-                      $"Bloom(t={bloomThreshold},i={bloomIntensity}), " +
-                      $"ACES Tonemapping, " +
-                      $"ColorGrading(warmth={warmth},contrast={contrast},sat={saturation}), " +
-                      $"Vignette({vignetteIntensity})");
+            // --- Fog (URP uses RenderSettings fog, controlled here) ---
+            SetupFog();
+
+            // --- Depth of Field (subtle background blur) ---
+            if (enableDOF)
+            {
+                var dof = _profile.Add<DepthOfField>(true);
+                dof.mode.Override(DepthOfFieldMode.Bokeh);
+                dof.focusDistance.Override(dofFocusDistance);
+                dof.focalLength.Override(50f);
+                dof.aperture.Override(5.6f);
+            }
+
+            // --- Lift Gamma Gain (subtle warm shadows, cool highlights) ---
+            var lgg = _profile.Add<LiftGammaGain>(true);
+            lgg.lift.Override(new Vector4(0.02f, 0.01f, -0.01f, 0f));   // Warm shadows
+            lgg.gamma.Override(new Vector4(0.01f, 0.005f, -0.005f, 0f)); // Slight warm mid
+            lgg.gain.Override(new Vector4(0f, 0f, 0.01f, 0f));           // Cool highlights
+
+            Debug.Log("[PostProcess] URP Volume configured: Bloom, ACES, ColorGrading, " +
+                      $"Vignette, FilmGrain, Fog, LiftGammaGain" +
+                      (enableDOF ? ", DOF" : ""));
         }
 
         /// <summary>
@@ -118,6 +144,40 @@ namespace Orlo.Rendering
                     wb.temperature.Override(newWarmth * 30f);
                 }
             }
+        }
+
+        private void SetupFog()
+        {
+            // Unity fog works with URP via RenderSettings
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.ExponentialSquared;
+            RenderSettings.fogDensity = fogDensity;
+            RenderSettings.fogColor = fogColorDay;
+        }
+
+        /// <summary>
+        /// Update fog color for time-of-day transitions.
+        /// Called by SkyboxController during time animation.
+        /// </summary>
+        public void SetFogForTimeOfDay(float timeOfDay)
+        {
+            // Interpolate fog color between day and night
+            float nightness = 0f;
+            if (timeOfDay < 0.15f)
+                nightness = 1f - (timeOfDay / 0.15f);     // Night → dawn
+            else if (timeOfDay > 0.85f)
+                nightness = (timeOfDay - 0.85f) / 0.15f;  // Dusk → night
+
+            RenderSettings.fogColor = Color.Lerp(fogColorDay, fogColorNight, nightness);
+        }
+
+        /// <summary>
+        /// Set fog density for weather changes.
+        /// Clear: 0.005, Normal: 0.012, Foggy: 0.03, Storm: 0.05
+        /// </summary>
+        public void SetFogDensity(float density)
+        {
+            RenderSettings.fogDensity = density;
         }
 
         private void OnDestroy()
