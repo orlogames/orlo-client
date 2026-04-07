@@ -158,7 +158,7 @@ jobs:
             Write-Host "SUCCESS: assets.pak downloaded ($sizeMB MB)"
             echo "has_pak=true" >> $env:GITHUB_OUTPUT
           } else {
-            Write-Host "ERROR: Could not download assets.pak — build will have NO 3D models!"
+            Write-Host "ERROR: Could not download assets.pak - build will have NO 3D models!"
             echo "has_pak=false" >> $env:GITHUB_OUTPUT
           }
 
