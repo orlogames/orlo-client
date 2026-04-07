@@ -14,23 +14,23 @@ namespace Orlo.Rendering
     public class PostProcessSetup : MonoBehaviour
     {
         [Header("Bloom")]
-        [SerializeField] private float bloomThreshold = 0.7f;
-        [SerializeField] private float bloomIntensity = 0.45f;
+        [SerializeField] private float bloomThreshold = 0.5f;
+        [SerializeField] private float bloomIntensity = 0.8f;
 
         [Header("Color Grading")]
-        [SerializeField] private float warmth = 0.12f;
+        [SerializeField] private float warmth = 0.2f;
         [SerializeField] private float contrast = 1.08f;
         [SerializeField] private float saturation = 1.1f;
-        [SerializeField] private float vignetteIntensity = 0.25f;
+        [SerializeField] private float vignetteIntensity = 0.35f;
 
         [Header("Fog")]
         [SerializeField] private Color fogColorDay = new Color(0.6f, 0.5f, 0.35f, 1f);
         [SerializeField] private Color fogColorNight = new Color(0.03f, 0.03f, 0.06f, 1f);
-        [SerializeField] private float fogDensity = 0.012f;
+        [SerializeField] private float fogDensity = 0.025f;
 
         [Header("Depth of Field")]
-        [SerializeField] private bool enableDOF = false;
-        [SerializeField] private float dofFocusDistance = 15f;
+        [SerializeField] private bool enableDOF = true;
+        [SerializeField] private float dofFocusDistance = 20f;
 
         private Volume _volume;
         private VolumeProfile _profile;
@@ -68,7 +68,7 @@ namespace Orlo.Rendering
             var bloom = _profile.Add<Bloom>(true);
             bloom.threshold.Override(bloomThreshold);
             bloom.intensity.Override(bloomIntensity);
-            bloom.scatter.Override(0.7f);
+            bloom.scatter.Override(0.8f);
 
             // --- Color Adjustments (replaces our custom color grading) ---
             var colorAdj = _profile.Add<ColorAdjustments>(true);
@@ -106,9 +106,9 @@ namespace Orlo.Rendering
 
             // --- Lift Gamma Gain (subtle warm shadows, cool highlights) ---
             var lgg = _profile.Add<LiftGammaGain>(true);
-            lgg.lift.Override(new Vector4(0.02f, 0.01f, -0.01f, 0f));   // Warm shadows
+            lgg.lift.Override(new Vector4(0.04f, 0.02f, -0.02f, 0f));   // Warm shadows
             lgg.gamma.Override(new Vector4(0.01f, 0.005f, -0.005f, 0f)); // Slight warm mid
-            lgg.gain.Override(new Vector4(0f, 0f, 0.01f, 0f));           // Cool highlights
+            lgg.gain.Override(new Vector4(-0.01f, -0.01f, 0.02f, 0f));   // Cool highlights
 
             Debug.Log("[PostProcess] URP Volume configured: Bloom, ACES, ColorGrading, " +
                       $"Vignette, FilmGrain, Fog, LiftGammaGain" +

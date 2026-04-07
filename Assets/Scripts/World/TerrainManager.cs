@@ -172,6 +172,9 @@ namespace Orlo.World
             float worldX = coord.x * chunkSize;
             float worldZ = coord.y * chunkSize;
 
+            // Stitch edges with adjacent chunks to eliminate seams
+            StitchEdges(coord, data);
+
             var vertices = new Vector3[res * res];
             var uvs = new Vector2[res * res];
             var normals = new Vector3[res * res];
@@ -321,6 +324,57 @@ namespace Orlo.World
             }
 
             return new Color(grassW, rockW, dirtW, sandW);
+        }
+
+        /// <summary>
+        /// Stitch chunk edges with adjacent chunks by averaging heights at shared borders.
+        /// This eliminates black seam artifacts caused by floating-point height mismatches.
+        /// </summary>
+        private void StitchEdges(Vector2Int coord, TerrainChunkData data)
+        {
+            int res = data.Resolution;
+
+            // Check each of 4 neighbors
+            Vector2Int[] neighbors = {
+                new(coord.x - 1, coord.y), // left  (x=0 edge)
+                new(coord.x + 1, coord.y), // right (x=res-1 edge)
+                new(coord.x, coord.y - 1), // bottom (z=0 edge)
+                new(coord.x, coord.y + 1), // top    (z=res-1 edge)
+            };
+
+            for (int n = 0; n < 4; n++)
+            {
+                if (!_chunks.TryGetValue(neighbors[n], out var neighbor)) continue;
+                if (neighbor.Resolution != res) continue;
+
+                for (int i = 0; i < res; i++)
+                {
+                    int myIdx, theirIdx;
+                    switch (n)
+                    {
+                        case 0: // left neighbor: my x=0 matches their x=res-1
+                            myIdx = i * res;
+                            theirIdx = i * res + (res - 1);
+                            break;
+                        case 1: // right neighbor: my x=res-1 matches their x=0
+                            myIdx = i * res + (res - 1);
+                            theirIdx = i * res;
+                            break;
+                        case 2: // bottom neighbor: my z=0 matches their z=res-1
+                            myIdx = i;
+                            theirIdx = (res - 1) * res + i;
+                            break;
+                        default: // top neighbor: my z=res-1 matches their z=0
+                            myIdx = (res - 1) * res + i;
+                            theirIdx = i;
+                            break;
+                    }
+
+                    // Average the heights at shared edges
+                    float avg = (data.Heightmap[myIdx] + neighbor.Heightmap[theirIdx]) * 0.5f;
+                    data.Heightmap[myIdx] = avg;
+                }
+            }
         }
 
         /// <summary>

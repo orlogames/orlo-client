@@ -272,6 +272,9 @@ namespace Orlo.World
             // Use URP Lit shader for GLB models (supports PBR textures from Meshy)
             var shader = Orlo.Rendering.OrloShaders.Lit;
 
+            // Get fallback tint for this asset type (used when model has no textures)
+            var fallbackTint = GetAssetFallbackColor(assetId);
+
             foreach (var entry in cached.entries)
             {
                 var child = new GameObject($"Mesh_{entry.name}");
@@ -282,7 +285,11 @@ namespace Orlo.World
 
                 var mr = child.AddComponent<MeshRenderer>();
                 var mat = new Material(shader);
-                ApplyPbrMaterial(mat, entry.material);
+                // If model has no albedo texture and base color is near-white, apply fallback tint
+                var matData = entry.material;
+                if (matData.albedoTex == null && IsNearWhite(matData.baseColor))
+                    matData.baseColor = fallbackTint;
+                ApplyPbrMaterial(mat, matData);
                 mr.material = mat;
 
                 // Accumulate bounds for the collider
@@ -387,6 +394,72 @@ namespace Orlo.World
                 mat.SetInt("_ZWrite", 0);
                 mat.renderQueue = 3000;
             }
+        }
+
+        // ─── Asset Fallback Colors ─────────────────────────────────────
+
+        private static bool IsNearWhite(Color c)
+        {
+            return c.r > 0.85f && c.g > 0.85f && c.b > 0.85f;
+        }
+
+        /// <summary>
+        /// Returns a warm, natural fallback color based on asset naming patterns.
+        /// Used when AI-generated GLBs have white/untextured materials.
+        /// </summary>
+        private static Color GetAssetFallbackColor(string assetId)
+        {
+            if (string.IsNullOrEmpty(assetId)) return new Color(0.6f, 0.5f, 0.4f);
+            string id = assetId.ToLower();
+
+            // Wood/buildings
+            if (id.Contains("cabin") || id.Contains("house") || id.Contains("building") || id.Contains("tavern"))
+                return new Color(0.45f, 0.30f, 0.15f); // warm wood brown
+            if (id.Contains("fence") || id.Contains("crate") || id.Contains("barrel") || id.Contains("cart"))
+                return new Color(0.50f, 0.35f, 0.18f); // lighter wood
+            if (id.Contains("log") || id.Contains("plank") || id.Contains("board"))
+                return new Color(0.40f, 0.28f, 0.14f); // darker wood
+
+            // Stone/paths
+            if (id.Contains("stone") || id.Contains("pathway") || id.Contains("cobble"))
+                return new Color(0.45f, 0.42f, 0.38f); // warm grey stone
+            if (id.Contains("fountain") || id.Contains("nexus") || id.Contains("crystal"))
+                return new Color(0.50f, 0.45f, 0.42f); // light warm stone
+
+            // Metal/lanterns
+            if (id.Contains("lantern") || id.Contains("lamp") || id.Contains("iron"))
+                return new Color(0.25f, 0.22f, 0.20f); // dark iron
+            if (id.Contains("tool") || id.Contains("rack") || id.Contains("anvil"))
+                return new Color(0.30f, 0.28f, 0.25f); // weathered metal
+
+            // Vegetation
+            if (id.Contains("tree") || id.Contains("pine") || id.Contains("broadleaf"))
+                return new Color(0.25f, 0.35f, 0.15f); // forest green
+            if (id.Contains("bush") || id.Contains("shrub") || id.Contains("fern"))
+                return new Color(0.30f, 0.40f, 0.18f); // lighter green
+            if (id.Contains("grass") || id.Contains("vegetation"))
+                return new Color(0.35f, 0.45f, 0.20f); // bright green
+
+            // Fabric/sacks
+            if (id.Contains("sack") || id.Contains("supply") || id.Contains("cloth"))
+                return new Color(0.55f, 0.48f, 0.35f); // burlap
+            if (id.Contains("tent") || id.Contains("banner"))
+                return new Color(0.50f, 0.35f, 0.25f); // canvas
+
+            // Characters/NPCs
+            if (id.Contains("human") || id.Contains("settler") || id.Contains("guard") || id.Contains("npc"))
+                return new Color(0.55f, 0.42f, 0.30f); // warm skin/clothing
+
+            // Creatures
+            if (id.Contains("wolf") || id.Contains("stalker") || id.Contains("creature"))
+                return new Color(0.40f, 0.35f, 0.28f); // animal brown
+
+            // Bench/furniture
+            if (id.Contains("bench") || id.Contains("table") || id.Contains("chair") || id.Contains("stool"))
+                return new Color(0.42f, 0.30f, 0.16f); // furniture wood
+
+            // Default warm earthy tone
+            return new Color(0.50f, 0.42f, 0.32f);
         }
 
         // ─── GLB Parser (same approach as ModelCharacter) ───────────────

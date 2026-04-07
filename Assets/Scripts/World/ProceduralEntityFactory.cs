@@ -609,7 +609,7 @@ namespace Orlo.World
             var standard = GetFallbackShader();
 
             // Circular stone platform
-            var platformMesh = ProceduralMeshBuilder.BuildCylinder(1.8f, 2.0f, 0.3f, 12);
+            var platformMesh = ProceduralMeshBuilder.BuildCylinder(3.0f, 3.5f, 0.3f, 12);
             var platform = new GameObject("Platform");
             platform.transform.SetParent(go.transform);
             platform.transform.localPosition = Vector3.zero;
@@ -619,7 +619,7 @@ namespace Orlo.World
             platform.AddComponent<MeshCollider>().sharedMesh = platformMesh;
 
             // Central hexagonal crystal prism
-            var crystalMesh = ProceduralMeshBuilder.BuildCylinder(0.2f, 0.15f, 3.0f, 6);
+            var crystalMesh = ProceduralMeshBuilder.BuildCylinder(0.35f, 0.25f, 4.5f, 6);
             var crystal = new GameObject("CrystalMain");
             crystal.transform.SetParent(go.transform);
             crystal.transform.localPosition = new Vector3(0, 0.3f, 0);
@@ -634,8 +634,8 @@ namespace Orlo.World
             for (int i = 0; i < 5; i++)
             {
                 float angle = i * Mathf.PI * 2f / 5f;
-                float radius = 0.8f + (i % 2) * 0.3f;
-                float height = 0.6f + (i % 3) * 0.3f;
+                float radius = 1.5f + (i % 2) * 0.4f;
+                float height = 1.0f + (i % 3) * 0.4f;
 
                 var fragMesh = ProceduralMeshBuilder.BuildCylinder(0.08f, 0.05f, height, 6);
                 var frag = new GameObject($"CrystalFrag_{i}");
@@ -667,33 +667,33 @@ namespace Orlo.World
             var standard = GetFallbackShader();
             var woodMat = new Material(standard) { color = new Color(0.45f, 0.3f, 0.15f) };
 
-            // Rectangular base box (3x2x2.5)
-            var baseMesh = ProceduralMeshBuilder.BuildBox(new Vector3(3f, 2f, 2.5f));
+            // Rectangular base box (5x3.5x4)
+            var baseMesh = ProceduralMeshBuilder.BuildBox(new Vector3(5f, 3.5f, 4f));
             var baseObj = new GameObject("Base");
             baseObj.transform.SetParent(go.transform);
-            baseObj.transform.localPosition = new Vector3(0, 1f, 0);
+            baseObj.transform.localPosition = new Vector3(0, 1.75f, 0);
             baseObj.AddComponent<MeshFilter>().mesh = baseMesh;
             baseObj.AddComponent<MeshRenderer>().material = woodMat;
             baseObj.AddComponent<BoxCollider>();
 
             // A-frame roof — triangular prism using two angled quads
             var roofMat = new Material(standard) { color = new Color(0.35f, 0.22f, 0.1f) };
-            float roofWidth = 1.8f;
+            float roofWidth = 3.2f;
             float roofAngle = 40f;
 
             var roofLeft = new GameObject("RoofLeft");
             roofLeft.transform.SetParent(go.transform);
-            roofLeft.transform.localPosition = new Vector3(-roofWidth * 0.4f, 2.4f, 0);
+            roofLeft.transform.localPosition = new Vector3(-roofWidth * 0.4f, 4.0f, 0);
             roofLeft.transform.localRotation = Quaternion.Euler(0, 0, roofAngle);
-            var roofMeshL = ProceduralMeshBuilder.BuildQuad(roofWidth, 3.2f);
+            var roofMeshL = ProceduralMeshBuilder.BuildQuad(roofWidth, 5.0f);
             roofLeft.AddComponent<MeshFilter>().mesh = roofMeshL;
             roofLeft.AddComponent<MeshRenderer>().material = roofMat;
 
             var roofRight = new GameObject("RoofRight");
             roofRight.transform.SetParent(go.transform);
-            roofRight.transform.localPosition = new Vector3(roofWidth * 0.4f, 2.4f, 0);
+            roofRight.transform.localPosition = new Vector3(roofWidth * 0.4f, 4.0f, 0);
             roofRight.transform.localRotation = Quaternion.Euler(0, 0, -roofAngle);
-            var roofMeshR = ProceduralMeshBuilder.BuildQuad(roofWidth, 3.2f);
+            var roofMeshR = ProceduralMeshBuilder.BuildQuad(roofWidth, 5.0f);
             roofRight.AddComponent<MeshFilter>().mesh = roofMeshR;
             roofRight.AddComponent<MeshRenderer>().material = roofMat;
 
@@ -705,22 +705,22 @@ namespace Orlo.World
 
             var win1 = new GameObject("Window1");
             win1.transform.SetParent(go.transform);
-            win1.transform.localPosition = new Vector3(-0.7f, 1.3f, 1.26f);
-            win1.AddComponent<MeshFilter>().mesh = ProceduralMeshBuilder.BuildQuad(0.4f, 0.4f);
+            win1.transform.localPosition = new Vector3(-1.2f, 2.2f, 2.01f);
+            win1.AddComponent<MeshFilter>().mesh = ProceduralMeshBuilder.BuildQuad(0.65f, 0.65f);
             win1.AddComponent<MeshRenderer>().material = windowMat;
 
             var win2 = new GameObject("Window2");
             win2.transform.SetParent(go.transform);
-            win2.transform.localPosition = new Vector3(0.7f, 1.3f, 1.26f);
-            win2.AddComponent<MeshFilter>().mesh = ProceduralMeshBuilder.BuildQuad(0.4f, 0.4f);
+            win2.transform.localPosition = new Vector3(1.2f, 2.2f, 2.01f);
+            win2.AddComponent<MeshFilter>().mesh = ProceduralMeshBuilder.BuildQuad(0.65f, 0.65f);
             win2.AddComponent<MeshRenderer>().material = windowMat;
 
             // Door opening (dark recessed quad)
             var doorMat = new Material(standard) { color = new Color(0.1f, 0.08f, 0.05f) };
             var door = new GameObject("Door");
             door.transform.SetParent(go.transform);
-            door.transform.localPosition = new Vector3(0, 0.8f, 1.26f);
-            door.AddComponent<MeshFilter>().mesh = ProceduralMeshBuilder.BuildQuad(0.7f, 1.5f);
+            door.transform.localPosition = new Vector3(0, 1.3f, 2.01f);
+            door.AddComponent<MeshFilter>().mesh = ProceduralMeshBuilder.BuildQuad(1.1f, 2.4f);
             door.AddComponent<MeshRenderer>().material = doorMat;
 
             return go;
@@ -771,15 +771,24 @@ namespace Orlo.World
             go.transform.SetPositionAndRotation(position, rotation);
             var standard = GetFallbackShader();
 
-            // Small glowing box
-            var boxMesh = ProceduralMeshBuilder.BuildBox(new Vector3(0.2f, 0.25f, 0.2f));
+            // Iron pole
+            var poleMesh = ProceduralMeshBuilder.BuildCylinder(0.05f, 0.05f, 3.0f, 6);
+            var pole = new GameObject("Pole");
+            pole.transform.SetParent(go.transform);
+            pole.transform.localPosition = new Vector3(0, 0, 0);
+            pole.AddComponent<MeshFilter>().mesh = poleMesh;
+            pole.AddComponent<MeshRenderer>().material =
+                new Material(standard) { color = new Color(0.2f, 0.2f, 0.22f) };
+
+            // Glowing lantern box at top
+            var boxMesh = ProceduralMeshBuilder.BuildBox(new Vector3(0.25f, 0.3f, 0.25f));
             var box = new GameObject("Lantern");
             box.transform.SetParent(go.transform);
-            box.transform.localPosition = new Vector3(0, 0.125f, 0);
+            box.transform.localPosition = new Vector3(0, 3.0f, 0);
             box.AddComponent<MeshFilter>().mesh = boxMesh;
             var mat = new Material(standard);
             mat.color = new Color(1f, 0.85f, 0.5f);
-            mat.SetColor("_EmissionColor", new Color(1f, 0.8f, 0.4f) * 1.5f);
+            mat.SetColor("_EmissionColor", new Color(1f, 0.8f, 0.4f) * 2.0f);
             mat.EnableKeyword("_EMISSION");
             box.AddComponent<MeshRenderer>().material = mat;
             box.AddComponent<BoxCollider>();
@@ -787,12 +796,12 @@ namespace Orlo.World
             // Warm point light
             var lightGo = new GameObject("Light");
             lightGo.transform.SetParent(go.transform);
-            lightGo.transform.localPosition = new Vector3(0, 0.3f, 0);
+            lightGo.transform.localPosition = new Vector3(0, 3.2f, 0);
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Point;
             light.color = new Color(1f, 0.85f, 0.6f);
-            light.intensity = 0.8f;
-            light.range = 3f;
+            light.intensity = 2.0f;
+            light.range = 12f;
 
             return go;
         }
@@ -953,14 +962,14 @@ namespace Orlo.World
 
             // Use assetId hash for slight variation
             int hash = assetId.GetHashCode();
-            float heightVar = 1f + (hash % 20) * 0.02f; // 1.0 to 1.38
+            float heightVar = 1f + (hash % 20) * 0.03f; // 1.0 to 1.57
             float rotVar = (hash % 360);
 
             go.transform.localRotation *= Quaternion.Euler(0, rotVar, 0);
 
-            // Brown cylinder trunk
-            float trunkHeight = 1.5f * heightVar;
-            var trunkMesh = ProceduralMeshBuilder.BuildCylinder(0.08f, 0.12f, trunkHeight, 6);
+            // Brown cylinder trunk (tall)
+            float trunkHeight = (8f + (hash % 5)) * heightVar; // 8-12 range
+            var trunkMesh = ProceduralMeshBuilder.BuildCylinder(0.2f, 0.35f, trunkHeight, 6);
             var trunk = new GameObject("Trunk");
             trunk.transform.SetParent(go.transform);
             trunk.transform.localPosition = Vector3.zero;
@@ -968,13 +977,13 @@ namespace Orlo.World
             trunk.AddComponent<MeshRenderer>().material =
                 new Material(standard) { color = new Color(0.4f, 0.25f, 0.1f) };
 
-            // 3 stacked green cones of decreasing size
+            // 4 stacked green cones of decreasing size (large canopy)
             var greenMat = new Material(standard) { color = new Color(0.15f, 0.4f, 0.12f) };
-            float[] coneRadii = { 0.7f, 0.5f, 0.3f };
-            float[] coneHeights = { 1.0f, 0.85f, 0.7f };
-            float yOffset = trunkHeight * 0.6f;
+            float[] coneRadii = { 5.0f, 4.0f, 3.0f, 2.0f };
+            float[] coneHeights = { 3.5f, 3.0f, 2.5f, 2.0f };
+            float yOffset = trunkHeight * 0.5f;
 
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 4; i++)
             {
                 float r = coneRadii[i] * heightVar;
                 float h = coneHeights[i] * heightVar;
@@ -984,14 +993,14 @@ namespace Orlo.World
                 cone.transform.localPosition = new Vector3(0, yOffset, 0);
                 cone.AddComponent<MeshFilter>().mesh = coneMesh;
                 cone.AddComponent<MeshRenderer>().material = greenMat;
-                yOffset += h * 0.6f;
+                yOffset += h * 0.55f;
             }
 
             // Simple capsule collider area
             var col = go.AddComponent<CapsuleCollider>();
-            col.center = new Vector3(0, trunkHeight * 0.5f + 0.5f, 0);
-            col.radius = 0.5f;
-            col.height = trunkHeight + 1.5f;
+            col.center = new Vector3(0, trunkHeight * 0.5f + 1.0f, 0);
+            col.radius = 1.0f;
+            col.height = trunkHeight + 4.0f;
 
             return go;
         }
