@@ -286,11 +286,24 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Update launcher manifest on infra server
+  # Separate job on self-hosted runner — ubuntu-latest can't SCP to Hetzner
+  # because GitHub-hosted runner IPs aren't in the firewall. The CI server
+  # (46.224.161.96) IS in the firewall allowlist.
+  deploy-manifest:
+    name: Deploy Manifest to Infra
+    needs: [version, publish-cdn]
+    runs-on: [self-hosted, linux]
+    if: always() && needs.publish-cdn.result != 'cancelled'
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: orlo-client-manifest
+          path: .
+
+      - name: Deploy manifest to infra server via SCP
         run: |
-          # Deploy the same V2 manifest (with file-level hashes) to the infra server.
-          # The launcher fetches from api.orlo.games/client/manifest.json which is
-          # served by Caddy from /opt/orlo/cdn/client/manifest.json on the infra server.
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > /tmp/deploy_key
           chmod 600 /tmp/deploy_key
           scp -o StrictHostKeyChecking=no -i /tmp/deploy_key \
