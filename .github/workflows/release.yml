@@ -336,3 +336,26 @@ jobs:
             --cache-control "public, max-age=30" \
             --no-progress
           echo "Manifest published to Hetzner S3"
+
+      - name: Register version with updater-api
+        if: always()
+        run: |
+          MANIFEST_URL="https://orlo-cdn.fsn1.your-objectstorage.com/client/manifest.json"
+          TOTAL_SIZE=$(cat manifest.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_size',0))" 2>/dev/null || echo "0")
+          FILES_COUNT=$(cat manifest.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_files',0))" 2>/dev/null || echo "0")
+
+          # Generate changelog
+          NOTES=$(git log --pretty=format:'- %s' HEAD~5..HEAD 2>/dev/null | head -10 || echo "Automated release")
+
+          curl -s -X POST "https://updater.orlo.games/admin/client/publish" \
+            -H "Content-Type: application/json" \
+            -H "X-Admin-Key: ${{ secrets.UPDATER_ADMIN_KEY }}" \
+            -d "{
+              \"version\": \"${VERSION}\",
+              \"channel\": \"stable\",
+              \"manifest_url\": \"${MANIFEST_URL}\",
+              \"total_size\": ${TOTAL_SIZE},
+              \"files_count\": ${FILES_COUNT},
+              \"notes\": \"${NOTES}\"
+            }" && echo "Registered v${VERSION} with updater-api" \
+            || echo "WARNING: Failed to register with updater-api (non-fatal)"
