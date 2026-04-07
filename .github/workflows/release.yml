@@ -17,6 +17,11 @@ on:
 permissions:
   contents: write
 
+env:
+  S3_ENDPOINT: https://fsn1.your-objectstorage.com
+  S3_BUCKET: orlo-cdn
+  S3_REGION: fsn1
+
 jobs:
   version:
     name: Determine Version
@@ -116,11 +121,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path Assets/StreamingAssets | Out-Null
           Write-Host "Fetching latest assets.pak from orlo-assets workflow artifacts..."
-
-          # Try multiple methods to get the pak
           $pakFound = $false
 
-          # Method 1: gh run download from latest successful pack-upload run
+          # Method 1: specific successful pack-upload run
           try {
             $runs = gh run list --repo orlogames/orlo-assets --workflow "Pack & Upload Assets" --status success --limit 1 --json databaseId | ConvertFrom-Json
             if ($runs.Count -gt 0) {
@@ -136,7 +139,7 @@ jobs:
             Write-Host "Method 1 failed: $($_.Exception.Message)"
           }
 
-          # Method 2: Try downloading latest artifact by name
+          # Method 2: latest artifact by name
           if (-not $pakFound) {
             try {
               gh run download --repo orlogames/orlo-assets --name assets-pak --dir pak-download2
@@ -156,8 +159,6 @@ jobs:
             echo "has_pak=true" >> $env:GITHUB_OUTPUT
           } else {
             Write-Host "ERROR: Could not download assets.pak — build will have NO 3D models!"
-            Write-Host "Players will see procedural fallback geometry (white shapes)."
-            Write-Host "Fix: ensure orlo-assets Pack & Upload workflow has run successfully."
             echo "has_pak=false" >> $env:GITHUB_OUTPUT
           }
 
@@ -257,12 +258,15 @@ jobs:
           prerelease: false
 
   publish-cdn:
-    name: Publish to CDN (Cloudflare R2)
+    name: Publish to Hetzner S3
     needs: [version, build-windows, release]
     runs-on: ubuntu-latest
     if: always() && needs.build-windows.result == 'success'
     env:
       VERSION: ${{ needs.version.outputs.version }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.HETZNER_S3_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.HETZNER_S3_SECRET_KEY }}
+      AWS_DEFAULT_REGION: fsn1
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -279,114 +283,56 @@ jobs:
           name: orlo-client-windows
           path: dist/
 
-      - name: Install wrangler
-        run: npm install -g wrangler
-
-      - name: Upload individual files to R2
+      - name: Install AWS CLI
         run: |
-          echo "Uploading individual files for version ${VERSION}..."
-          cd build-files
-          find . -type f | while IFS= read -r file; do
-            REL="${file#./}"
-            echo "  uploading: ${REL}"
-            wrangler r2 object put "orlo-cdn/client/files/${VERSION}/${REL}" \
-              --file="${file}" 2>/dev/null
-          done
-          cd ..
+          if ! command -v aws &> /dev/null; then
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip -q awscliv2.zip
+            sudo ./aws/install
+          fi
+
+      - name: Upload individual files to Hetzner S3
+        run: |
+          echo "Uploading client files for version ${VERSION}..."
+          aws s3 sync build-files/ "s3://${S3_BUCKET}/client/files/${VERSION}/" \
+            --endpoint-url "${S3_ENDPOINT}" \
+            --no-progress
           echo "All files uploaded for version ${VERSION}"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Upload zip fallback to R2
+      - name: Upload zip fallback
         run: |
-          wrangler r2 object put "orlo-cdn/client/releases/${VERSION}/OrloClient-Windows-${VERSION}.zip" \
-            --file="dist/OrloClient-Windows-${VERSION}.zip"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          aws s3 cp \
+            "dist/OrloClient-Windows-${VERSION}.zip" \
+            "s3://${S3_BUCKET}/client/releases/${VERSION}/OrloClient-Windows-${VERSION}.zip" \
+            --endpoint-url "${S3_ENDPOINT}" \
+            --no-progress
 
-      - name: Verify files exist on R2 before publishing manifest
+      - name: Verify critical files exist before publishing manifest
         run: |
-          echo "Verifying key files are accessible on R2..."
-          # Check a few critical files exist by listing them
+          echo "Verifying key files on S3..."
           MISSING=0
-          for CHECK_FILE in "OrloClient.exe" "UnityPlayer.dll" "OrloClient_Data/boot.config"; do
-            RESULT=$(wrangler r2 object head "orlo-cdn/client/files/${VERSION}/${CHECK_FILE}" 2>&1 || true)
-            if echo "$RESULT" | grep -q "error\|not found\|NoSuchKey"; then
-              echo "MISSING: ${CHECK_FILE}"
-              MISSING=$((MISSING + 1))
+          for CHECK in "OrloClient.exe" "UnityPlayer.dll"; do
+            if aws s3api head-object \
+              --bucket "${S3_BUCKET}" \
+              --key "client/files/${VERSION}/${CHECK}" \
+              --endpoint-url "${S3_ENDPOINT}" 2>/dev/null; then
+              echo "  OK: ${CHECK}"
             else
-              echo "  OK: ${CHECK_FILE}"
+              echo "  MISSING: ${CHECK}"
+              MISSING=$((MISSING + 1))
             fi
           done
           if [ "$MISSING" -gt 0 ]; then
-            echo "WARNING: $MISSING critical files not found on R2. Retrying upload..."
-            # Re-upload any missing files
-            cd build-files
-            find . -type f | while IFS= read -r file; do
-              REL="${file#./}"
-              wrangler r2 object put "orlo-cdn/client/files/${VERSION}/${REL}" \
-                --file="${file}" 2>/dev/null
-            done
-            cd ..
+            echo "ERROR: Critical files missing on S3!"
+            exit 1
           fi
-          echo "File verification complete"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Upload manifest to R2 (LAST — after files verified)
+      - name: Publish manifest (LAST — after files verified)
         run: |
-          echo "Publishing v2 manifest for version ${VERSION}..."
-          cat manifest.json | head -5
-          wrangler r2 object put "orlo-cdn/client/manifest.json" \
-            --file="manifest.json"
-          echo "Manifest published to R2"
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-  # Deploy manifest to infra server so launchers can see it at api.orlo.games.
-  # Tries self-hosted Linux runner first (inside firewall), falls back to
-  # direct R2 serving if SCP fails.
-  deploy-manifest:
-    name: Deploy Manifest to Infra
-    needs: [version, publish-cdn]
-    runs-on: [self-hosted, linux]
-    if: always() && needs.publish-cdn.result == 'success'
-    env:
-      VERSION: ${{ needs.version.outputs.version }}
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: orlo-client-manifest
-          path: .
-
-      - name: Deploy manifest to infra server via SCP
-        id: scp
-        run: |
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > /tmp/deploy_key
-          chmod 600 /tmp/deploy_key
-
-          # Use timeout to prevent hanging on SSH connection
-          timeout 30 scp -o StrictHostKeyChecking=no \
-            -o ConnectTimeout=10 \
-            -i /tmp/deploy_key \
-            manifest.json \
-            root@${{ vars.INFRA_SERVER_IP }}:/opt/orlo/cdn/client/manifest.json \
-            && echo "status=success" >> "$GITHUB_OUTPUT" \
-            || echo "status=failed" >> "$GITHUB_OUTPUT"
-
-          rm -f /tmp/deploy_key
-
-      - name: Report deployment status
-        run: |
-          if [ "${{ steps.scp.outputs.status }}" = "success" ]; then
-            echo "V2 manifest (v${VERSION}) deployed to infra server"
-          else
-            echo "WARNING: SCP to infra failed. Manifest is available on R2 CDN."
-            echo "Launchers will still get updates via R2 if Caddy is configured to proxy."
-            echo "Manual fix: SSH to infra and run:"
-            echo "  curl -o /opt/orlo/cdn/client/manifest.json https://cdn.orlo.games/client/manifest.json"
-          fi
+          echo "Publishing manifest for v${VERSION}..."
+          aws s3 cp manifest.json "s3://${S3_BUCKET}/client/manifest.json" \
+            --endpoint-url "${S3_ENDPOINT}" \
+            --content-type "application/json" \
+            --cache-control "public, max-age=30" \
+            --no-progress
+          echo "Manifest published to Hetzner S3"
