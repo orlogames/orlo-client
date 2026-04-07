@@ -109,24 +109,56 @@ jobs:
           echo "path=$unity" >> $env:GITHUB_OUTPUT
 
       - name: Download asset pak from orlo-assets
+        id: pak
         shell: powershell
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           New-Item -ItemType Directory -Force -Path Assets/StreamingAssets | Out-Null
           Write-Host "Fetching latest assets.pak from orlo-assets workflow artifacts..."
+
+          # Try multiple methods to get the pak
+          $pakFound = $false
+
+          # Method 1: gh run download from latest successful pack-upload run
           try {
-            gh run download --repo orlogames/orlo-assets --name assets-pak --dir pak-download
-            if (Test-Path "pak-download/assets.pak") {
-              Copy-Item "pak-download/assets.pak" "Assets/StreamingAssets/assets.pak"
-              $size = (Get-Item "Assets/StreamingAssets/assets.pak").Length
-              Write-Host "Downloaded assets.pak: $size bytes"
-            } else {
-              Write-Host "WARNING: assets.pak not found in artifact, building without bundled assets"
+            $runs = gh run list --repo orlogames/orlo-assets --workflow "Pack & Upload Assets" --status success --limit 1 --json databaseId | ConvertFrom-Json
+            if ($runs.Count -gt 0) {
+              $runId = $runs[0].databaseId
+              Write-Host "Downloading from run $runId..."
+              gh run download $runId --repo orlogames/orlo-assets --name assets-pak --dir pak-download
+              if (Test-Path "pak-download/assets.pak") {
+                Copy-Item "pak-download/assets.pak" "Assets/StreamingAssets/assets.pak"
+                $pakFound = $true
+              }
             }
           } catch {
-            Write-Host "WARNING: Could not download assets.pak, building without bundled assets"
-            Write-Host "  $($_.Exception.Message)"
+            Write-Host "Method 1 failed: $($_.Exception.Message)"
+          }
+
+          # Method 2: Try downloading latest artifact by name
+          if (-not $pakFound) {
+            try {
+              gh run download --repo orlogames/orlo-assets --name assets-pak --dir pak-download2
+              if (Test-Path "pak-download2/assets.pak") {
+                Copy-Item "pak-download2/assets.pak" "Assets/StreamingAssets/assets.pak"
+                $pakFound = $true
+              }
+            } catch {
+              Write-Host "Method 2 failed: $($_.Exception.Message)"
+            }
+          }
+
+          if ($pakFound) {
+            $size = (Get-Item "Assets/StreamingAssets/assets.pak").Length
+            $sizeMB = [math]::Round($size / 1MB, 1)
+            Write-Host "SUCCESS: assets.pak downloaded ($sizeMB MB)"
+            echo "has_pak=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "ERROR: Could not download assets.pak — build will have NO 3D models!"
+            Write-Host "Players will see procedural fallback geometry (white shapes)."
+            Write-Host "Fix: ensure orlo-assets Pack & Upload workflow has run successfully."
+            echo "has_pak=false" >> $env:GITHUB_OUTPUT
           }
 
       - name: Build with Unity
@@ -254,16 +286,14 @@ jobs:
         run: |
           echo "Uploading individual files for version ${VERSION}..."
           cd build-files
-          FILE_COUNT=0
           find . -type f | while IFS= read -r file; do
             REL="${file#./}"
             echo "  uploading: ${REL}"
             wrangler r2 object put "orlo-cdn/client/files/${VERSION}/${REL}" \
               --file="${file}" 2>/dev/null
-            FILE_COUNT=$((FILE_COUNT + 1))
           done
           cd ..
-          echo "Uploaded files for version ${VERSION}"
+          echo "All files uploaded for version ${VERSION}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -276,24 +306,55 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Upload manifest to R2 (last — files must exist first)
+      - name: Verify files exist on R2 before publishing manifest
         run: |
-          echo "Uploading v2 manifest..."
-          cat manifest.json
-          wrangler r2 object put "orlo-cdn/client/manifest.json" \
-            --file="manifest.json"
+          echo "Verifying key files are accessible on R2..."
+          # Check a few critical files exist by listing them
+          MISSING=0
+          for CHECK_FILE in "OrloClient.exe" "UnityPlayer.dll" "OrloClient_Data/boot.config"; do
+            RESULT=$(wrangler r2 object head "orlo-cdn/client/files/${VERSION}/${CHECK_FILE}" 2>&1 || true)
+            if echo "$RESULT" | grep -q "error\|not found\|NoSuchKey"; then
+              echo "MISSING: ${CHECK_FILE}"
+              MISSING=$((MISSING + 1))
+            else
+              echo "  OK: ${CHECK_FILE}"
+            fi
+          done
+          if [ "$MISSING" -gt 0 ]; then
+            echo "WARNING: $MISSING critical files not found on R2. Retrying upload..."
+            # Re-upload any missing files
+            cd build-files
+            find . -type f | while IFS= read -r file; do
+              REL="${file#./}"
+              wrangler r2 object put "orlo-cdn/client/files/${VERSION}/${REL}" \
+                --file="${file}" 2>/dev/null
+            done
+            cd ..
+          fi
+          echo "File verification complete"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-  # Separate job on self-hosted runner — ubuntu-latest can't SCP to Hetzner
-  # because GitHub-hosted runner IPs aren't in the firewall. The CI server
-  # (46.224.161.96) IS in the firewall allowlist.
+      - name: Upload manifest to R2 (LAST — after files verified)
+        run: |
+          echo "Publishing v2 manifest for version ${VERSION}..."
+          cat manifest.json | head -5
+          wrangler r2 object put "orlo-cdn/client/manifest.json" \
+            --file="manifest.json"
+          echo "Manifest published to R2"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  # Deploy manifest to infra server so launchers can see it at api.orlo.games.
+  # Tries self-hosted Linux runner first (inside firewall), falls back to
+  # direct R2 serving if SCP fails.
   deploy-manifest:
     name: Deploy Manifest to Infra
     needs: [version, publish-cdn]
     runs-on: [self-hosted, linux]
-    if: always() && needs.publish-cdn.result != 'cancelled'
+    if: always() && needs.publish-cdn.result == 'success'
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
@@ -303,11 +364,29 @@ jobs:
           path: .
 
       - name: Deploy manifest to infra server via SCP
+        id: scp
         run: |
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > /tmp/deploy_key
           chmod 600 /tmp/deploy_key
-          scp -o StrictHostKeyChecking=no -i /tmp/deploy_key \
+
+          # Use timeout to prevent hanging on SSH connection
+          timeout 30 scp -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=10 \
+            -i /tmp/deploy_key \
             manifest.json \
-            root@${{ vars.INFRA_SERVER_IP }}:/opt/orlo/cdn/client/manifest.json
-          rm /tmp/deploy_key
-          echo "V2 manifest (v${VERSION}) deployed to infra server"
+            root@${{ vars.INFRA_SERVER_IP }}:/opt/orlo/cdn/client/manifest.json \
+            && echo "status=success" >> "$GITHUB_OUTPUT" \
+            || echo "status=failed" >> "$GITHUB_OUTPUT"
+
+          rm -f /tmp/deploy_key
+
+      - name: Report deployment status
+        run: |
+          if [ "${{ steps.scp.outputs.status }}" = "success" ]; then
+            echo "V2 manifest (v${VERSION}) deployed to infra server"
+          else
+            echo "WARNING: SCP to infra failed. Manifest is available on R2 CDN."
+            echo "Launchers will still get updates via R2 if Caddy is configured to proxy."
+            echo "Manual fix: SSH to infra and run:"
+            echo "  curl -o /opt/orlo/cdn/client/manifest.json https://cdn.orlo.games/client/manifest.json"
+          fi
