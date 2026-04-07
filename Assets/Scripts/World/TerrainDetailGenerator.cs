@@ -61,7 +61,23 @@ namespace Orlo.World
         {
             _treeTrunkMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.35f, 0.22f, 0.1f), 0f, 0.1f);
 
-            _treeCanopyMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.15f, 0.45f, 0.12f), 0f, 0.05f);
+            // Try foliage shader first for better tree rendering (wind, SSS, alpha cutout)
+            var foliageShader = Resources.Load<Shader>("Shaders/Foliage");
+            if (foliageShader != null)
+            {
+                _treeCanopyMaterial = new Material(foliageShader);
+                _treeCanopyMaterial.SetColor("_BaseColor", new Color(0.15f, 0.45f, 0.12f, 1f));
+                _treeCanopyMaterial.SetFloat("_Smoothness", 0.1f);
+                _treeCanopyMaterial.SetFloat("_Cutoff", 0.3f);
+                _treeCanopyMaterial.SetFloat("_WindStrength", 0.15f);
+                _treeCanopyMaterial.SetColor("_TranslucencyColor", new Color(0.4f, 0.7f, 0.2f, 1f));
+                _treeCanopyMaterial.enableInstancing = true;
+                Debug.Log("[TerrainDetail] Using Foliage shader for tree canopy (wind + SSS)");
+            }
+            else
+            {
+                _treeCanopyMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.15f, 0.45f, 0.12f), 0f, 0.05f);
+            }
 
             _rockMaterial = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.5f, 0.48f, 0.45f), 0f, 0.2f);
 
