@@ -13,6 +13,7 @@ using ProtoResource = Orlo.Proto.Resource;
 using ProtoInventory = Orlo.Proto.Inventory;
 using ProtoSocial = Orlo.Proto.Social;
 using ProtoLobby = Orlo.Proto.Lobby;
+using ProtoBadges = Orlo.Proto.Badges;
 
 namespace Orlo.Network
 {
@@ -1264,6 +1265,25 @@ namespace Orlo.Network
             {
                 QuestId = questId
             };
+            return pkt.ToByteArray();
+        }
+
+        /// <summary>Request the full badge list (earned + unearned).</summary>
+        public static byte[] BadgeListRequest()
+        {
+            var pkt = NewPacket();
+            pkt.BadgeListRequest = new ProtoBadges.BadgeListRequest();
+            return pkt.ToByteArray();
+        }
+
+        /// <summary>Set up to 3 showcase badge IDs.</summary>
+        public static byte[] SetShowcase(uint[] badgeIds)
+        {
+            var pkt = NewPacket();
+            var msg = new ProtoBadges.SetShowcase();
+            foreach (var id in badgeIds)
+                msg.BadgeIds.Add(id);
+            pkt.SetShowcase = msg;
             return pkt.ToByteArray();
         }
     }

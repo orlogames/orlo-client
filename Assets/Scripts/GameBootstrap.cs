@@ -338,6 +338,28 @@ namespace Orlo
                 go.AddComponent<MainMenuUI>();
             }
 
+            // Toolbar panels (Character, Skills, Combat, Quests)
+            if (Panels.CharacterPanelUI.Instance == null)
+            {
+                var go = new GameObject("CharacterPanelUI");
+                go.AddComponent<Panels.CharacterPanelUI>();
+            }
+            if (Panels.SkillsPanelUI.Instance == null)
+            {
+                var go = new GameObject("SkillsPanelUI");
+                go.AddComponent<Panels.SkillsPanelUI>();
+            }
+            if (Panels.CombatPanelUI.Instance == null)
+            {
+                var go = new GameObject("CombatPanelUI");
+                go.AddComponent<Panels.CombatPanelUI>();
+            }
+            if (Panels.QuestJournalUI.Instance == null)
+            {
+                var go = new GameObject("QuestJournalUI");
+                go.AddComponent<Panels.QuestJournalUI>();
+            }
+
             // Register UIs with progressive disclosure system
             // Level 1: movement + combat bar (always visible)
             // Level 3: inventory + minimap

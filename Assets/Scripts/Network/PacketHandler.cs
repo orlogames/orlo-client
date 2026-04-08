@@ -20,6 +20,7 @@ using ProtoResource = Orlo.Proto.Resource;
 using ProtoTMD = Orlo.Proto.TMD;
 using ProtoProgression = Orlo.Proto.Progression;
 using ProtoLobby = Orlo.Proto.Lobby;
+using ProtoBadges = Orlo.Proto.Badges;
 
 namespace Orlo.Network
 {
@@ -51,6 +52,8 @@ namespace Orlo.Network
         public event Action<ProtoAuth.CharacterSpawnResponse> OnCharacterSpawn;
         public event Action<ProtoAuth.Pong> OnPong;
         public event Action<ProtoLobby.ServerStatusResponse> OnServerStatusResponse;
+        public event Action<ProtoBadges.BadgeListResponse> OnBadgeListResponse;
+        public event Action<ProtoBadges.BadgeEarned> OnBadgeEarned;
 
         // Death overlay state
         private bool _deathOverlayActive;
@@ -261,6 +264,16 @@ namespace Orlo.Network
                 case Packet.PayloadOneofCase.ServerStatusResponse:
                     Debug.Log("[Lobby] Received ServerStatusResponse");
                     OnServerStatusResponse?.Invoke(packet.ServerStatusResponse);
+                    break;
+
+                // Badges
+                case Packet.PayloadOneofCase.BadgeListResponse:
+                    Debug.Log("[Badges] Received BadgeListResponse");
+                    OnBadgeListResponse?.Invoke(packet.BadgeListResponse);
+                    break;
+                case Packet.PayloadOneofCase.BadgeEarned:
+                    Debug.Log($"[Badges] Badge earned: {packet.BadgeEarned.Badge?.Name}");
+                    OnBadgeEarned?.Invoke(packet.BadgeEarned);
                     break;
 
                 default:

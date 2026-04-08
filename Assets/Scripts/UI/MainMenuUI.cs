@@ -1,4 +1,5 @@
 using UnityEngine;
+using Orlo.UI.Panels;
 
 namespace Orlo.UI
 {
@@ -43,11 +44,11 @@ namespace Orlo.UI
         {
             _buttons = new[]
             {
-                new ToolbarButton { Icon = "\u263A", Tooltip = "Character",  Hotkey = "P",   OnClick = () => PlayerProfileUI.Instance?.Toggle() },
+                new ToolbarButton { Icon = "\u263A", Tooltip = "Character",  Hotkey = "P",   OnClick = () => CharacterPanelUI.Instance?.Toggle() },
                 new ToolbarButton { Icon = "\u2692", Tooltip = "Inventory",  Hotkey = "I",   OnClick = () => InventoryUI.Instance?.Toggle() },
-                new ToolbarButton { Icon = "\u2726", Tooltip = "Skills",     Hotkey = "K",   OnClick = () => {} },
-                new ToolbarButton { Icon = "\u2694", Tooltip = "Combat",     Hotkey = "C",   OnClick = () => {} },
-                new ToolbarButton { Icon = "\u2638", Tooltip = "Quests",     Hotkey = "J",   OnClick = () => {} },
+                new ToolbarButton { Icon = "\u2726", Tooltip = "Skills",     Hotkey = "K",   OnClick = () => SkillsPanelUI.Instance?.Toggle() },
+                new ToolbarButton { Icon = "\u2694", Tooltip = "Combat",     Hotkey = "C",   OnClick = () => CombatPanelUI.Instance?.Toggle() },
+                new ToolbarButton { Icon = "\u2638", Tooltip = "Quests",     Hotkey = "J",   OnClick = () => QuestJournalUI.Instance?.Toggle() },
                 new ToolbarButton { Icon = "\u25CB", Tooltip = "Map",        Hotkey = "M",   OnClick = () => FindFirstObjectByType<MinimapUI>()?.Toggle() },
                 new ToolbarButton { Icon = "\u2691", Tooltip = "Guild",      Hotkey = "G",   OnClick = () => GuildUI.Instance?.Toggle() },
                 new ToolbarButton { Icon = "\u263B", Tooltip = "Friends",    Hotkey = "O",   OnClick = () => FriendsUI.Instance?.Toggle() },
