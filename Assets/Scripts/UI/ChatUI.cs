@@ -50,18 +50,24 @@ namespace Orlo.UI
             AddSystemMessage("Welcome to Orlo! Type /w <name> <message> to whisper.");
         }
 
+        private bool _pendingSend;
+
         private void Update()
         {
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
             {
                 if (!_inputFocused)
                 {
-                    // First Enter press: focus the input field
+                    // First Enter: focus the input field
                     _inputFocused = true;
                     _lastActivityTime = Time.time;
                 }
-                // Sending is handled in OnGUI via Event detection
-                // (Update runs before OnGUI, so we can't read GUI focus state here)
+                else if (!string.IsNullOrEmpty(_inputText.Trim()))
+                {
+                    // Second Enter while focused with text: send the message
+                    // (GUI.TextField consumes Return in OnGUI, so we handle it here)
+                    _pendingSend = true;
+                }
             }
 
             if (Input.GetKeyDown(KeyCode.Escape) && _inputFocused)
@@ -449,15 +455,12 @@ namespace Orlo.UI
                 GUI.FocusControl(_inputControlName);
             }
 
-            // Detect Enter while text field is focused (GUI.TextField consumes Return)
-            if (Event.current.type == EventType.KeyDown &&
-                (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter) &&
-                GUI.GetNameOfFocusedControl() == _inputControlName &&
-                !string.IsNullOrEmpty(_inputText))
+            // Process pending send from Update() (Enter key)
+            if (_pendingSend)
             {
+                _pendingSend = false;
                 SendMessage();
                 _lastActivityTime = Time.time;
-                Event.current.Use();
             }
 
             // Reset GUI color
