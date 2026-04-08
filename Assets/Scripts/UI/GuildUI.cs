@@ -448,7 +448,7 @@ namespace Orlo.UI
             for (int i = 0; i < 10; i++)
             {
                 GUI.Label(new Rect(4, y, 30, 18), $"#{i}", DimLabel());
-                _ranks[i] = new GuildRank
+                _ranks[i] = new Network.PacketBuilder.GuildRankData
                 {
                     Name = GUI.TextField(new Rect(36, y, 100, 18), _ranks[i].Name, SmallInputStyle()),
                     CanInvite = GUI.Toggle(new Rect(142, y, 60, 18), _ranks[i].CanInvite, "Invite"),

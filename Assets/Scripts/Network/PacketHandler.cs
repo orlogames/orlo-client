@@ -1040,7 +1040,7 @@ namespace Orlo.Network
                         Name = m.Name,
                         CurrentHP = m.Health,
                         MaxHP = m.MaxHealth,
-                        IsLeader = m.IsLeader
+                        IsLeader = m.Name == update.LeaderName
                     });
                 }
                 partyUI.SetPartyData(members);
@@ -1053,12 +1053,12 @@ namespace Orlo.Network
             var charSelect = FindFirstObjectByType<CharacterSelectUI>();
             if (charSelect != null)
             {
-                charSelect.AddPartyInvite(invite.FromPlayer);
+                charSelect.AddPartyInvite(invite.InviterName);
             }
             else
             {
                 var chatUI = FindFirstObjectByType<ChatUI>();
-                chatUI?.AddSystemMessage($"{invite.FromPlayer} invited you to a party. Type /party_accept to join.");
+                chatUI?.AddSystemMessage($"{invite.InviterName} invited you to a party. Type /party_accept to join.");
             }
         }
 
@@ -1074,9 +1074,9 @@ namespace Orlo.Network
                 {
                     Name = f.Name,
                     Online = f.Online,
-                    ZoneName = f.Zone,
-                    Note = f.Note,
-                    Category = f.Category
+                    ZoneName = f.ZoneName,
+                    Note = "",
+                    Category = 0
                 });
             }
             friendsUI.SetFriendsList(friends);
@@ -1084,7 +1084,7 @@ namespace Orlo.Network
 
         private void HandleFriendStatus(Orlo.Proto.Social.FriendStatusNotify status)
         {
-            FriendsUI.Instance?.UpdateFriendStatus(status.Name, status.Online, status.Zone);
+            FriendsUI.Instance?.UpdateFriendStatus(status.Name, status.Online, "");
 
             // Also route to CharacterSelectUI lobby
             var charSelect = FindFirstObjectByType<CharacterSelectUI>();
@@ -1095,7 +1095,7 @@ namespace Orlo.Network
                 {
                     Name = status.Name,
                     Online = status.Online,
-                    Zone = status.Zone
+                    Zone = ""
                 });
                 charSelect.SetLobbyFriends(lobbyFriends);
             }
@@ -1106,30 +1106,27 @@ namespace Orlo.Network
             // Map proto channel enum to display channel name
             string channel = msg.Channel switch
             {
-                Orlo.Proto.Social.ChatChannel.Global => "Global",
+                Orlo.Proto.Social.ChatChannel.Proximity => "Say",
                 Orlo.Proto.Social.ChatChannel.Zone => "Zone",
+                Orlo.Proto.Social.ChatChannel.Global => "Global",
                 Orlo.Proto.Social.ChatChannel.Party => "Party",
                 Orlo.Proto.Social.ChatChannel.Whisper => "Whisper",
-                Orlo.Proto.Social.ChatChannel.Proximity => "Say",
                 Orlo.Proto.Social.ChatChannel.System => "System",
-                (Orlo.Proto.Social.ChatChannel)1 => "Yell",
-                (Orlo.Proto.Social.ChatChannel)3 => "Trade",
-                (Orlo.Proto.Social.ChatChannel)4 => "LFG",
-                (Orlo.Proto.Social.ChatChannel)5 => "Guild",
-                (Orlo.Proto.Social.ChatChannel)6 => "Officer",
-                (Orlo.Proto.Social.ChatChannel)9 => "Circle",
-                (Orlo.Proto.Social.ChatChannel)13 => "Emote",
+                Orlo.Proto.Social.ChatChannel.Guild => "Guild",
+                Orlo.Proto.Social.ChatChannel.Say => "Say",
+                Orlo.Proto.Social.ChatChannel.Yell => "Yell",
+                Orlo.Proto.Social.ChatChannel.Trade => "Trade",
+                Orlo.Proto.Social.ChatChannel.Lfg => "LFG",
+                Orlo.Proto.Social.ChatChannel.Officer => "Officer",
+                Orlo.Proto.Social.ChatChannel.Raid => "Raid",
+                Orlo.Proto.Social.ChatChannel.Mentor => "Mentor",
+                Orlo.Proto.Social.ChatChannel.Circle => "Circle",
                 _ => "Global"
             };
 
-            // Extract sender entity ID if available (field may not exist in current proto)
-            ulong senderEntityId = 0;
-            try { if (msg.SenderEntityId != null) senderEntityId = msg.SenderEntityId.Id; }
-            catch (System.Exception) { /* SenderEntityId not in proto yet */ }
-
             var chatUI = ChatUI.Instance;
             if (chatUI != null)
-                chatUI.ReceiveMessage(msg.SenderName, channel, msg.Content, senderEntityId);
+                chatUI.ReceiveMessage(msg.SenderName, channel, msg.Content);
             else
                 Debug.Log($"[Chat] [{channel}] {msg.SenderName}: {msg.Content}");
 
