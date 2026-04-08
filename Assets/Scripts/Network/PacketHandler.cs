@@ -1082,7 +1082,7 @@ namespace Orlo.Network
             friendsUI.SetFriendsList(friends);
         }
 
-        private void HandleFriendStatus(Orlo.Proto.Social.FriendStatus status)
+        private void HandleFriendStatus(Orlo.Proto.Social.FriendStatusNotify status)
         {
             FriendsUI.Instance?.UpdateFriendStatus(status.Name, status.Online, status.Zone);
 

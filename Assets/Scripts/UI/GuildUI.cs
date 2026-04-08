@@ -74,19 +74,8 @@ namespace Orlo.UI
         }
         private List<GuildLogEntry> _log = new List<GuildLogEntry>();
 
-        // Ranks
-        public struct GuildRank
-        {
-            public string Name;
-            public bool CanInvite;
-            public bool CanKick;
-            public bool CanPromote;
-            public bool CanEditMotd;
-            public bool CanBankDeposit;
-            public bool CanBankWithdraw;
-            public long BankWithdrawLimit;
-        }
-        private GuildRank[] _ranks = new GuildRank[10];
+        // Ranks — uses GuildRankData from PacketBuilder to avoid circular dependency
+        private Network.PacketBuilder.GuildRankData[] _ranks = new Network.PacketBuilder.GuildRankData[10];
         private bool _isLeader;
         private int _myRank;
 
@@ -103,7 +92,7 @@ namespace Orlo.UI
             string[] defaultNames = { "Leader", "Officer", "Veteran", "Member", "Recruit", "", "", "", "", "" };
             for (int i = 0; i < 10; i++)
             {
-                _ranks[i] = new GuildRank { Name = i < defaultNames.Length ? defaultNames[i] : "" };
+                _ranks[i] = new Network.PacketBuilder.GuildRankData { Name = i < defaultNames.Length ? defaultNames[i] : "" };
             }
         }
 
@@ -143,7 +132,7 @@ namespace Orlo.UI
         }
 
         public void SetLog(List<GuildLogEntry> log) { _log = log ?? new List<GuildLogEntry>(); }
-        public void SetRanks(GuildRank[] ranks) { if (ranks != null && ranks.Length == 10) _ranks = ranks; }
+        public void SetRanks(Network.PacketBuilder.GuildRankData[] ranks) { if (ranks != null && ranks.Length == 10) _ranks = ranks; }
         public void SetRenown(int level) { _renownLevel = level; }
 
         // ---- OnGUI ----

@@ -787,7 +787,19 @@ namespace Orlo.Network
             return pkt.ToByteArray();
         }
 
-        public static byte[] SetGuildRanks(GuildUI.GuildRank[] ranks)
+        public struct GuildRankData
+        {
+            public string Name;
+            public bool CanInvite;
+            public bool CanKick;
+            public bool CanPromote;
+            public bool CanEditMotd;
+            public bool CanBankDeposit;
+            public bool CanBankWithdraw;
+            public long BankWithdrawLimit;
+        }
+
+        public static byte[] SetGuildRanks(GuildRankData[] ranks)
         {
             // Serialize rank data as command — server parses
             var sb = new System.Text.StringBuilder("/guild_ranks");
