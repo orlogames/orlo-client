@@ -92,8 +92,10 @@ namespace Orlo.World
                 }
                 bool isZUp = boundsInit && combinedBounds.size.z > combinedBounds.size.y * 1.2f;
                 if (isZUp)
-                    _modelRoot.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
-                // else: Y-up model, no rotation needed
+                    _modelRoot.transform.localRotation = Quaternion.Euler(-90f, 180f, 0f);
+                else
+                    _modelRoot.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                // 180° Y flips model to face away from camera (GLB models face -Z by default)
 
                 // Create a combined mesh from all primitives
                 foreach (var meshData in meshes)
