@@ -331,6 +331,13 @@ namespace Orlo
                 go.AddComponent<LoadingScreen>();
             }
 
+            // Main menu (Escape key — resume, settings, logout, quit)
+            if (FindFirstObjectByType<MainMenuUI>() == null)
+            {
+                var go = new GameObject("MainMenuUI");
+                go.AddComponent<MainMenuUI>();
+            }
+
             // Register UIs with progressive disclosure system
             // Level 1: movement + combat bar (always visible)
             // Level 3: inventory + minimap
@@ -563,20 +570,9 @@ namespace Orlo
                 // No characters — go straight to creation
                 ShowCharacterCreation();
             }
-            else if (characters.Count == 1)
-            {
-                // Single character — auto-select and enter world immediately
-                var ch = characters[0];
-                string fullName = $"{ch.firstName} {ch.lastName}";
-                Debug.Log($"[Orlo] Single character detected — auto-selecting: {fullName} (ID {ch.id})");
-                playerName = fullName;
-                _connectionUI?.Show("Entering world");
-                var selectData = PacketBuilder.CharacterSelect(_sessionId, playerName);
-                NetworkManager.Instance.Send(selectData);
-            }
             else
             {
-                // Multiple characters — show character select / lobby screen
+                // Always show lobby / character select — even with 1 character
                 ShowCharacterSelect(characters, maxSlots);
             }
         }
