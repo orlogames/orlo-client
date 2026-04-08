@@ -94,10 +94,15 @@ namespace Orlo.UI
                 }
                 else
                 {
-                    _visible = !_visible;
-                    if (_visible) _isOwnProfile = true;
+                    Toggle();
                 }
             }
+        }
+
+        public void Toggle()
+        {
+            _visible = !_visible;
+            if (_visible) _isOwnProfile = true;
         }
 
         // ---- Public API for server data ----

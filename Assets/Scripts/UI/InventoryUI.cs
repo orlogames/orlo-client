@@ -243,14 +243,12 @@ namespace Orlo.UI
             foreach (var s in _equipSlots) if (s.Occupied) _currentWeight += s.Weight * s.StackCount;
         }
 
+        public void Toggle() { _visible = !_visible; _contextMenuOpen = false; _equipContextOpen = false; }
+
         private void Update()
         {
             if (Input.GetKeyDown(KeyCode.I))
-            {
-                _visible = !_visible;
-                _contextMenuOpen = false;
-                _equipContextOpen = false;
-            }
+                Toggle();
 
             _pendingPulseTimer += Time.deltaTime;
 
