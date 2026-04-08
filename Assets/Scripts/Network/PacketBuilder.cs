@@ -12,6 +12,7 @@ using ProtoTMD = Orlo.Proto.TMD;
 using ProtoResource = Orlo.Proto.Resource;
 using ProtoInventory = Orlo.Proto.Inventory;
 using ProtoSocial = Orlo.Proto.Social;
+using ProtoLobby = Orlo.Proto.Lobby;
 
 namespace Orlo.Network
 {
@@ -1198,11 +1199,7 @@ namespace Orlo.Network
         public static byte[] ServerStatusRequest()
         {
             var pkt = NewPacket();
-            pkt.ChatSend = new ProtoSocial.ChatSend
-            {
-                Channel = ProtoSocial.ChatChannel.System,
-                Content = "/server_status"
-            };
+            pkt.ServerStatusRequest = new ProtoLobby.ServerStatusRequest();
             return pkt.ToByteArray();
         }
 

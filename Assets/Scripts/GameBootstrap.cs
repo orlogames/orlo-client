@@ -8,6 +8,7 @@ using Orlo.Animation;
 using Orlo.Rendering;
 using Orlo.VFX;
 using Orlo.UI.CharacterCreation;
+using Orlo.UI.Lobby;
 using Orlo.Proto;
 using ProtoAuth = Orlo.Proto.Auth;
 using Color = UnityEngine.Color;
@@ -39,6 +40,8 @@ namespace Orlo
         private ConnectionStatusUI _connectionUI;
         private bool _characterSpawned = false;
         private string _launcherToken;
+        private CharacterPreviewManager _lobbyPreviewManager;
+        private bool _showWelcomeAfterSpawn;
 
         // Ping every 5 seconds for latency tracking
         private float _pingTimer;
@@ -71,6 +74,7 @@ namespace Orlo
             PacketHandler.Instance.OnRegisterResponse += OnRegisterResponse;
             PacketHandler.Instance.OnCharacterSpawn += OnCharacterSpawn;
             PacketHandler.Instance.OnPong += OnPong;
+            PacketHandler.Instance.OnServerStatusResponse += OnServerStatus;
 
             // If launched with a token, show status overlay and auto-connect
             if (!string.IsNullOrEmpty(_launcherToken))
@@ -94,7 +98,7 @@ namespace Orlo
             }
             else
             {
-                ShowLoginUI();
+                ShowSplashScreen();
             }
         }
 
@@ -383,6 +387,38 @@ namespace Orlo
         private string _pendingUsername;
         private string _pendingPassword;
 
+        private void ShowSplashScreen()
+        {
+            // Create lobby background (renders behind everything)
+            if (LobbyBackground.Instance == null)
+            {
+                var go = new GameObject("LobbyBackground");
+                go.AddComponent<LobbyBackground>();
+            }
+            LobbyBackground.Instance.Show();
+
+            // Create and start lobby audio
+            if (LobbyAudio.Instance == null)
+            {
+                var go = new GameObject("LobbyAudio");
+                go.AddComponent<LobbyAudio>();
+            }
+            LobbyAudio.Instance.Play();
+
+            // Create splash screen
+            if (SplashScreen.Instance == null)
+            {
+                var go = new GameObject("SplashScreen");
+                go.AddComponent<SplashScreen>();
+            }
+            SplashScreen.Instance.OnComplete = () =>
+            {
+                SplashScreen.Instance.Hide();
+                ShowLoginUI();
+            };
+            SplashScreen.Instance.Show();
+        }
+
         private void ShowLoginUI()
         {
             if (_loginUI == null)
@@ -574,6 +610,55 @@ namespace Orlo
             };
 
             _charSelectUI.Show();
+
+            // Ensure lobby background is visible
+            if (LobbyBackground.Instance == null)
+            {
+                var go = new GameObject("LobbyBackground");
+                go.AddComponent<LobbyBackground>();
+            }
+            LobbyBackground.Instance.Show();
+
+            // Create character platform
+            if (CharacterPlatform.Instance == null)
+            {
+                var go = new GameObject("CharacterPlatform");
+                go.AddComponent<CharacterPlatform>();
+            }
+            CharacterPlatform.Instance.Show();
+
+            // Create enter world button
+            if (EnterWorldButton.Instance == null)
+            {
+                var go = new GameObject("EnterWorldButton");
+                go.AddComponent<EnterWorldButton>();
+            }
+            EnterWorldButton.Instance.YPosition = 0.78f; // 78% from top
+            EnterWorldButton.Instance.Show();
+            EnterWorldButton.Instance.OnClick = () =>
+            {
+                // Trigger enter-world via CharacterSelectUI's existing selection logic
+                _charSelectUI?.EnterWithSelectedCharacter();
+            };
+
+            // Create news ticker
+            if (NewsTicker.Instance == null)
+            {
+                var go = new GameObject("NewsTicker");
+                go.AddComponent<NewsTicker>();
+            }
+            NewsTicker.Instance.Show();
+
+            // Request server status (which now includes news/events)
+            NetworkManager.Instance.Send(PacketBuilder.ServerStatusRequest());
+
+            // Create preview manager for lobby character display
+            if (_lobbyPreviewManager == null)
+            {
+                var go = new GameObject("LobbyPreviewManager");
+                _lobbyPreviewManager = go.AddComponent<CharacterPreviewManager>();
+                _lobbyPreviewManager.Initialize();
+            }
         }
 
         private void ShowCharacterCreation()
@@ -604,6 +689,13 @@ namespace Orlo
             {
                 Debug.Log($"[Orlo] Character created (ID {characterId}) — requesting list to spawn...");
                 _connectionUI?.SetStatus("Entering world");
+
+                // Flag welcome overlay for first-time players
+                if (WelcomeOverlay.ShouldShow())
+                {
+                    _showWelcomeAfterSpawn = true;
+                }
+
                 NetworkManager.Instance.Send(PacketBuilder.CharacterListRequest(_sessionId));
             }
             else
@@ -619,6 +711,19 @@ namespace Orlo
         {
             _connectionUI?.Hide();
             _charSelectUI?.Hide(); // Hide lobby if still visible
+
+            // Hide all lobby components
+            LobbyBackground.Instance?.Hide();
+            CharacterPlatform.Instance?.Hide();
+            EnterWorldButton.Instance?.Hide();
+            NewsTicker.Instance?.Hide();
+            LobbyAudio.Instance?.Stop();
+            if (_lobbyPreviewManager != null)
+            {
+                _lobbyPreviewManager.Cleanup();
+                _lobbyPreviewManager = null;
+            }
+
             _characterEntityId = spawn.EntityId.Id;
             _characterSpawned = true;
 
@@ -782,12 +887,46 @@ namespace Orlo
 
             // Wire cloud + god ray cross-system updates
             WireCloudAndGodRays();
+
+            // Show welcome overlay for first-time players
+            if (_showWelcomeAfterSpawn)
+            {
+                _showWelcomeAfterSpawn = false;
+                if (WelcomeOverlay.Instance == null)
+                {
+                    var go = new GameObject("WelcomeOverlay");
+                    go.AddComponent<WelcomeOverlay>();
+                }
+                WelcomeOverlay.Instance.ShowFirstTime();
+                WelcomeOverlay.Instance.OnDismissed = () => { /* welcome dismissed, nothing needed */ };
+            }
         }
 
         private void OnPong(ProtoAuth.Pong pong)
         {
             float rtt = (float)(Time.realtimeSinceStartup * 1000 - pong.ClientTime.Ms);
             Debug.Log($"[Network] RTT: {rtt:F1}ms");
+        }
+
+        private void OnServerStatus(Orlo.Proto.Lobby.ServerStatusResponse status)
+        {
+            Debug.Log($"[Orlo] Server status: {status.ServerName} — {status.OnlinePlayers} players, {status.Status}");
+
+            // Update character select UI
+            bool online = status.Status == "online";
+            _charSelectUI?.SetServerStatus(online, (int)status.OnlinePlayers, status.ServerName);
+
+            // Update news ticker with server news + events
+            if (NewsTicker.Instance != null)
+            {
+                NewsTicker.Instance.ClearNews();
+                foreach (var item in status.News)
+                    NewsTicker.Instance.AddNews(item.Category, item.Title);
+                foreach (var evt in status.ActiveEvents)
+                    NewsTicker.Instance.AddNews("event", $"{evt.Name} — {evt.Description}");
+                if (!string.IsNullOrEmpty(status.ServerMotd))
+                    NewsTicker.Instance.AddNews("announcement", status.ServerMotd);
+            }
         }
 
         public void ShowLoginAfterLogout()
@@ -964,6 +1103,7 @@ namespace Orlo
                 PacketHandler.Instance.OnRegisterResponse -= OnRegisterResponse;
                 PacketHandler.Instance.OnCharacterSpawn -= OnCharacterSpawn;
                 PacketHandler.Instance.OnPong -= OnPong;
+                PacketHandler.Instance.OnServerStatusResponse -= OnServerStatus;
             }
         }
     }

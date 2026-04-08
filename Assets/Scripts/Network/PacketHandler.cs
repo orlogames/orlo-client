@@ -19,6 +19,7 @@ using ProtoInventory = Orlo.Proto.Inventory;
 using ProtoResource = Orlo.Proto.Resource;
 using ProtoTMD = Orlo.Proto.TMD;
 using ProtoProgression = Orlo.Proto.Progression;
+using ProtoLobby = Orlo.Proto.Lobby;
 
 namespace Orlo.Network
 {
@@ -49,6 +50,7 @@ namespace Orlo.Network
         public event Action<ProtoAuth.RegisterResponse> OnRegisterResponse;
         public event Action<ProtoAuth.CharacterSpawnResponse> OnCharacterSpawn;
         public event Action<ProtoAuth.Pong> OnPong;
+        public event Action<ProtoLobby.ServerStatusResponse> OnServerStatusResponse;
 
         // Death overlay state
         private bool _deathOverlayActive;
@@ -253,6 +255,12 @@ namespace Orlo.Network
                     break;
                 case Packet.PayloadOneofCase.CharacterAppearance:
                     HandleCharacterAppearance(packet.CharacterAppearance);
+                    break;
+
+                // Lobby
+                case Packet.PayloadOneofCase.ServerStatusResponse:
+                    Debug.Log("[Lobby] Received ServerStatusResponse");
+                    OnServerStatusResponse?.Invoke(packet.ServerStatusResponse);
                     break;
 
                 default:

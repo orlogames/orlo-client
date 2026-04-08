@@ -1,65 +1,69 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Orlo.UI.CharacterCreation;
+using Orlo.UI.Lobby;
 
 namespace Orlo.UI
 {
     /// <summary>
-    /// Character selection / lobby screen shown after login.
-    /// Three-panel layout: character list (left), 3D preview (center), info (right).
-    /// Pre-game social sidebar, server status, delete with confirmation.
-    /// Uses OnGUI immediate mode rendering.
+    /// Full lobby experience: three-panel layout with character list (left),
+    /// 3D preview (center), character info (right), plus social sidebar and top bar.
+    /// Integrates with LobbyBackground, CharacterPlatform, EnterWorldButton, NewsTicker.
     /// </summary>
     public class CharacterSelectUI : MonoBehaviour
     {
         public Action<ulong, string> OnCharacterSelected;
         public Action OnCreateNew;
 
-        private bool _visible = true;
-        private int _selectedIndex = 0;
+        private bool _visible;
+        private int _selectedIndex = -1;
         private List<CharacterEntry> _characters = new();
         private int _maxCharacters = 4;
         private Vector2 _listScroll;
         private Vector2 _socialScroll;
+        private float _lastClickTime;
+        private int _lastClickIndex = -1;
 
         // Delete state
         private bool _deleteConfirmActive;
         private string _deleteConfirmInput = "";
         private int _deleteTargetIndex = -1;
-        private float _deleteCooldownEnd;
-        private bool _deletePending;
 
         // Server status
         private bool _serverOnline = true;
         private int _playerCount;
         private string _serverStatusText = "Online";
-        private Color _serverStatusColor = Color.green;
 
-        // Pre-game social sidebar
+        // Social sidebar
         private bool _socialExpanded = true;
-
-        // Friends in sidebar
-        public struct LobbyFriend
-        {
-            public string Name;
-            public bool Online;
-            public string Zone;
-        }
-        private List<LobbyFriend> _lobbyFriends = new List<LobbyFriend>();
+        private List<LobbyFriend> _lobbyFriends = new();
         private string _guildChatInput = "";
-        private List<string> _guildChatMessages = new List<string>();
+        private List<string> _guildChatMessages = new();
+        private List<PartyInvite> _partyInvites = new();
 
-        // Party invites
-        public struct PartyInvite
-        {
-            public string FromPlayer;
-            public float ReceivedTime;
-        }
-        private List<PartyInvite> _partyInvites = new List<PartyInvite>();
+        // External references (found at runtime)
+        private CharacterPreviewManager _previewManager;
+        private EnterWorldButton _enterWorldButton;
 
-        // Race names
+        // Cached styles (rebuilt each OnGUI frame to avoid stale skin refs)
         private static readonly string[] RaceNames = { "Solari", "Vael", "Korrath", "Thyren" };
         private static readonly string[] ClassNames = { "Explorer", "Warrior", "Artisan", "Medic", "Ranger", "Pilot" };
+
+        // Colors
+        private static readonly Color ColPanelBg = new(0.07f, 0.07f, 0.11f, 0.8f);
+        private static readonly Color ColSelected = new(0.15f, 0.2f, 0.35f, 0.9f);
+        private static readonly Color ColSlotNormal = new(0.07f, 0.07f, 0.11f, 0.8f);
+        private static readonly Color ColDeleteTint = new(0.3f, 0.1f, 0.1f, 0.7f);
+        private static readonly Color ColBorderGlow = new(0.4f, 0.6f, 1f, 0.8f);
+        private static readonly Color ColGold = new(0.95f, 0.85f, 0.4f);
+        private static readonly Color ColBlueWhite = new(0.7f, 0.85f, 1f);
+        private static readonly Color ColDim = new(0.5f, 0.5f, 0.6f);
+        private static readonly Color ColText = new(0.85f, 0.85f, 0.9f);
+        private static readonly Color ColRed = new(1f, 0.35f, 0.25f);
+        private static readonly Color ColGuildChat = new(0f, 0.8f, 0.6f);
+
+        // ---- Structs ----
 
         public struct CharacterEntry
         {
@@ -80,12 +84,45 @@ namespace Orlo.UI
             public float deleteTimeRemaining;
         }
 
-        public void Show() { _visible = true; _selectedIndex = 0; _deleteConfirmActive = false; }
+        public struct LobbyFriend
+        {
+            public string Name;
+            public bool Online;
+            public string Zone;
+        }
+
+        public struct PartyInvite
+        {
+            public string FromPlayer;
+            public float ReceivedTime;
+        }
+
+        // ---- Public API ----
+
+        public void Show()
+        {
+            _visible = true;
+            _selectedIndex = _characters.Count > 0 ? 0 : -1;
+            _deleteConfirmActive = false;
+            FindReferences();
+        }
+
         public void Hide() { _visible = false; }
+
+        /// <summary>Enter world with the currently selected character (called by EnterWorldButton).</summary>
+        public void EnterWithSelectedCharacter()
+        {
+            if (_selectedIndex < 0 || _selectedIndex >= _characters.Count) return;
+            var ch = _characters[_selectedIndex];
+            if (ch.pendingDelete) return;
+            string fullName = $"{ch.firstName} {ch.lastName}";
+            OnCharacterSelected?.Invoke(ch.id, fullName);
+            Hide();
+        }
 
         public void SetCharacters(List<CharacterEntry> characters, int maxSlots)
         {
-            _characters = characters;
+            _characters = characters ?? new List<CharacterEntry>();
             _maxCharacters = maxSlots;
             _selectedIndex = _characters.Count > 0 ? 0 : -1;
         }
@@ -95,12 +132,20 @@ namespace Orlo.UI
             _serverOnline = online;
             _playerCount = playerCount;
             _serverStatusText = statusText;
-            _serverStatusColor = online ? Color.green : Color.red;
         }
 
-        public void SetLobbyFriends(List<LobbyFriend> friends) { _lobbyFriends = friends ?? new List<LobbyFriend>(); }
-        public void AddGuildChatMessage(string msg) { _guildChatMessages.Add(msg); if (_guildChatMessages.Count > 50) _guildChatMessages.RemoveAt(0); }
-        public void AddPartyInvite(string from) { _partyInvites.Add(new PartyInvite { FromPlayer = from, ReceivedTime = Time.time }); }
+        public void SetLobbyFriends(List<LobbyFriend> friends) => _lobbyFriends = friends ?? new List<LobbyFriend>();
+
+        public void AddGuildChatMessage(string msg)
+        {
+            _guildChatMessages.Add(msg);
+            if (_guildChatMessages.Count > 50) _guildChatMessages.RemoveAt(0);
+        }
+
+        public void AddPartyInvite(string from)
+        {
+            _partyInvites.Add(new PartyInvite { FromPlayer = from, ReceivedTime = Time.time });
+        }
 
         public void OnDeleteStatus(ulong characterId, bool success, float cooldownRemaining)
         {
@@ -121,8 +166,20 @@ namespace Orlo.UI
             _deleteConfirmActive = false;
         }
 
+        // ---- Unity Lifecycle ----
+
+        private void FindReferences()
+        {
+            if (_previewManager == null)
+                _previewManager = FindFirstObjectByType<CharacterPreviewManager>();
+            if (_enterWorldButton == null)
+                _enterWorldButton = FindFirstObjectByType<EnterWorldButton>();
+        }
+
         private void Update()
         {
+            if (!_visible) return;
+
             // Tick delete cooldowns
             for (int i = 0; i < _characters.Count; i++)
             {
@@ -133,194 +190,254 @@ namespace Orlo.UI
                     _characters[i] = ch;
                 }
             }
+
+            // Keyboard shortcuts (only when delete dialog is closed)
+            if (!_deleteConfirmActive)
+                HandleKeyboardInput();
         }
+
+        private void HandleKeyboardInput()
+        {
+            if (_characters.Count == 0) return;
+
+            // A / Left arrow = previous character
+            if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow))
+            {
+                _selectedIndex = (_selectedIndex - 1 + _characters.Count) % _characters.Count;
+            }
+            // D / Right arrow = next character
+            if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow))
+            {
+                _selectedIndex = (_selectedIndex + 1) % _characters.Count;
+            }
+            // Enter = enter world
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+            {
+                TryEnterWorld();
+            }
+        }
+
+        private void TryEnterWorld()
+        {
+            if (_selectedIndex < 0 || _selectedIndex >= _characters.Count) return;
+            var ch = _characters[_selectedIndex];
+            if (ch.pendingDelete) return;
+            OnCharacterSelected?.Invoke(ch.id, $"{ch.firstName} {ch.lastName}");
+            Hide();
+        }
+
+        // ---- OnGUI Layout ----
 
         private void OnGUI()
         {
             if (!_visible) return;
 
-            // Full-screen dark background
-            GUI.color = new Color(0.04f, 0.03f, 0.07f, 0.98f);
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            float sw = Screen.width;
+            float sh = Screen.height;
+            float topBarH = 50f;
+            float bottomPad = 80f;
+
+            // Panel dimensions
+            float leftW = sw * 0.20f;
+            float rightW = sw * 0.20f;
+            float centerW = sw - leftW - rightW;
+            float panelY = topBarH;
+            float panelH = sh - topBarH - bottomPad;
+
+            // Draw layers
+            DrawTopBar(sw, topBarH);
+            DrawLeftPanel(new Rect(0, panelY, leftW, panelH));
+            DrawCenterArea(new Rect(leftW, panelY, centerW, panelH));
+            DrawRightPanel(new Rect(sw - rightW, panelY, rightW, panelH));
+            DrawSocialSidebar(sw, sh, topBarH);
+
+            if (_deleteConfirmActive)
+                DrawDeleteConfirm(sw, sh);
+        }
+
+        // ---- Top Bar ----
+
+        private void DrawTopBar(float sw, float h)
+        {
+            // Background
+            GUI.color = new Color(0.04f, 0.04f, 0.08f, 0.95f);
+            GUI.DrawTexture(new Rect(0, 0, sw, h), Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            // Title
-            var titleStyle = new GUIStyle(GUI.skin.label)
+            // Bottom border line
+            GUI.color = new Color(0.2f, 0.3f, 0.5f, 0.4f);
+            GUI.DrawTexture(new Rect(0, h - 1, sw, 1), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            // ORLO title (left)
+            var titleStyle = MakeStyle(24, FontStyle.Bold, ColBlueWhite, TextAnchor.MiddleLeft);
+            GUI.Label(new Rect(20, 0, 200, h), "ORLO", titleStyle);
+
+            // Server status (center-right)
+            float statusX = sw - 400;
+            GUI.color = _serverOnline ? Color.green : Color.red;
+            GUI.DrawTexture(new Rect(statusX, h / 2f - 4, 8, 8), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            var statusStyle = MakeStyle(12, FontStyle.Normal, new Color(0.7f, 0.7f, 0.8f));
+            string statusStr = $"Veridian Prime -- {_serverStatusText} ({_playerCount} players)";
+            GUI.Label(new Rect(statusX + 14, 0, 260, h), statusStr, statusStyle);
+
+            // Settings gear (placeholder)
+            if (GUI.Button(new Rect(sw - 110, 10, 40, 30), "Cfg"))
             {
-                fontSize = 32, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(0.7f, 0.85f, 1f) }
-            };
-            GUI.Label(new Rect(0, 20, Screen.width, 40), "ORLO", titleStyle);
+                // Settings would open here
+            }
 
-            // Server status (top right)
-            DrawServerStatus();
-
-            // Top right buttons
-            float btnSize = 28;
-            if (GUI.Button(new Rect(Screen.width - 70, 10, 60, btnSize), "Exit"))
+            // Exit button
+            if (GUI.Button(new Rect(sw - 65, 10, 50, 30), "Exit"))
             {
                 Application.Quit();
 #if UNITY_EDITOR
                 UnityEditor.EditorApplication.isPlaying = false;
 #endif
             }
-
-            // Main layout
-            float topPad = 75;
-            float bottomPad = 70;
-            float mainH = Screen.height - topPad - bottomPad;
-            float totalW = Mathf.Min(Screen.width * 0.92f, 1400f);
-            float startX = (Screen.width - totalW) / 2f;
-
-            float leftW = totalW * 0.25f;
-            float rightW = totalW * 0.25f;
-            float centerW = totalW - leftW - rightW - 20;
-
-            // Left panel: character list
-            DrawCharacterList(new Rect(startX, topPad, leftW, mainH));
-
-            // Center: 3D preview area (placeholder)
-            DrawPreviewArea(new Rect(startX + leftW + 10, topPad, centerW, mainH));
-
-            // Right panel: character info
-            if (_selectedIndex >= 0 && _selectedIndex < _characters.Count)
-                DrawCharacterInfo(new Rect(startX + leftW + centerW + 20, topPad, rightW, mainH));
-
-            // Bottom bar
-            DrawBottomBar(startX, totalW);
-
-            // Pre-game social sidebar (collapsible, right edge)
-            DrawSocialSidebar();
-
-            // Delete confirmation dialog
-            if (_deleteConfirmActive)
-                DrawDeleteConfirm();
         }
 
-        private void DrawServerStatus()
+        // ---- Left Panel: Character List ----
+
+        private void DrawLeftPanel(Rect area)
         {
-            float sx = Screen.width - 240;
-            float sy = 14;
-
-            // Status dot
-            GUI.color = _serverStatusColor;
-            GUI.DrawTexture(new Rect(sx, sy + 4, 10, 10), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
-            var statusStyle = new GUIStyle(GUI.skin.label) { fontSize = 12, normal = { textColor = new Color(0.7f, 0.7f, 0.8f) } };
-            GUI.Label(new Rect(sx + 14, sy, 160, 20), $"{_serverStatusText} ({_playerCount} players)", statusStyle);
-        }
-
-        private void DrawCharacterList(Rect area)
-        {
-            GUI.color = new Color(0.07f, 0.06f, 0.1f, 0.9f);
+            GUI.color = ColPanelBg;
             GUI.DrawTexture(area, Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            float y = area.y + 10;
-            float padX = 12;
+            float pad = 12f;
+            float y = area.y + pad;
+            float w = area.width - pad * 2;
 
-            var headerStyle = new GUIStyle(GUI.skin.label) { fontSize = 16, fontStyle = FontStyle.Bold, normal = { textColor = new Color(0.8f, 0.85f, 0.95f) } };
-            GUI.Label(new Rect(area.x + padX, y, area.width - padX * 2, 24), $"Characters ({_characters.Count}/{_maxCharacters})", headerStyle);
-            y += 32;
+            // Header
+            var headerStyle = MakeStyle(14, FontStyle.Bold, new Color(0.8f, 0.85f, 0.95f));
+            GUI.Label(new Rect(area.x + pad, y, w, 20), $"Characters ({_characters.Count}/{_maxCharacters})", headerStyle);
+            y += 28;
 
-            float listH = area.height - 80;
-            float totalH = (_characters.Count + (_characters.Count < _maxCharacters ? 1 : 0)) * 76f;
-            _listScroll = GUI.BeginScrollView(new Rect(area.x, y, area.width, listH), _listScroll,
-                new Rect(0, 0, area.width - 16, Mathf.Max(totalH, listH)));
+            // Scrollable character list
+            float slotH = 80f;
+            float gap = 6f;
+            int totalSlots = Mathf.Max(_characters.Count + (_characters.Count < _maxCharacters ? 1 : 0), 1);
+            float contentH = totalSlots * (slotH + gap);
+            float listH = area.y + area.height - y - 90;
+
+            _listScroll = GUI.BeginScrollView(
+                new Rect(area.x, y, area.width, listH), _listScroll,
+                new Rect(0, 0, area.width - 16, Mathf.Max(contentH, listH)));
 
             float ly = 0;
             for (int i = 0; i < _characters.Count; i++)
             {
-                bool selected = i == _selectedIndex;
-                DrawCharacterSlot(new Rect(padX, ly, area.width - padX * 2 - 16, 70), _characters[i], selected, i);
-                ly += 76;
+                DrawCharacterSlot(new Rect(pad, ly, w - 2, slotH), _characters[i], i == _selectedIndex, i);
+                ly += slotH + gap;
             }
 
-            // Empty slots
+            // Empty / create-new slots
             for (int i = _characters.Count; i < _maxCharacters; i++)
             {
-                Rect slotRect = new Rect(padX, ly, area.width - padX * 2 - 16, 70);
-                GUI.color = new Color(0.08f, 0.08f, 0.1f, 0.5f);
-                GUI.DrawTexture(slotRect, Texture2D.whiteTexture);
-                GUI.color = new Color(0.3f, 0.3f, 0.4f);
-                var emptyStyle = new GUIStyle(GUI.skin.label) { fontSize = 13, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Italic, normal = { textColor = new Color(0.4f, 0.4f, 0.5f) } };
-                GUI.Label(slotRect, "Empty Slot", emptyStyle);
+                Rect slotR = new Rect(pad, ly, w - 2, slotH);
+                GUI.color = new Color(0.06f, 0.06f, 0.09f, 0.5f);
+                GUI.DrawTexture(slotR, Texture2D.whiteTexture);
+                GUI.color = new Color(0.25f, 0.3f, 0.4f, 0.6f);
+                DrawDashedBorder(slotR, 1);
                 GUI.color = Color.white;
-                ly += 76;
-            }
 
+                var emptyStyle = MakeStyle(12, FontStyle.Italic, new Color(0.35f, 0.4f, 0.55f), TextAnchor.MiddleCenter);
+                GUI.Label(slotR, "+ Create New Character", emptyStyle);
+
+                if (Event.current.type == EventType.MouseDown && slotR.Contains(Event.current.mousePosition))
+                {
+                    OnCreateNew?.Invoke();
+                    Hide();
+                    Event.current.Use();
+                }
+
+                ly += slotH + gap;
+            }
             GUI.EndScrollView();
+
+            // Account summary at bottom
+            float summY = area.y + area.height - 80;
+            GUI.color = new Color(0.06f, 0.06f, 0.09f, 0.6f);
+            GUI.DrawTexture(new Rect(area.x, summY, area.width, 80), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            var secStyle = MakeStyle(11, FontStyle.Bold, new Color(0.6f, 0.65f, 0.8f));
+            GUI.Label(new Rect(area.x + pad, summY + 8, w, 16), "Account", secStyle);
+
+            float totalHours = 0;
+            foreach (var c in _characters) totalHours += c.playtimeHours;
+            int th = (int)totalHours;
+            int tm = (int)((totalHours - th) * 60);
+
+            var dimStyle = MakeStyle(10, FontStyle.Normal, ColDim);
+            GUI.Label(new Rect(area.x + pad, summY + 28, w, 14), $"Total Playtime: {th}h {tm}m", dimStyle);
+            GUI.Label(new Rect(area.x + pad, summY + 44, w, 14), $"Characters: {_characters.Count}/{_maxCharacters}", dimStyle);
         }
 
         private void DrawCharacterSlot(Rect area, CharacterEntry ch, bool selected, int index)
         {
-            Color bgColor = selected
-                ? new Color(0.15f, 0.2f, 0.35f, 0.9f)
-                : new Color(0.09f, 0.09f, 0.13f, 0.7f);
-
-            if (ch.pendingDelete)
-                bgColor = new Color(0.3f, 0.1f, 0.1f, 0.7f);
-
-            GUI.color = bgColor;
+            Color bg = ch.pendingDelete ? ColDeleteTint : (selected ? ColSelected : ColSlotNormal);
+            GUI.color = bg;
             GUI.DrawTexture(area, Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            // Selection border
+            // Glow border on selection
             if (selected)
             {
-                GUI.color = new Color(0.4f, 0.6f, 1f, 0.8f);
+                GUI.color = ColBorderGlow;
                 DrawBorder(area, 2);
                 GUI.color = Color.white;
             }
 
-            // Click to select
+            // Click / double-click
             if (Event.current.type == EventType.MouseDown && area.Contains(Event.current.mousePosition))
             {
+                if (_lastClickIndex == index && Time.realtimeSinceStartup - _lastClickTime < 0.35f && !ch.pendingDelete)
+                {
+                    // Double-click: enter world
+                    OnCharacterSelected?.Invoke(ch.id, $"{ch.firstName} {ch.lastName}");
+                    Hide();
+                    Event.current.Use();
+                    return;
+                }
                 _selectedIndex = index;
-                Event.current.Use();
-            }
-
-            // Double-click to enter
-            if (Event.current.type == EventType.MouseDown && Event.current.clickCount == 2 &&
-                area.Contains(Event.current.mousePosition) && selected && !ch.pendingDelete)
-            {
-                string fullName = $"{ch.firstName} {ch.lastName}";
-                OnCharacterSelected?.Invoke(ch.id, fullName);
-                Hide();
+                _lastClickIndex = index;
+                _lastClickTime = Time.realtimeSinceStartup;
                 Event.current.Use();
             }
 
             float x = area.x + 10;
-            float y = area.y + 6;
+            float y = area.y + 8;
+            float contentW = area.width - 20;
 
-            // Name
-            var nameStyle = new GUIStyle(GUI.skin.label) { fontSize = 15, fontStyle = FontStyle.Bold, normal = { textColor = selected ? new Color(0.9f, 0.95f, 1f) : new Color(0.7f, 0.75f, 0.85f) } };
-            GUI.Label(new Rect(x, y, area.width - 20, 20), $"{ch.firstName} {ch.lastName}", nameStyle);
+            // Name (bold)
+            var nameColor = selected ? new Color(0.95f, 0.97f, 1f) : new Color(0.75f, 0.78f, 0.88f);
+            var nameStyle = MakeStyle(14, FontStyle.Bold, nameColor);
+            GUI.Label(new Rect(x, y, contentW, 18), $"{ch.firstName} {ch.lastName}", nameStyle);
 
-            // Level + class + race
+            // Level + race
             string raceName = ch.race >= 0 && ch.race < RaceNames.Length ? RaceNames[ch.race] : "Unknown";
-            string className = ch.classId >= 0 && ch.classId < ClassNames.Length ? ClassNames[ch.classId] : "";
-            var detailStyle = new GUIStyle(GUI.skin.label) { fontSize = 11, normal = { textColor = new Color(0.5f, 0.55f, 0.65f) } };
-            string detail = !string.IsNullOrEmpty(className) ? $"L{ch.level} {className} {raceName}" : $"L{ch.level} {raceName}";
-            GUI.Label(new Rect(x, y + 20, area.width - 20, 16), detail, detailStyle);
+            var detStyle = MakeStyle(10, FontStyle.Normal, ColDim);
+            GUI.Label(new Rect(x, y + 20, contentW, 14), $"L{ch.level} {raceName}", detStyle);
 
-            // Last location + last played
+            // Zone + guild tag
             string zone = string.IsNullOrEmpty(ch.zoneName) ? "Threshold" : ch.zoneName;
-            string lastPlayed = string.IsNullOrEmpty(ch.lastPlayedRelative) ? "" : $" | {ch.lastPlayedRelative}";
-            GUI.Label(new Rect(x, y + 36, area.width - 20, 16), $"{zone}{lastPlayed}", detailStyle);
+            string guildTag = !string.IsNullOrEmpty(ch.guildName) ? $"  <{ch.guildName}>" : "";
+            GUI.Label(new Rect(x, y + 36, contentW, 14), $"{zone}{guildTag}", detStyle);
 
-            // Pending delete indicator
+            // Pending delete overlay
             if (ch.pendingDelete)
             {
-                float remaining = ch.deleteTimeRemaining;
-                int hours = (int)(remaining / 3600);
-                int mins = (int)((remaining % 3600) / 60);
-                var delStyle = new GUIStyle(GUI.skin.label) { fontSize = 10, normal = { textColor = new Color(1f, 0.4f, 0.3f) } };
-                GUI.Label(new Rect(x, y + 50, 200, 14), $"Deleting... ({hours}h {mins}m)", delStyle);
+                float rem = ch.deleteTimeRemaining;
+                int hrs = (int)(rem / 3600);
+                int mins = (int)((rem % 3600) / 60);
+                var delStyle = MakeStyle(10, FontStyle.Normal, ColRed);
+                GUI.Label(new Rect(x, y + 52, 160, 14), $"Deleting in {hrs}h {mins}m", delStyle);
 
-                // Cancel button
-                if (GUI.Button(new Rect(area.x + area.width - 60, area.y + area.height - 22, 50, 18), "Cancel"))
+                if (GUI.Button(new Rect(area.x + area.width - 58, area.y + area.height - 22, 50, 18), "Cancel"))
                 {
                     Network.NetworkManager.Instance?.Send(
                         Network.PacketBuilder.CancelCharacterDelete(ch.id));
@@ -328,246 +445,225 @@ namespace Orlo.UI
             }
         }
 
-        private void DrawPreviewArea(Rect area)
+        // ---- Center Area: 3D Preview ----
+
+        private void DrawCenterArea(Rect area)
         {
-            GUI.color = new Color(0.05f, 0.05f, 0.08f, 0.6f);
+            // Transparent center lets LobbyBackground/CharacterPlatform show through
+            GUI.color = new Color(0.02f, 0.02f, 0.04f, 0.3f);
             GUI.DrawTexture(area, Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            // Placeholder text (CharacterPreviewManager renders the 3D model here)
             if (_selectedIndex < 0 || _selectedIndex >= _characters.Count)
             {
-                var style = new GUIStyle(GUI.skin.label) { fontSize = 16, alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(0.3f, 0.3f, 0.4f) } };
+                var style = MakeStyle(18, FontStyle.Italic, new Color(0.3f, 0.3f, 0.4f), TextAnchor.MiddleCenter);
                 GUI.Label(area, "Select a character", style);
+                return;
             }
-            else
+
+            // Draw preview render texture if available
+            if (_previewManager != null && _previewManager.PreviewTexture != null)
             {
-                var style = new GUIStyle(GUI.skin.label) { fontSize = 11, alignment = TextAnchor.LowerCenter, normal = { textColor = new Color(0.4f, 0.4f, 0.5f) } };
-                GUI.Label(new Rect(area.x, area.y + area.height - 24, area.width, 20), "Click and drag to rotate", style);
+                float texW = area.width * 0.85f;
+                float texH = area.height * 0.8f;
+                float texX = area.x + (area.width - texW) / 2f;
+                float texY = area.y + 10;
+                Rect previewRect = new Rect(texX, texY, texW, texH);
+
+                GUI.DrawTexture(previewRect, _previewManager.PreviewTexture, ScaleMode.ScaleToFit);
+                _previewManager.HandleOrbitInput(previewRect);
             }
+
+            // Character name below preview
+            var ch = _characters[_selectedIndex];
+            var nameStyle = MakeStyle(18, FontStyle.Bold, ColGold, TextAnchor.UpperCenter);
+            GUI.Label(new Rect(area.x, area.y + area.height - 60, area.width, 24),
+                $"{ch.firstName} {ch.lastName}", nameStyle);
+
+            // Left / right arrows to cycle
+            float arrowY = area.y + area.height / 2f - 20;
+            if (_characters.Count > 1)
+            {
+                if (GUI.Button(new Rect(area.x + 8, arrowY, 36, 40), "<"))
+                    _selectedIndex = (_selectedIndex - 1 + _characters.Count) % _characters.Count;
+
+                if (GUI.Button(new Rect(area.x + area.width - 44, arrowY, 36, 40), ">"))
+                    _selectedIndex = (_selectedIndex + 1) % _characters.Count;
+            }
+
+            // Hint text
+            var hintStyle = MakeStyle(10, FontStyle.Normal, new Color(0.4f, 0.4f, 0.5f), TextAnchor.UpperCenter);
+            GUI.Label(new Rect(area.x, area.y + area.height - 34, area.width, 16),
+                "Drag to rotate  |  A / D to cycle  |  Enter to play", hintStyle);
         }
 
-        private void DrawCharacterInfo(Rect area)
+        // ---- Right Panel: Character Info ----
+
+        private void DrawRightPanel(Rect area)
         {
-            GUI.color = new Color(0.07f, 0.06f, 0.1f, 0.9f);
+            if (_selectedIndex < 0 || _selectedIndex >= _characters.Count)
+            {
+                // Empty right panel
+                GUI.color = ColPanelBg;
+                GUI.DrawTexture(area, Texture2D.whiteTexture);
+                GUI.color = Color.white;
+                return;
+            }
+
+            GUI.color = ColPanelBg;
             GUI.DrawTexture(area, Texture2D.whiteTexture);
             GUI.color = Color.white;
 
             var ch = _characters[_selectedIndex];
-            float y = area.y + 12;
-            float x = area.x + 12;
-            float w = area.width - 24;
+            float pad = 14f;
+            float x = area.x + pad;
+            float w = area.width - pad * 2;
+            float y = area.y + pad;
 
-            // Full name header
-            var nameStyle = new GUIStyle(GUI.skin.label) { fontSize = 16, fontStyle = FontStyle.Bold, normal = { textColor = new Color(0.9f, 0.85f, 0.5f) } };
+            // Character name header
+            var nameStyle = MakeStyle(16, FontStyle.Bold, ColGold);
             GUI.Label(new Rect(x, y, w, 22), $"{ch.firstName} {ch.lastName}", nameStyle);
-            y += 28;
+            y += 30;
+
+            // Separator
+            GUI.color = new Color(0.3f, 0.35f, 0.5f, 0.3f);
+            GUI.DrawTexture(new Rect(x, y, w, 1), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+            y += 10;
 
             // Info rows
             string raceName = ch.race >= 0 && ch.race < RaceNames.Length ? RaceNames[ch.race] : "Unknown";
             string className = ch.classId >= 0 && ch.classId < ClassNames.Length ? ClassNames[ch.classId] : "Explorer";
 
-            DrawInfoRow(x, ref y, w, "Level", ch.level.ToString());
-            DrawInfoRow(x, ref y, w, "Class", className);
-            DrawInfoRow(x, ref y, w, "Race", raceName);
-            DrawInfoRow(x, ref y, w, "Last Location", string.IsNullOrEmpty(ch.zoneName) ? "Threshold" : ch.zoneName);
+            InfoRow(x, ref y, w, "Level", ch.level.ToString());
+            InfoRow(x, ref y, w, "Race", raceName);
+            InfoRow(x, ref y, w, "Class", className);
+            InfoRow(x, ref y, w, "Last Location", string.IsNullOrEmpty(ch.zoneName) ? "Threshold" : ch.zoneName);
 
-            int hours = (int)ch.playtimeHours;
-            int mins = (int)((ch.playtimeHours - hours) * 60);
-            DrawInfoRow(x, ref y, w, "Play Time", $"{hours}h {mins}m");
+            int hrs = (int)ch.playtimeHours;
+            int mins = (int)((ch.playtimeHours - hrs) * 60);
+            InfoRow(x, ref y, w, "Playtime", $"{hrs}h {mins}m");
 
-            var credStyle = new GUIStyle(GUI.skin.label) { fontSize = 11, normal = { textColor = new Color(1f, 0.85f, 0.2f) } };
-            GUI.Label(new Rect(x, y, 80, 18), "Credits", DimStyle());
+            // Credits (gold)
+            var labelStyle = MakeStyle(11, FontStyle.Normal, ColDim);
+            GUI.Label(new Rect(x, y, 80, 18), "Credits", labelStyle);
+            var credStyle = MakeStyle(11, FontStyle.Normal, ColGold);
             GUI.Label(new Rect(x + 84, y, w - 84, 18), $"{ch.credits:N0}", credStyle);
             y += 20;
 
             if (!string.IsNullOrEmpty(ch.guildName))
-                DrawInfoRow(x, ref y, w, "Guild", ch.guildName);
+                InfoRow(x, ref y, w, "Guild", ch.guildName);
             if (!string.IsNullOrEmpty(ch.factionName))
-                DrawInfoRow(x, ref y, w, "Faction", ch.factionName);
+                InfoRow(x, ref y, w, "Faction", ch.factionName);
 
             if (ch.criminalRating > 0)
             {
                 string[] crLabels = { "", "Suspect", "Criminal", "Notorious" };
                 string crLabel = ch.criminalRating < crLabels.Length ? crLabels[ch.criminalRating] : $"Rating {ch.criminalRating}";
-                var crStyle = new GUIStyle(GUI.skin.label) { fontSize = 11, normal = { textColor = new Color(1f, 0.3f, 0.2f) } };
-                GUI.Label(new Rect(x, y, 80, 18), "Criminal", DimStyle());
+                GUI.Label(new Rect(x, y, 80, 18), "Criminal", labelStyle);
+                var crStyle = MakeStyle(11, FontStyle.Normal, ColRed);
                 GUI.Label(new Rect(x + 84, y, w - 84, 18), crLabel, crStyle);
                 y += 20;
             }
-        }
 
-        private void DrawInfoRow(float x, ref float y, float w, string label, string value)
-        {
-            GUI.Label(new Rect(x, y, 80, 18), label, DimStyle());
-            GUI.Label(new Rect(x + 84, y, w - 84, 18), value, SmallStyle());
-            y += 20;
-        }
+            y += 10;
 
-        private void DrawBottomBar(float startX, float totalW)
-        {
-            float barY = Screen.height - 60;
-            float btnH = 40;
+            // Equipment section
+            GUI.color = new Color(0.3f, 0.35f, 0.5f, 0.3f);
+            GUI.DrawTexture(new Rect(x, y, w, 1), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+            y += 10;
 
-            // Delete button
-            GUI.enabled = _selectedIndex >= 0 && _selectedIndex < _characters.Count;
-            GUI.backgroundColor = new Color(0.5f, 0.15f, 0.15f);
-            if (GUI.Button(new Rect(startX, barY, 100, btnH), "Delete"))
+            var secStyle = MakeStyle(12, FontStyle.Bold, new Color(0.65f, 0.7f, 0.85f));
+            GUI.Label(new Rect(x, y, w, 18), "Equipment", secStyle);
+            y += 22;
+
+            var placeholderStyle = MakeStyle(10, FontStyle.Italic, new Color(0.35f, 0.35f, 0.45f));
+            GUI.Label(new Rect(x, y, w, 16), "Equipment details coming soon", placeholderStyle);
+            y += 28;
+
+            // Quick Stats section
+            GUI.color = new Color(0.3f, 0.35f, 0.5f, 0.3f);
+            GUI.DrawTexture(new Rect(x, y, w, 1), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+            y += 10;
+
+            GUI.Label(new Rect(x, y, w, 18), "Quick Stats", secStyle);
+            y += 22;
+            GUI.Label(new Rect(x, y, w, 16), "Coming soon", placeholderStyle);
+
+            // Delete button at bottom
+            float delY = area.y + area.height - 40;
+            GUI.backgroundColor = new Color(0.4f, 0.12f, 0.12f);
+            var delBtnStyle = new GUIStyle(GUI.skin.button) { fontSize = 11, normal = { textColor = ColRed } };
+            if (GUI.Button(new Rect(x, delY, w, 26), "Delete Character", delBtnStyle))
             {
                 _deleteConfirmActive = true;
                 _deleteTargetIndex = _selectedIndex;
                 _deleteConfirmInput = "";
             }
             GUI.backgroundColor = Color.white;
-            GUI.enabled = true;
-
-            // Create character
-            GUI.enabled = _characters.Count < _maxCharacters;
-            GUI.backgroundColor = new Color(0.3f, 0.4f, 0.8f);
-            if (GUI.Button(new Rect(startX + totalW / 2f - 80, barY, 160, btnH), "Create Character"))
-            {
-                OnCreateNew?.Invoke();
-                Hide();
-            }
-            GUI.backgroundColor = Color.white;
-            GUI.enabled = true;
-
-            // Enter world
-            bool canEnter = _selectedIndex >= 0 && _selectedIndex < _characters.Count && !_characters[_selectedIndex].pendingDelete;
-            GUI.enabled = canEnter;
-            GUI.backgroundColor = new Color(0.2f, 0.7f, 0.3f);
-            var enterStyle = new GUIStyle(GUI.skin.button) { fontSize = 16, fontStyle = FontStyle.Bold };
-            if (GUI.Button(new Rect(startX + totalW - 180, barY, 180, btnH), "ENTER WORLD", enterStyle))
-            {
-                var ch = _characters[_selectedIndex];
-                OnCharacterSelected?.Invoke(ch.id, $"{ch.firstName} {ch.lastName}");
-                Hide();
-            }
-            GUI.backgroundColor = Color.white;
-            GUI.enabled = true;
         }
 
-        private void DrawDeleteConfirm()
-        {
-            // Modal overlay
-            GUI.color = new Color(0, 0, 0, 0.6f);
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+        // ---- Social Sidebar ----
 
-            float dlgW = 350;
-            float dlgH = 180;
-            float dlgX = (Screen.width - dlgW) / 2f;
-            float dlgY = (Screen.height - dlgH) / 2f;
-
-            GUI.color = new Color(0.1f, 0.08f, 0.14f, 0.98f);
-            GUI.DrawTexture(new Rect(dlgX, dlgY, dlgW, dlgH), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
-            // Border
-            GUI.color = new Color(0.6f, 0.2f, 0.2f, 0.8f);
-            DrawBorder(new Rect(dlgX, dlgY, dlgW, dlgH), 2);
-            GUI.color = Color.white;
-
-            if (_deleteTargetIndex < 0 || _deleteTargetIndex >= _characters.Count)
-            {
-                _deleteConfirmActive = false;
-                return;
-            }
-
-            var ch = _characters[_deleteTargetIndex];
-            string charName = $"{ch.firstName} {ch.lastName}";
-
-            float y = dlgY + 12;
-            var warnStyle = new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(1f, 0.4f, 0.3f) } };
-            GUI.Label(new Rect(dlgX, y, dlgW, 20), "Delete Character?", warnStyle);
-            y += 26;
-
-            var msgStyle = new GUIStyle(GUI.skin.label) { fontSize = 11, alignment = TextAnchor.MiddleCenter, wordWrap = true, normal = { textColor = new Color(0.8f, 0.8f, 0.8f) } };
-            string msg = ch.level >= 10
-                ? $"Type \"{charName}\" to confirm.\nLevel 10+ characters have a 24h deletion cooldown."
-                : $"Type \"{charName}\" to confirm.\nThis character will be immediately deleted.";
-            GUI.Label(new Rect(dlgX + 20, y, dlgW - 40, 40), msg, msgStyle);
-            y += 48;
-
-            _deleteConfirmInput = GUI.TextField(new Rect(dlgX + 20, y, dlgW - 40, 22), _deleteConfirmInput,
-                new GUIStyle(GUI.skin.textField) { fontSize = 12, normal = { textColor = Color.white }, focused = { textColor = Color.white } });
-            y += 30;
-
-            // Buttons
-            bool nameMatches = _deleteConfirmInput.Trim() == charName;
-            GUI.enabled = nameMatches;
-            GUI.backgroundColor = new Color(0.6f, 0.15f, 0.15f);
-            if (GUI.Button(new Rect(dlgX + 20, y, 100, 30), "Delete"))
-            {
-                Network.NetworkManager.Instance?.Send(
-                    Network.PacketBuilder.CharacterDeleteExtended(ch.id));
-                _deleteConfirmActive = false;
-            }
-            GUI.backgroundColor = Color.white;
-            GUI.enabled = true;
-
-            if (GUI.Button(new Rect(dlgX + dlgW - 120, y, 100, 30), "Cancel"))
-                _deleteConfirmActive = false;
-        }
-
-        private void DrawSocialSidebar()
+        private void DrawSocialSidebar(float sw, float sh, float topBarH)
         {
             float sideW = _socialExpanded ? 200f : 30f;
-            float sideX = Screen.width - sideW;
-            float sideY = 50;
-            float sideH = Screen.height - 120;
+            float sideX = sw - sideW;
+            float sideY = topBarH + 4;
+            float sideH = sh - topBarH - 90;
 
             // Toggle button
-            if (GUI.Button(new Rect(sideX, sideY, 28, 28), _socialExpanded ? ">>" : "<<"))
+            string toggleLabel = _socialExpanded ? ">>" : "<<";
+            if (GUI.Button(new Rect(sideX, sideY, 28, 28), toggleLabel))
                 _socialExpanded = !_socialExpanded;
 
             if (!_socialExpanded) return;
 
-            GUI.color = new Color(0.06f, 0.06f, 0.1f, 0.9f);
+            GUI.color = new Color(0.05f, 0.05f, 0.09f, 0.92f);
             GUI.DrawTexture(new Rect(sideX, sideY + 30, sideW, sideH - 30), Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            float y = sideY + 34;
-            float x = sideX + 6;
-            float w = sideW - 12;
+            float y = sideY + 36;
+            float x = sideX + 8;
+            float w = sideW - 16;
 
-            // Friends section
-            GUI.Label(new Rect(x, y, w, 16), "Friends", SectionStyle());
+            // Friends
+            var secStyle = MakeStyle(11, FontStyle.Bold, new Color(0.6f, 0.7f, 0.9f));
+            GUI.Label(new Rect(x, y, w, 16), "Friends", secStyle);
             y += 18;
 
-            int displayed = 0;
+            int shown = 0;
             foreach (var f in _lobbyFriends)
             {
-                if (displayed >= 8) break;
-                GUI.color = f.Online ? Color.green : new Color(0.4f, 0.4f, 0.4f);
+                if (shown >= 8) break;
+                GUI.color = f.Online ? Color.green : new Color(0.35f, 0.35f, 0.35f);
                 GUI.DrawTexture(new Rect(x, y + 3, 6, 6), Texture2D.whiteTexture);
                 GUI.color = Color.white;
 
-                GUI.Label(new Rect(x + 10, y, 100, 14), f.Name, new GUIStyle(GUI.skin.label) { fontSize = 10, normal = { textColor = Color.white } });
+                var fStyle = MakeStyle(10, FontStyle.Normal, f.Online ? Color.white : ColDim);
+                GUI.Label(new Rect(x + 10, y, 100, 14), f.Name, fStyle);
 
-                if (f.Online)
-                {
-                    if (GUI.Button(new Rect(x + w - 20, y, 18, 14), "W"))
-                    {
-                        // Open whisper
-                        ChatUI.Instance?.ReceiveMessage("System", "System", $"/w {f.Name} ");
-                    }
-                }
+                if (f.Online && GUI.Button(new Rect(x + w - 20, y, 18, 14), "W"))
+                    ChatUI.Instance?.ReceiveMessage("System", "System", $"/w {f.Name} ");
+
                 y += 16;
-                displayed++;
+                shown++;
             }
-
             y += 8;
 
             // Party invites
             if (_partyInvites.Count > 0)
             {
-                GUI.Label(new Rect(x, y, w, 16), "Party Invites", SectionStyle());
+                GUI.Label(new Rect(x, y, w, 16), "Party Invites", secStyle);
                 y += 18;
 
                 for (int i = _partyInvites.Count - 1; i >= 0; i--)
                 {
                     var inv = _partyInvites[i];
-                    GUI.Label(new Rect(x, y, 80, 14), inv.FromPlayer, new GUIStyle(GUI.skin.label) { fontSize = 10, normal = { textColor = Color.white } });
+                    var invStyle = MakeStyle(10, FontStyle.Normal, Color.white);
+                    GUI.Label(new Rect(x, y, 80, 14), inv.FromPlayer, invStyle);
                     if (GUI.Button(new Rect(x + 84, y, 30, 14), "Yes"))
                     {
                         Network.NetworkManager.Instance?.Send(
@@ -581,29 +677,32 @@ namespace Orlo.UI
                 y += 8;
             }
 
-            // Guild chat (if in guild)
+            // Guild chat
             if (_guildChatMessages.Count > 0)
             {
-                GUI.Label(new Rect(x, y, w, 16), "Guild Chat", SectionStyle());
+                GUI.Label(new Rect(x, y, w, 16), "Guild Chat", secStyle);
                 y += 18;
 
-                float chatH = Mathf.Min(sideH - (y - sideY) - 30, 120);
+                float chatH = Mathf.Min(sideH - (y - sideY) - 40, 140);
                 float totalH = _guildChatMessages.Count * 14f;
-                _socialScroll = GUI.BeginScrollView(new Rect(x, y, w, chatH), _socialScroll,
+                _socialScroll = GUI.BeginScrollView(
+                    new Rect(x, y, w, chatH), _socialScroll,
                     new Rect(0, 0, w - 12, Mathf.Max(totalH, chatH)));
 
                 float ly = 0;
+                var chatStyle = MakeStyle(9, FontStyle.Normal, ColGuildChat);
+                chatStyle.wordWrap = true;
                 foreach (var msg in _guildChatMessages)
                 {
-                    GUI.Label(new Rect(0, ly, w - 12, 12), msg, new GUIStyle(GUI.skin.label) { fontSize = 9, normal = { textColor = new Color(0, 0.8f, 0.6f) }, wordWrap = true });
+                    GUI.Label(new Rect(0, ly, w - 12, 12), msg, chatStyle);
                     ly += 14;
                 }
                 GUI.EndScrollView();
-                y += chatH + 2;
+                y += chatH + 4;
 
-                // Input
+                // Chat input
                 _guildChatInput = GUI.TextField(new Rect(x, y, w - 30, 18), _guildChatInput,
-                    new GUIStyle(GUI.skin.textField) { fontSize = 10, normal = { textColor = Color.white }, focused = { textColor = Color.white } });
+                    new GUIStyle(GUI.skin.textField) { fontSize = 10 });
                 if (GUI.Button(new Rect(x + w - 28, y, 28, 18), ">"))
                 {
                     if (!string.IsNullOrEmpty(_guildChatInput.Trim()))
@@ -616,16 +715,127 @@ namespace Orlo.UI
             }
         }
 
-        private static void DrawBorder(Rect area, float width)
+        // ---- Delete Confirmation Modal ----
+
+        private void DrawDeleteConfirm(float sw, float sh)
         {
-            GUI.DrawTexture(new Rect(area.x, area.y, area.width, width), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(area.x, area.y + area.height - width, area.width, width), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(area.x, area.y, width, area.height), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(area.x + area.width - width, area.y, width, area.height), Texture2D.whiteTexture);
+            // Overlay
+            GUI.color = new Color(0, 0, 0, 0.65f);
+            GUI.DrawTexture(new Rect(0, 0, sw, sh), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            float dlgW = 380;
+            float dlgH = 200;
+            float dlgX = (sw - dlgW) / 2f;
+            float dlgY = (sh - dlgH) / 2f;
+
+            // Card background
+            GUI.color = new Color(0.08f, 0.07f, 0.12f, 0.98f);
+            GUI.DrawTexture(new Rect(dlgX, dlgY, dlgW, dlgH), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            // Red border
+            GUI.color = new Color(0.6f, 0.15f, 0.15f, 0.9f);
+            DrawBorder(new Rect(dlgX, dlgY, dlgW, dlgH), 2);
+            GUI.color = Color.white;
+
+            if (_deleteTargetIndex < 0 || _deleteTargetIndex >= _characters.Count)
+            {
+                _deleteConfirmActive = false;
+                return;
+            }
+
+            var ch = _characters[_deleteTargetIndex];
+            string charName = $"{ch.firstName} {ch.lastName}";
+
+            float y = dlgY + 16;
+
+            // Header
+            var headerStyle = MakeStyle(15, FontStyle.Bold, ColRed, TextAnchor.MiddleCenter);
+            GUI.Label(new Rect(dlgX, y, dlgW, 22), "Delete Character?", headerStyle);
+            y += 30;
+
+            // Message
+            string msg = ch.level >= 10
+                ? $"Type \"{charName}\" to confirm.\nLevel 10+ characters have a 24h deletion cooldown."
+                : $"Type \"{charName}\" to confirm.\nThis character will be immediately deleted.";
+            var msgStyle = MakeStyle(11, FontStyle.Normal, ColText, TextAnchor.MiddleCenter);
+            msgStyle.wordWrap = true;
+            GUI.Label(new Rect(dlgX + 24, y, dlgW - 48, 44), msg, msgStyle);
+            y += 52;
+
+            // Input field
+            _deleteConfirmInput = GUI.TextField(
+                new Rect(dlgX + 24, y, dlgW - 48, 24), _deleteConfirmInput,
+                new GUIStyle(GUI.skin.textField) { fontSize = 12 });
+            y += 34;
+
+            // Buttons
+            bool nameMatches = _deleteConfirmInput.Trim() == charName;
+            GUI.enabled = nameMatches;
+            GUI.backgroundColor = new Color(0.6f, 0.12f, 0.12f);
+            if (GUI.Button(new Rect(dlgX + 24, y, 110, 32), "Delete"))
+            {
+                Network.NetworkManager.Instance?.Send(
+                    Network.PacketBuilder.CharacterDeleteExtended(ch.id));
+                _deleteConfirmActive = false;
+            }
+            GUI.backgroundColor = Color.white;
+            GUI.enabled = true;
+
+            if (GUI.Button(new Rect(dlgX + dlgW - 134, y, 110, 32), "Cancel"))
+                _deleteConfirmActive = false;
         }
 
-        private GUIStyle SmallStyle() => new GUIStyle(GUI.skin.label) { fontSize = 11, normal = { textColor = Color.white } };
-        private GUIStyle DimStyle() => new GUIStyle(GUI.skin.label) { fontSize = 11, normal = { textColor = new Color(0.5f, 0.5f, 0.6f) } };
-        private GUIStyle SectionStyle() => new GUIStyle(GUI.skin.label) { fontSize = 11, fontStyle = FontStyle.Bold, normal = { textColor = new Color(0.6f, 0.7f, 0.9f) } };
+        // ---- Helpers ----
+
+        private void InfoRow(float x, ref float y, float w, string label, string value)
+        {
+            var lbl = MakeStyle(11, FontStyle.Normal, ColDim);
+            var val = MakeStyle(11, FontStyle.Normal, ColText);
+            GUI.Label(new Rect(x, y, 84, 18), label, lbl);
+            GUI.Label(new Rect(x + 84, y, w - 84, 18), value, val);
+            y += 20;
+        }
+
+        private static GUIStyle MakeStyle(int size, FontStyle font, Color color,
+            TextAnchor anchor = TextAnchor.MiddleLeft)
+        {
+            return new GUIStyle(GUI.skin.label)
+            {
+                fontSize = size,
+                fontStyle = font,
+                alignment = anchor,
+                normal = { textColor = color }
+            };
+        }
+
+        private static void DrawBorder(Rect r, float w)
+        {
+            GUI.DrawTexture(new Rect(r.x, r.y, r.width, w), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(r.x, r.y + r.height - w, r.width, w), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(r.x, r.y, w, r.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(r.x + r.width - w, r.y, w, r.height), Texture2D.whiteTexture);
+        }
+
+        private static void DrawDashedBorder(Rect r, float w)
+        {
+            // Simplified dashed border via corner ticks and mid-edge ticks
+            float dashLen = 8f;
+            float gap = 6f;
+
+            // Top edge
+            for (float dx = 0; dx < r.width; dx += dashLen + gap)
+                GUI.DrawTexture(new Rect(r.x + dx, r.y, Mathf.Min(dashLen, r.width - dx), w), Texture2D.whiteTexture);
+            // Bottom edge
+            for (float dx = 0; dx < r.width; dx += dashLen + gap)
+                GUI.DrawTexture(new Rect(r.x + dx, r.y + r.height - w, Mathf.Min(dashLen, r.width - dx), w), Texture2D.whiteTexture);
+            // Left edge
+            for (float dy = 0; dy < r.height; dy += dashLen + gap)
+                GUI.DrawTexture(new Rect(r.x, r.y + dy, w, Mathf.Min(dashLen, r.height - dy)), Texture2D.whiteTexture);
+            // Right edge
+            for (float dy = 0; dy < r.height; dy += dashLen + gap)
+                GUI.DrawTexture(new Rect(r.x + r.width - w, r.y + dy, w, Mathf.Min(dashLen, r.height - dy)), Texture2D.whiteTexture);
+        }
     }
 }
