@@ -3,8 +3,10 @@ using UnityEngine;
 namespace Orlo.UI
 {
     /// <summary>
-    /// Player profile panel showing character info, stats, skills, and achievements.
-    /// Toggle with P key. Uses OnGUI for rapid prototyping.
+    /// Player profile / identity card panel.
+    /// Toggle with P key for own profile. Also used for inspecting other players.
+    /// Shows: bio, title, achievement showcase, commendations, top skills, full stats.
+    /// Uses OnGUI for rapid prototyping.
     /// </summary>
     public class PlayerProfileUI : MonoBehaviour
     {
@@ -23,6 +25,25 @@ namespace Orlo.UI
         private string _factionName = "Unaffiliated";
         private string _guildName = "";
         private string _title = "";
+        private bool _isOwnProfile = true;
+
+        // Identity card fields
+        private string _bio = "";
+        private bool _editingBio;
+        private string _bioInput = "";
+        private int _selectedTitleIndex;
+        private string[] _availableTitles = { "(None)", "Explorer", "Pathfinder", "Veteran", "Artisan", "Champion" };
+        private bool _titleDropdown;
+        private int _commendationCount;
+
+        // Achievement showcase (5 slots)
+        public struct AchievementSlot
+        {
+            public string Name;
+            public string Description;
+            public bool Filled;
+        }
+        private AchievementSlot[] _showcase = new AchievementSlot[5];
 
         // Pools
         private float _vitality, _maxVitality = 100;
@@ -52,9 +73,8 @@ namespace Orlo.UI
         private float _distanceTraveled;
         private float _playtimeHours;
 
-        // Layout
-        private const float WinW = 360f;
-        private const float WinH = 520f;
+        private const float WinW = 380f;
+        private const float WinH = 560f;
 
         private void Awake()
         {
@@ -65,19 +85,35 @@ namespace Orlo.UI
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.P)) _visible = !_visible;
+            if (Input.GetKeyDown(KeyCode.P) && !ChatUI.Instance?.IsInputActive == true)
+            {
+                if (_visible && !_isOwnProfile)
+                {
+                    // Pressing P while viewing someone else switches back to own profile
+                    _isOwnProfile = true;
+                }
+                else
+                {
+                    _visible = !_visible;
+                    if (_visible) _isOwnProfile = true;
+                }
+            }
         }
 
-        // ── Public API for server data ──────────────────────────────────
+        // ---- Public API for server data ----
 
         public void SetCharacterInfo(string name, string race, int level, string faction, string guild, string title)
         {
-            _characterName = name;
-            _raceName = race;
-            _level = level;
-            _factionName = faction;
-            _guildName = guild;
-            _title = title;
+            _characterName = name; _raceName = race; _level = level;
+            _factionName = faction; _guildName = guild; _title = title;
+        }
+
+        public void SetIdentityCard(string bio, int titleIndex, int commendations, AchievementSlot[] showcase)
+        {
+            _bio = bio ?? "";
+            _selectedTitleIndex = titleIndex;
+            _commendationCount = commendations;
+            if (showcase != null && showcase.Length == 5) _showcase = showcase;
         }
 
         public void SetPools(float vit, float maxVit, float stam, float maxStam, float foc, float maxFoc)
@@ -99,15 +135,24 @@ namespace Orlo.UI
 
         public void SetLifetimeStats(int kills, int deaths, int crafted, int gathered, float distance, float playtime)
         {
-            _kills = kills;
-            _deaths = deaths;
-            _itemsCrafted = crafted;
-            _resourcesGathered = gathered;
-            _distanceTraveled = distance;
-            _playtimeHours = playtime;
+            _kills = kills; _deaths = deaths; _itemsCrafted = crafted;
+            _resourcesGathered = gathered; _distanceTraveled = distance; _playtimeHours = playtime;
         }
 
-        // ── OnGUI ───────────────────────────────────────────────────────
+        /// <summary>Show read-only profile for another player.</summary>
+        public void ShowOtherProfile(string name, string race, int level, string faction, string guild,
+            string title, string bio, int commendations, AchievementSlot[] showcase, SkillEntry[] topSkills)
+        {
+            _isOwnProfile = false;
+            _characterName = name; _raceName = race; _level = level;
+            _factionName = faction; _guildName = guild; _title = title;
+            _bio = bio ?? ""; _commendationCount = commendations;
+            if (showcase != null && showcase.Length == 5) _showcase = showcase;
+            if (topSkills != null) _skills = topSkills;
+            _visible = true;
+        }
+
+        // ---- OnGUI ----
 
         private void OnGUI()
         {
@@ -115,7 +160,6 @@ namespace Orlo.UI
 
             Rect windowRect = new Rect(_windowPos.x, _windowPos.y, WinW, WinH);
 
-            // Window background
             GUI.color = new Color(0.08f, 0.08f, 0.12f, 0.95f);
             GUI.DrawTexture(windowRect, Texture2D.whiteTexture);
             GUI.color = Color.white;
@@ -126,84 +170,154 @@ namespace Orlo.UI
             GUI.DrawTexture(new Rect(_windowPos.x, _windowPos.y, WinW, 28), Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            var titleStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 14, fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleLeft,
-                normal = { textColor = Color.white }
-            };
-            GUI.Label(new Rect(_windowPos.x + 8, _windowPos.y, 200, 28), "Player Profile", titleStyle);
+            string headerText = _isOwnProfile ? "Player Profile" : $"Profile: {_characterName}";
+            GUI.Label(new Rect(_windowPos.x + 8, _windowPos.y, 250, 28), headerText,
+                new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft, normal = { textColor = Color.white } });
 
-            // Close button
             if (GUI.Button(new Rect(_windowPos.x + WinW - 28, _windowPos.y + 2, 24, 24), "X"))
-            {
-                _visible = false;
-                return;
-            }
-
+            { _visible = false; return; }
             HandleDrag(titleBar);
 
-            // Content area
-            float contentX = _windowPos.x + 12;
-            float contentW = WinW - 24;
+            // Content
             Rect scrollArea = new Rect(_windowPos.x + 4, _windowPos.y + 32, WinW - 8, WinH - 36);
-
             GUILayout.BeginArea(scrollArea);
             _scrollPos = GUILayout.BeginScrollView(_scrollPos);
 
-            // ── Character Info ───────────────────────────────────────
+            // ---- Character Info ----
             SectionHeader("Character");
 
-            var nameStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 18, fontStyle = FontStyle.Bold,
-                normal = { textColor = new Color(0.9f, 0.85f, 0.5f) }
-            };
+            var nameStyle = new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold, normal = { textColor = new Color(0.9f, 0.85f, 0.5f) } };
             GUILayout.Label(_characterName, nameStyle);
 
-            if (!string.IsNullOrEmpty(_title))
+            // Title
+            if (_isOwnProfile)
             {
-                var ttlStyle = new GUIStyle(GUI.skin.label)
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Title:", DimLabelStyle(), GUILayout.Width(40));
+                if (GUILayout.Button(_selectedTitleIndex > 0 && _selectedTitleIndex < _availableTitles.Length
+                    ? _availableTitles[_selectedTitleIndex] : "(None)", GUILayout.Width(120)))
+                    _titleDropdown = !_titleDropdown;
+                GUILayout.EndHorizontal();
+
+                if (_titleDropdown)
                 {
-                    fontSize = 11, fontStyle = FontStyle.Italic,
-                    normal = { textColor = new Color(0.7f, 0.7f, 0.9f) }
-                };
-                GUILayout.Label(_title, ttlStyle);
+                    for (int i = 0; i < _availableTitles.Length; i++)
+                    {
+                        if (GUILayout.Button(_availableTitles[i], SmallLabelStyle(), GUILayout.Width(120)))
+                        {
+                            _selectedTitleIndex = i;
+                            _titleDropdown = false;
+                            Network.NetworkManager.Instance?.Send(
+                                Network.PacketBuilder.SetPlayerProfile(_bio, _selectedTitleIndex));
+                        }
+                    }
+                }
+            }
+            else if (!string.IsNullOrEmpty(_title))
+            {
+                GUILayout.Label(_title, new GUIStyle(GUI.skin.label) { fontSize = 11, fontStyle = FontStyle.Italic, normal = { textColor = new Color(0.7f, 0.7f, 0.9f) } });
             }
 
             InfoRow("Race", _raceName);
             InfoRow("Level", _level.ToString());
             InfoRow("Faction", _factionName);
-            if (!string.IsNullOrEmpty(_guildName))
-                InfoRow("Guild", _guildName);
+            if (!string.IsNullOrEmpty(_guildName)) InfoRow("Guild", _guildName);
+            InfoRow("Commendations", _commendationCount.ToString());
 
-            // ── Health Pools ─────────────────────────────────────────
-            SectionHeader("Health Pools");
-
-            DrawPoolBar("Vitality", _vitality, _maxVitality, new Color(0.85f, 0.15f, 0.15f));
-            DrawPoolBar("Stamina", _stamina, _maxStamina, new Color(0.15f, 0.75f, 0.25f));
-            DrawPoolBar("Focus", _focus, _maxFocus, new Color(0.25f, 0.45f, 0.95f));
-
-            // ── Armor Ratings ────────────────────────────────────────
-            SectionHeader("Armor Ratings");
-
-            for (int i = 0; i < 6; i++)
+            // ---- Bio ----
+            SectionHeader("Bio");
+            if (_isOwnProfile)
             {
-                InfoRow(ArmorLabels[i], $"{_armorRatings[i]:F0}");
+                if (_editingBio)
+                {
+                    _bioInput = GUILayout.TextArea(_bioInput, 200, GUILayout.Height(40));
+                    GUILayout.BeginHorizontal();
+                    if (GUILayout.Button("Save", GUILayout.Width(50)))
+                    {
+                        _bio = _bioInput;
+                        _editingBio = false;
+                        Network.NetworkManager.Instance?.Send(
+                            Network.PacketBuilder.SetPlayerProfile(_bio, _selectedTitleIndex));
+                    }
+                    if (GUILayout.Button("Cancel", GUILayout.Width(50)))
+                        _editingBio = false;
+                    GUILayout.EndHorizontal();
+                }
+                else
+                {
+                    GUILayout.Label(string.IsNullOrEmpty(_bio) ? "(No bio set)" : _bio, BioStyle());
+                    if (GUILayout.Button("Edit Bio", GUILayout.Width(70)))
+                    {
+                        _editingBio = true;
+                        _bioInput = _bio;
+                    }
+                }
+            }
+            else
+            {
+                GUILayout.Label(string.IsNullOrEmpty(_bio) ? "(No bio)" : _bio, BioStyle());
             }
 
-            // ── Skills ──────────────────────────────────────────────
+            // ---- Achievement Showcase ----
+            SectionHeader("Achievement Showcase");
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < 5; i++)
+            {
+                var slot = _showcase[i];
+                Rect r = GUILayoutUtility.GetRect(56, 40);
+
+                GUI.color = slot.Filled ? new Color(0.15f, 0.2f, 0.3f, 0.9f) : new Color(0.1f, 0.1f, 0.12f, 0.5f);
+                GUI.DrawTexture(r, Texture2D.whiteTexture);
+
+                if (slot.Filled)
+                {
+                    GUI.color = new Color(1f, 0.85f, 0.3f);
+                    GUI.DrawTexture(new Rect(r.x, r.y, r.width, 2), Texture2D.whiteTexture);
+                    GUI.color = Color.white;
+                    var aStyle = new GUIStyle(GUI.skin.label) { fontSize = 8, alignment = TextAnchor.MiddleCenter, wordWrap = true, normal = { textColor = Color.white } };
+                    GUI.Label(r, slot.Name, aStyle);
+
+                    // Tooltip on hover
+                    if (r.Contains(Event.current.mousePosition) && !string.IsNullOrEmpty(slot.Description))
+                    {
+                        var tip = new GUIStyle(GUI.skin.box) { fontSize = 10, wordWrap = true, normal = { textColor = Color.white } };
+                        GUI.Box(new Rect(r.x, r.y - 30, 120, 28), slot.Description, tip);
+                    }
+                }
+                else
+                {
+                    GUI.color = new Color(0.3f, 0.3f, 0.4f);
+                    var eStyle = new GUIStyle(GUI.skin.label) { fontSize = 9, alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(0.4f, 0.4f, 0.5f) } };
+                    GUI.Label(r, "Empty", eStyle);
+                }
+                GUI.color = Color.white;
+            }
+            GUILayout.EndHorizontal();
+
+            // ---- Health Pools ----
+            if (_isOwnProfile)
+            {
+                SectionHeader("Health Pools");
+                DrawPoolBar("Vitality", _vitality, _maxVitality, new Color(0.85f, 0.15f, 0.15f));
+                DrawPoolBar("Stamina", _stamina, _maxStamina, new Color(0.15f, 0.75f, 0.25f));
+                DrawPoolBar("Focus", _focus, _maxFocus, new Color(0.25f, 0.45f, 0.95f));
+
+                // ---- Armor Ratings ----
+                SectionHeader("Armor Ratings");
+                for (int i = 0; i < 6; i++)
+                    InfoRow(ArmorLabels[i], $"{_armorRatings[i]:F0}");
+            }
+
+            // ---- Top Skills ----
             if (_skills.Length > 0)
             {
-                SectionHeader("Skills");
-
-                foreach (var skill in _skills)
+                SectionHeader(_isOwnProfile ? "Skills" : "Top Skills");
+                int displayCount = _isOwnProfile ? _skills.Length : Mathf.Min(_skills.Length, 3);
+                for (int i = 0; i < displayCount; i++)
                 {
+                    var skill = _skills[i];
                     GUILayout.BeginHorizontal();
-                    var lbl = new GUIStyle(GUI.skin.label) { fontSize = 11, normal = { textColor = new Color(0.85f, 0.85f, 0.85f) } };
-                    GUILayout.Label(skill.Name, lbl, GUILayout.Width(160));
-
-                    // Skill level bar
+                    GUILayout.Label(skill.Name, SmallLabelStyle(), GUILayout.Width(160));
                     float pct = skill.MaxLevel > 0 ? (float)skill.Level / skill.MaxLevel : 0;
                     Rect barRect = GUILayoutUtility.GetRect(140, 14);
                     GUI.color = new Color(0.15f, 0.15f, 0.15f);
@@ -211,78 +325,75 @@ namespace Orlo.UI
                     GUI.color = new Color(0.3f, 0.7f, 0.9f);
                     GUI.DrawTexture(new Rect(barRect.x, barRect.y, barRect.width * pct, barRect.height), Texture2D.whiteTexture);
                     GUI.color = Color.white;
-
                     var valStyle = new GUIStyle(GUI.skin.label) { fontSize = 10, alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.white } };
                     GUI.Label(barRect, $"{skill.Level}/{skill.MaxLevel}", valStyle);
-
                     GUILayout.EndHorizontal();
                 }
             }
 
-            // ── Lifetime Stats ──────────────────────────────────────
-            SectionHeader("Lifetime Stats");
+            // ---- Lifetime Stats ----
+            if (_isOwnProfile)
+            {
+                SectionHeader("Lifetime Stats");
+                InfoRow("Kills", _kills.ToString());
+                InfoRow("Deaths", _deaths.ToString());
+                InfoRow("K/D Ratio", _deaths > 0 ? $"{(float)_kills / _deaths:F2}" : "N/A");
+                InfoRow("Items Crafted", _itemsCrafted.ToString());
+                InfoRow("Resources Gathered", _resourcesGathered.ToString());
+                InfoRow("Distance Traveled", $"{_distanceTraveled:F0}m");
+                InfoRow("Playtime", $"{_playtimeHours:F1} hours");
+            }
 
-            InfoRow("Kills", _kills.ToString());
-            InfoRow("Deaths", _deaths.ToString());
-            InfoRow("K/D Ratio", _deaths > 0 ? $"{(float)_kills / _deaths:F2}" : "N/A");
-            InfoRow("Items Crafted", _itemsCrafted.ToString());
-            InfoRow("Resources Gathered", _resourcesGathered.ToString());
-            InfoRow("Distance Traveled", $"{_distanceTraveled:F0}m");
-            InfoRow("Playtime", $"{_playtimeHours:F1} hours");
+            // Commend button (when viewing others)
+            if (!_isOwnProfile)
+            {
+                GUILayout.Space(10);
+                if (GUILayout.Button("Commend Player", GUILayout.Width(120)))
+                {
+                    Network.NetworkManager.Instance?.Send(
+                        Network.PacketBuilder.CommendPlayer(_characterName));
+                }
+            }
 
             GUILayout.Space(8);
             GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
 
-        // ── Helpers ─────────────────────────────────────────────────────
+        // ---- Helpers ----
 
         private void SectionHeader(string text)
         {
             GUILayout.Space(6);
-            var style = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 13, fontStyle = FontStyle.Bold,
-                normal = { textColor = new Color(0.7f, 0.8f, 1f) }
-            };
-            GUILayout.Label(text, style);
-
+            GUILayout.Label(text, new GUIStyle(GUI.skin.label) { fontSize = 13, fontStyle = FontStyle.Bold, normal = { textColor = new Color(0.7f, 0.8f, 1f) } });
             Rect lineRect = GUILayoutUtility.GetRect(GUIContent.none, GUIStyle.none, GUILayout.Height(1));
             GUI.color = new Color(0.3f, 0.3f, 0.4f);
             GUI.DrawTexture(lineRect, Texture2D.whiteTexture);
             GUI.color = Color.white;
-
             GUILayout.Space(2);
         }
 
         private void InfoRow(string label, string value)
         {
             GUILayout.BeginHorizontal();
-            var lblStyle = new GUIStyle(GUI.skin.label) { fontSize = 11, normal = { textColor = new Color(0.6f, 0.6f, 0.6f) } };
-            var valStyle = new GUIStyle(GUI.skin.label) { fontSize = 11, normal = { textColor = Color.white } };
-            GUILayout.Label(label, lblStyle, GUILayout.Width(150));
-            GUILayout.Label(value, valStyle);
+            GUILayout.Label(label, DimLabelStyle(), GUILayout.Width(150));
+            GUILayout.Label(value, SmallLabelStyle());
             GUILayout.EndHorizontal();
         }
 
         private void DrawPoolBar(string label, float current, float max, Color color)
         {
             GUILayout.BeginHorizontal();
-            var lbl = new GUIStyle(GUI.skin.label) { fontSize = 11, normal = { textColor = new Color(0.85f, 0.85f, 0.85f) } };
-            GUILayout.Label(label, lbl, GUILayout.Width(70));
-
+            GUILayout.Label(label, SmallLabelStyle(), GUILayout.Width(70));
             Rect barRect = GUILayoutUtility.GetRect(200, 16);
             float pct = Mathf.Clamp01(current / max);
-
             GUI.color = new Color(0.12f, 0.12f, 0.12f);
             GUI.DrawTexture(barRect, Texture2D.whiteTexture);
             GUI.color = color;
             GUI.DrawTexture(new Rect(barRect.x, barRect.y, barRect.width * pct, barRect.height), Texture2D.whiteTexture);
             GUI.color = Color.white;
-
             var valStyle = new GUIStyle(GUI.skin.label) { fontSize = 10, alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.white } };
             GUI.Label(barRect, $"{current:F0} / {max:F0}", valStyle);
-
             GUILayout.EndHorizontal();
         }
 
@@ -290,18 +401,14 @@ namespace Orlo.UI
         {
             Event e = Event.current;
             if (e.type == EventType.MouseDown && titleBar.Contains(e.mousePosition))
-            {
-                _dragging = true;
-                _dragOffset = e.mousePosition - _windowPos;
-                e.Use();
-            }
+            { _dragging = true; _dragOffset = e.mousePosition - _windowPos; e.Use(); }
             if (_dragging && e.type == EventType.MouseDrag)
-            {
-                _windowPos = e.mousePosition - _dragOffset;
-                e.Use();
-            }
-            if (e.type == EventType.MouseUp)
-                _dragging = false;
+            { _windowPos = e.mousePosition - _dragOffset; e.Use(); }
+            if (e.type == EventType.MouseUp) _dragging = false;
         }
+
+        private GUIStyle SmallLabelStyle() => new GUIStyle(GUI.skin.label) { fontSize = 11, normal = { textColor = Color.white } };
+        private GUIStyle DimLabelStyle() => new GUIStyle(GUI.skin.label) { fontSize = 11, normal = { textColor = new Color(0.6f, 0.6f, 0.6f) } };
+        private GUIStyle BioStyle() => new GUIStyle(GUI.skin.label) { fontSize = 11, wordWrap = true, normal = { textColor = new Color(0.8f, 0.8f, 0.75f) } };
     }
 }

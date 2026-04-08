@@ -271,6 +271,62 @@ namespace Orlo
                 go.AddComponent<ChatUI>();
             }
 
+            // Chat bubble manager (3D world space bubbles for Say/Yell)
+            if (ChatBubbleManager.Instance == null)
+            {
+                var go = new GameObject("ChatBubbleManager");
+                go.AddComponent<ChatBubbleManager>();
+            }
+
+            // Friends panel (O key)
+            if (FriendsUI.Instance == null)
+            {
+                var go = new GameObject("FriendsUI");
+                go.AddComponent<FriendsUI>();
+            }
+
+            // Guild panel (G key)
+            if (GuildUI.Instance == null)
+            {
+                var go = new GameObject("GuildUI");
+                go.AddComponent<GuildUI>();
+            }
+
+            // Mail system
+            if (MailUI.Instance == null)
+            {
+                var go = new GameObject("MailUI");
+                go.AddComponent<MailUI>();
+            }
+
+            // LFG Board
+            if (LFGBoardUI.Instance == null)
+            {
+                var go = new GameObject("LFGBoardUI");
+                go.AddComponent<LFGBoardUI>();
+            }
+
+            // Emote wheel (Period key)
+            if (EmoteUI.Instance == null)
+            {
+                var go = new GameObject("EmoteUI");
+                go.AddComponent<EmoteUI>();
+            }
+
+            // Bulletin Board
+            if (BulletinBoardUI.Instance == null)
+            {
+                var go = new GameObject("BulletinBoardUI");
+                go.AddComponent<BulletinBoardUI>();
+            }
+
+            // Loading Screen
+            if (LoadingScreen.Instance == null)
+            {
+                var go = new GameObject("LoadingScreen");
+                go.AddComponent<LoadingScreen>();
+            }
+
             // Register UIs with progressive disclosure system
             // Level 1: movement + combat bar (always visible)
             // Level 3: inventory + minimap

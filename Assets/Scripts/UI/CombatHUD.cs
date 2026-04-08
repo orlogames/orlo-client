@@ -17,6 +17,10 @@ namespace Orlo.UI
         private float _stamina,  _maxStamina  = 100;
         private float _focus,    _maxFocus    = 100;
 
+        // Strain
+        private float _strain; // 0-100%
+        private float _strainPulse;
+
         // Flash effect when taking damage
         private float _damageFlashTimer;
         private const float FlashDuration = 0.3f;
@@ -39,6 +43,12 @@ namespace Orlo.UI
         public void TakeDamage(float amount, string poolName)
         {
             _damageFlashTimer = FlashDuration;
+        }
+
+        /// <summary>Update strain value from server (0-100).</summary>
+        public void UpdateStrain(float strain)
+        {
+            _strain = Mathf.Clamp(strain, 0f, 100f);
         }
 
         private const string HUD_KEY = "HAM";
@@ -98,6 +108,61 @@ namespace Orlo.UI
             DrawBar(x, y,           barW, barH, _vitality / _maxVitality, vitColor, $"VIT  {_vitality:F0}/{_maxVitality:F0}");
             DrawBar(x, y + barH + gap, barW, barH, _stamina  / _maxStamina,  stamColor, $"STAM {_stamina:F0}/{_maxStamina:F0}");
             DrawBar(x, y + (barH + gap) * 2, barW, barH, _focus / _maxFocus, focColor, $"FOC  {_focus:F0}/{_maxFocus:F0}");
+
+            // Strain bar (below health pools)
+            float strainY = y + (barH + gap) * 3 + 2f * s;
+            DrawStrainBar(x, strainY, barW, barH, s);
+        }
+
+        private void DrawStrainBar(float x, float y, float w, float h, float s)
+        {
+            if (_strain <= 0) return;
+
+            float fill = _strain / 100f;
+
+            // Pulsing effect when strain > 70%
+            if (_strain > 70f)
+            {
+                _strainPulse += Time.deltaTime * 3f;
+                float pulse = Mathf.Sin(_strainPulse) * 0.15f + 0.85f;
+                GUI.color = new Color(0.1f, 0.1f, 0.1f, 0.8f * pulse);
+            }
+            else
+            {
+                GUI.color = new Color(0.1f, 0.1f, 0.1f, 0.8f);
+            }
+            GUI.DrawTexture(new Rect(x, y, w, h), Texture2D.whiteTexture);
+
+            // Orange to red gradient based on strain level
+            Color strainColor = Color.Lerp(new Color(1f, 0.6f, 0f), new Color(0.9f, 0.15f, 0.1f), fill);
+            if (_strain > 70f)
+            {
+                float pulse = Mathf.Sin(_strainPulse) * 0.15f + 0.85f;
+                strainColor *= pulse;
+            }
+
+            GUI.color = strainColor;
+            GUI.DrawTexture(new Rect(x, y, w * fill, h), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            var style = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = UIScaler.ScaledFontSize(10),
+                alignment = TextAnchor.MiddleLeft
+            };
+            GUI.Label(new Rect(x + 4, y, w, h), $"Strain: {_strain:F0}%", style);
+
+            // Tooltip on hover
+            Rect barRect = new Rect(x, y, w, h);
+            if (barRect.Contains(Event.current.mousePosition))
+            {
+                var tipStyle = new GUIStyle(GUI.skin.box)
+                {
+                    fontSize = 10, alignment = TextAnchor.MiddleCenter,
+                    normal = { textColor = Color.white }, wordWrap = true
+                };
+                GUI.Box(new Rect(x, y - 24, 200, 22), "Visit a cantina or rest to cure strain", tipStyle);
+            }
         }
 
         private static void DrawBar(float x, float y, float w, float h, float fill, Color color, string label)

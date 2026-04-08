@@ -1009,31 +1009,142 @@ namespace Orlo.Network
                 case Packet.PayloadOneofCase.SystemMessage:
                     HandleSystemMessage(packet.SystemMessage);
                     break;
+                case Packet.PayloadOneofCase.PartyUpdate:
+                    HandlePartyUpdate(packet.PartyUpdate);
+                    break;
+                case Packet.PayloadOneofCase.PartyInviteNotify:
+                    HandlePartyInvite(packet.PartyInviteNotify);
+                    break;
+                case Packet.PayloadOneofCase.FriendsList:
+                    HandleFriendsList(packet.FriendsList);
+                    break;
+                case Packet.PayloadOneofCase.FriendStatus:
+                    HandleFriendStatus(packet.FriendStatus);
+                    break;
                 default:
                     Debug.Log($"[Social] Unhandled: {packet.PayloadCase}");
                     break;
             }
         }
 
+        private void HandlePartyUpdate(Orlo.Proto.Social.PartyUpdate update)
+        {
+            var partyUI = FindFirstObjectByType<PartyUI>();
+            if (partyUI != null)
+            {
+                var members = new System.Collections.Generic.List<PartyUI.PartyMember>();
+                foreach (var m in update.Members)
+                {
+                    members.Add(new PartyUI.PartyMember
+                    {
+                        Name = m.Name,
+                        CurrentHP = m.Health,
+                        MaxHP = m.MaxHealth,
+                        IsLeader = m.IsLeader
+                    });
+                }
+                partyUI.SetPartyData(members);
+            }
+        }
+
+        private void HandlePartyInvite(Orlo.Proto.Social.PartyInviteNotify invite)
+        {
+            // Route to CharacterSelectUI if in lobby, or ChatUI if in game
+            var charSelect = FindFirstObjectByType<CharacterSelectUI>();
+            if (charSelect != null)
+            {
+                charSelect.AddPartyInvite(invite.FromPlayer);
+            }
+            else
+            {
+                var chatUI = FindFirstObjectByType<ChatUI>();
+                chatUI?.AddSystemMessage($"{invite.FromPlayer} invited you to a party. Type /party_accept to join.");
+            }
+        }
+
+        private void HandleFriendsList(Orlo.Proto.Social.FriendsList list)
+        {
+            var friendsUI = FriendsUI.Instance;
+            if (friendsUI == null) return;
+
+            var friends = new System.Collections.Generic.List<FriendsUI.FriendEntry>();
+            foreach (var f in list.Friends)
+            {
+                friends.Add(new FriendsUI.FriendEntry
+                {
+                    Name = f.Name,
+                    Online = f.Online,
+                    ZoneName = f.Zone,
+                    Note = f.Note,
+                    Category = f.Category
+                });
+            }
+            friendsUI.SetFriendsList(friends);
+        }
+
+        private void HandleFriendStatus(Orlo.Proto.Social.FriendStatus status)
+        {
+            FriendsUI.Instance?.UpdateFriendStatus(status.Name, status.Online, status.Zone);
+
+            // Also route to CharacterSelectUI lobby
+            var charSelect = FindFirstObjectByType<CharacterSelectUI>();
+            if (charSelect != null)
+            {
+                var lobbyFriends = new System.Collections.Generic.List<CharacterSelectUI.LobbyFriend>();
+                lobbyFriends.Add(new CharacterSelectUI.LobbyFriend
+                {
+                    Name = status.Name,
+                    Online = status.Online,
+                    Zone = status.Zone
+                });
+                charSelect.SetLobbyFriends(lobbyFriends);
+            }
+        }
+
         private void HandleChatMessage(Orlo.Proto.Social.ChatMessage msg)
         {
-            // Proto C# strips the CHAT_CHANNEL_ prefix from enum values
+            // Map proto channel enum to display channel name
             string channel = msg.Channel switch
             {
                 Orlo.Proto.Social.ChatChannel.Global => "Global",
                 Orlo.Proto.Social.ChatChannel.Zone => "Zone",
                 Orlo.Proto.Social.ChatChannel.Party => "Party",
                 Orlo.Proto.Social.ChatChannel.Whisper => "Whisper",
-                Orlo.Proto.Social.ChatChannel.Proximity => "Zone",
+                Orlo.Proto.Social.ChatChannel.Proximity => "Say",
                 Orlo.Proto.Social.ChatChannel.System => "System",
+                (Orlo.Proto.Social.ChatChannel)1 => "Yell",
+                (Orlo.Proto.Social.ChatChannel)3 => "Trade",
+                (Orlo.Proto.Social.ChatChannel)4 => "LFG",
+                (Orlo.Proto.Social.ChatChannel)5 => "Guild",
+                (Orlo.Proto.Social.ChatChannel)6 => "Officer",
+                (Orlo.Proto.Social.ChatChannel)9 => "Circle",
+                (Orlo.Proto.Social.ChatChannel)13 => "Emote",
                 _ => "Global"
             };
 
-            var chatUI = FindFirstObjectByType<ChatUI>();
+            // Extract sender entity ID if available (field may not exist in current proto)
+            ulong senderEntityId = 0;
+            try { if (msg.SenderEntityId != null) senderEntityId = msg.SenderEntityId.Id; }
+            catch (System.Exception) { /* SenderEntityId not in proto yet */ }
+
+            var chatUI = ChatUI.Instance;
             if (chatUI != null)
-                chatUI.ReceiveMessage(msg.SenderName, channel, msg.Content);
+                chatUI.ReceiveMessage(msg.SenderName, channel, msg.Content, senderEntityId);
             else
                 Debug.Log($"[Chat] [{channel}] {msg.SenderName}: {msg.Content}");
+
+            // Rate limit feedback
+            if (channel == "System" && msg.Content.Contains("too fast"))
+            {
+                ChatUI.Instance?.ShowRateLimitWarning();
+            }
+
+            // Route guild chat to lobby if in character select
+            if (channel == "Guild")
+            {
+                var charSelect = FindFirstObjectByType<CharacterSelectUI>();
+                charSelect?.AddGuildChatMessage($"{msg.SenderName}: {msg.Content}");
+            }
         }
 
         private void HandleSystemMessage(Orlo.Proto.Social.SystemMessage msg)

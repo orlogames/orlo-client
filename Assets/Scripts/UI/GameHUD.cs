@@ -188,6 +188,18 @@ namespace Orlo.UI
             // ── Currency (top-right) ────────────────────────────────
             DrawCurrency();
 
+            // ── Mail notification icon ──────────────────────────────
+            if (MailUI.UnreadCount > 0)
+            {
+                float mailX = Screen.width - 160;
+                float mailY = 10;
+                GUI.color = new Color(1f, 0.7f, 0.2f, 0.9f);
+                GUI.DrawTexture(new Rect(mailX, mailY, 18, 18), Texture2D.whiteTexture);
+                GUI.color = Color.white;
+                var mailStyle = new GUIStyle(GUI.skin.label) { fontSize = 10, alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.white } };
+                GUI.Label(new Rect(mailX, mailY, 18, 18), MailUI.UnreadCount.ToString(), mailStyle);
+            }
+
             // ── Buff/Debuff icons (below health bars) ───────────────
             DrawBuffs();
 

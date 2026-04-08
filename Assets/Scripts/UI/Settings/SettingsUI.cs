@@ -321,6 +321,14 @@ namespace Orlo.UI.Settings
             S.ambientVolume = DrawSliderInt("Ambient Volume", S.ambientVolume, 0, 100, "%");
             S.voiceChatVolume = DrawSliderInt("Voice Chat Volume", S.voiceChatVolume, 0, 100, "%");
 
+            SectionHeader("Options");
+
+            bool newMute = DrawToggle("Mute When Minimized", PlayerPrefs.GetInt("MuteMinimized", 1) == 1);
+            PlayerPrefs.SetInt("MuteMinimized", newMute ? 1 : 0);
+
+            bool newCombatMusic = DrawToggle("Combat Music", PlayerPrefs.GetInt("CombatMusic", 1) == 1);
+            PlayerPrefs.SetInt("CombatMusic", newCombatMusic ? 1 : 0);
+
             // Apply master volume immediately
             Mgr.ApplyAudio();
         }
@@ -344,22 +352,53 @@ namespace Orlo.UI.Settings
         {
             SectionHeader("Chat");
 
-            S.chatFilter = DrawToggle("Chat Filter", S.chatFilter);
+            S.chatFilter = DrawToggle("Profanity Filter", S.chatFilter);
             S.proximityChat = DrawToggle("Proximity Chat", S.proximityChat);
+
+            int bubbleIdx = PlayerPrefs.GetInt("ChatBubbles", 0);
+            int newBubbleIdx = DrawDropdown("Chat Bubbles", bubbleIdx, new[] { "All", "Party Only", "Off" });
+            if (newBubbleIdx != bubbleIdx) PlayerPrefs.SetInt("ChatBubbles", newBubbleIdx);
 
             SectionHeader("Privacy");
 
+            int wIdx = (int)S.allowWhispers;
+            int newWIdx = DrawDropdown("Who Can Whisper", wIdx, new[] { "Anyone", "Friends", "Nobody" });
+            if (newWIdx != wIdx) S.allowWhispers = (SocialFilter)newWIdx;
+
             int piIdx = (int)S.allowPartyInvites;
-            int newPiIdx = DrawDropdown("Allow Party Invites", piIdx, new[] { "Everyone", "Friends", "Nobody" });
+            int newPiIdx = DrawDropdown("Who Can Invite", piIdx, new[] { "Anyone", "Friends+Guild", "Friends", "Nobody" });
             if (newPiIdx != piIdx) S.allowPartyInvites = (SocialFilter)newPiIdx;
 
-            int wIdx = (int)S.allowWhispers;
-            int newWIdx = DrawDropdown("Allow Whispers", wIdx, new[] { "Everyone", "Friends", "Nobody" });
-            if (newWIdx != wIdx) S.allowWhispers = (SocialFilter)newWIdx;
+            int tradeIdx = PlayerPrefs.GetInt("AllowTrade", 0);
+            int newTradeIdx = DrawDropdown("Who Can Trade", tradeIdx, new[] { "Anyone", "Friends", "Nobody" });
+            if (newTradeIdx != tradeIdx) PlayerPrefs.SetInt("AllowTrade", newTradeIdx);
+
+            int inspectIdx = PlayerPrefs.GetInt("AllowInspect", 0);
+            int newInspectIdx = DrawDropdown("Who Can Inspect", inspectIdx, new[] { "Anyone", "Friends", "Nobody" });
+            if (newInspectIdx != inspectIdx) PlayerPrefs.SetInt("AllowInspect", newInspectIdx);
+
+            SectionHeader("Display");
 
             S.showOnlineStatus = DrawToggle("Show Online Status", S.showOnlineStatus);
 
+            int nameIdx = PlayerPrefs.GetInt("ShowNames", 0);
+            int newNameIdx = DrawDropdown("Show Player Names", nameIdx, new[] { "All", "Friends+Guild", "Party", "Off" });
+            if (newNameIdx != nameIdx) PlayerPrefs.SetInt("ShowNames", newNameIdx);
+
+            bool showTitles = DrawToggle("Show Titles", PlayerPrefs.GetInt("ShowTitles", 1) == 1);
+            PlayerPrefs.SetInt("ShowTitles", showTitles ? 1 : 0);
+
+            bool showGuildTags = DrawToggle("Show Guild Tags", PlayerPrefs.GetInt("ShowGuildTags", 1) == 1);
+            PlayerPrefs.SetInt("ShowGuildTags", showGuildTags ? 1 : 0);
+
+            bool blockMail = DrawToggle("Block Stranger Mail", PlayerPrefs.GetInt("BlockStrangerMail", 0) == 1);
+            PlayerPrefs.SetInt("BlockStrangerMail", blockMail ? 1 : 0);
+
             Mgr.ApplySocial();
+
+            // Sync to server
+            Network.NetworkManager.Instance?.Send(
+                Network.PacketBuilder.SettingsSyncRequest());
         }
 
         // ── Controls tab ────────────────────────────────────────────────
@@ -407,10 +446,39 @@ namespace Orlo.UI.Settings
             S.showDamageNumbers = DrawToggle("Show Damage Numbers", S.showDamageNumbers);
             S.screenShake = DrawToggle("Screen Shake", S.screenShake);
 
+            bool targetOfTarget = DrawToggle("Target of Target", PlayerPrefs.GetInt("TargetOfTarget", 0) == 1);
+            PlayerPrefs.SetInt("TargetOfTarget", targetOfTarget ? 1 : 0);
+
+            bool actionBarLock = DrawToggle("Action Bar Lock", PlayerPrefs.GetInt("ActionBarLock", 0) == 1);
+            PlayerPrefs.SetInt("ActionBarLock", actionBarLock ? 1 : 0);
+
             SectionHeader("Interface");
 
             S.showEntityNames = DrawToggle("Show Entity Names", S.showEntityNames);
             S.autoLoot = DrawToggle("Auto-Loot", S.autoLoot);
+
+            int lootMode = PlayerPrefs.GetInt("LootMode", 0);
+            int newLootMode = DrawDropdown("Loot Mode", lootMode, new[] { "Auto", "Manual", "Area" });
+            if (newLootMode != lootMode) PlayerPrefs.SetInt("LootMode", newLootMode);
+
+            int nameDistIdx = PlayerPrefs.GetInt("NameDistance", 1);
+            int newNameDist = DrawDropdown("Name Display Distance", nameDistIdx, new[] { "Near", "Medium", "Far" });
+            if (newNameDist != nameDistIdx) PlayerPrefs.SetInt("NameDistance", newNameDist);
+
+            int clockFmt = PlayerPrefs.GetInt("ClockFormat", 0);
+            int newClockFmt = DrawDropdown("Clock Format", clockFmt, new[] { "12h", "24h" });
+            if (newClockFmt != clockFmt) PlayerPrefs.SetInt("ClockFormat", newClockFmt);
+
+            SectionHeader("Visuals");
+
+            bool showHelmet = DrawToggle("Show Helmet", PlayerPrefs.GetInt("ShowHelmet", 1) == 1);
+            PlayerPrefs.SetInt("ShowHelmet", showHelmet ? 1 : 0);
+
+            bool showCloak = DrawToggle("Show Cloak", PlayerPrefs.GetInt("ShowCloak", 1) == 1);
+            PlayerPrefs.SetInt("ShowCloak", showCloak ? 1 : 0);
+
+            bool clickToMove = DrawToggle("Click-to-Move", PlayerPrefs.GetInt("ClickToMove", 0) == 1);
+            PlayerPrefs.SetInt("ClickToMove", clickToMove ? 1 : 0);
         }
 
         // ── Accessibility tab ───────────────────────────────────────────
@@ -467,6 +535,20 @@ namespace Orlo.UI.Settings
             {
                 S.screenShake = newShake;
             }
+
+            SectionHeader("Motion & Feedback");
+
+            bool reducedMotion = DrawToggle("Reduced Motion", PlayerPrefs.GetInt("ReducedMotion", 0) == 1);
+            PlayerPrefs.SetInt("ReducedMotion", reducedMotion ? 1 : 0);
+
+            bool highContrast = DrawToggle("High Contrast", PlayerPrefs.GetInt("HighContrast", 0) == 1);
+            PlayerPrefs.SetInt("HighContrast", highContrast ? 1 : 0);
+
+            bool subtitles = DrawToggle("Subtitles", PlayerPrefs.GetInt("Subtitles", 1) == 1);
+            PlayerPrefs.SetInt("Subtitles", subtitles ? 1 : 0);
+
+            bool dmgNumbers = DrawToggle("Damage Numbers", S.showDamageNumbers);
+            if (dmgNumbers != S.showDamageNumbers) S.showDamageNumbers = dmgNumbers;
 
             // Color preview section
             SectionHeader("Color Preview");

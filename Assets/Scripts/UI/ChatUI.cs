@@ -4,53 +4,98 @@ using System.Collections.Generic;
 namespace Orlo.UI
 {
     /// <summary>
-    /// Chat window with channel support, whispers, and fade behavior.
-    /// Uses OnGUI for rapid prototyping — will be replaced with proper UI later.
+    /// Chat window with 14 channel support, whispers, chat bubbles, and fade behavior.
+    /// Uses OnGUI for rapid prototyping.
     /// </summary>
     public class ChatUI : MonoBehaviour
     {
-        private const int MaxMessages = 100;
-        private const float WindowW = 400f;
-        private const float WindowH = 250f;
+        public static ChatUI Instance { get; private set; }
+
+        private const int MaxMessages = 200;
+        private const float WindowW = 440f;
+        private const float WindowH = 280f;
         private const float FadeDelay = 5f;
         private const float FadedAlpha = 0.5f;
 
-        private struct ChatEntry
+        public struct ChatEntry
         {
             public string Sender;
             public string Channel;
             public string Message;
             public float Timestamp;
             public Color ChannelColor;
+            public ulong SenderEntityId;
         }
 
-        private enum Channel { Global, Zone, Party }
-
-        private static readonly Dictionary<string, Color> ChannelColors = new Dictionary<string, Color>
+        public enum ChatChannel
         {
-            { "Global", Color.green },
-            { "Zone", Color.cyan },
-            { "Party", new Color(0.3f, 0.3f, 1f) },
-            { "Whisper", Color.magenta },
-            { "System", Color.yellow }
+            Say = 0, Yell = 1, Zone = 2, Trade = 3, LFG = 4,
+            Guild = 5, Officer = 6, Party = 7, Whisper = 8, Circle = 9,
+            System = 10, Global = 11, Proximity = 12, Emote = 13
+        }
+
+        public static readonly Dictionary<string, Color> ChannelColors = new Dictionary<string, Color>
+        {
+            { "Say",      Color.white },
+            { "Yell",     new Color(1f, 0.6f, 0f) },
+            { "Zone",     Color.yellow },
+            { "Trade",    Color.green },
+            { "LFG",      Color.cyan },
+            { "Guild",    new Color(0f, 0.8f, 0.6f) },
+            { "Officer",  new Color(0.7f, 0.3f, 0.9f) },
+            { "Party",    new Color(0.3f, 0.5f, 1f) },
+            { "Whisper",  new Color(1f, 0.5f, 0.8f) },
+            { "Circle",   new Color(0.5f, 0.8f, 0.5f) },
+            { "System",   new Color(1f, 0.3f, 0.3f) },
+            { "Global",   Color.green },
+            { "Proximity", Color.white },
+            { "Emote",    new Color(1f, 0.6f, 0.3f) }
+        };
+
+        // Channel tabs displayed at the top
+        private static readonly string[] ChannelTabs = {
+            "Say", "Yell", "Zone", "Trade", "LFG",
+            "Guild", "Officer", "Party", "Whisper", "Circle"
+        };
+
+        // Channel ID mapping for PacketBuilder
+        private static readonly Dictionary<string, int> ChannelIds = new Dictionary<string, int>
+        {
+            { "Say", 0 }, { "Yell", 1 }, { "Zone", 2 }, { "Trade", 3 },
+            { "LFG", 4 }, { "Guild", 5 }, { "Officer", 6 }, { "Party", 7 },
+            { "Whisper", 8 }, { "Circle", 9 }, { "System", 10 }, { "Global", 11 }
         };
 
         private List<ChatEntry> _messages = new List<ChatEntry>();
         private Vector2 _scrollPos;
         private string _inputText = "";
         private bool _inputFocused;
-        private Channel _activeChannel = Channel.Global;
+        private string _activeChannelName = "Say";
         private float _lastActivityTime;
         private bool _hovered;
         private string _inputControlName = "ChatInput";
+        private bool _pendingSend;
+
+        // Filter: which channels to display
+        private HashSet<string> _visibleChannels = new HashSet<string>(ChannelTabs) { "System", "Global", "Proximity", "Emote" };
+
+        // Last whisper sender for /r reply
+        private string _lastWhisperFrom = "";
+
+        // Who response display
+        private string _whoResults = "";
+        private float _whoTimer;
+
+        // Rate limit feedback
+        private float _rateLimitTimer;
 
         private void Awake()
         {
+            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+            Instance = this;
             _lastActivityTime = Time.time;
-            AddSystemMessage("Welcome to Orlo! Type /w <name> <message> to whisper.");
+            AddSystemMessage("Welcome to Orlo! Type /help for a list of commands.");
         }
-
-        private bool _pendingSend;
 
         private void Update()
         {
@@ -58,13 +103,11 @@ namespace Orlo.UI
             {
                 if (!_inputFocused)
                 {
-                    // Open chat input
                     _inputFocused = true;
                     _lastActivityTime = Time.time;
                 }
                 else
                 {
-                    // Already focused — send whatever is in the box
                     _pendingSend = true;
                 }
             }
@@ -74,26 +117,58 @@ namespace Orlo.UI
                 _inputFocused = false;
                 _inputText = "";
             }
+
+            if (_rateLimitTimer > 0) _rateLimitTimer -= Time.deltaTime;
+            if (_whoTimer > 0) _whoTimer -= Time.deltaTime;
         }
 
-        /// <summary>
-        /// Returns true if the chat input is active (for other systems to know
-        /// not to process input, e.g. camera controller should not capture cursor).
-        /// </summary>
         public bool IsInputActive => _inputFocused;
+
+        // ---- Public API ----
 
         public void AddSystemMessage(string text)
         {
-            AddEntry("System", "System", text, Color.yellow);
+            AddEntry("System", "System", text, ChannelColors["System"]);
         }
 
-        public void ReceiveMessage(string sender, string channel, string message)
+        public void ReceiveMessage(string sender, string channel, string message, ulong senderEntityId = 0)
         {
             Color color = ChannelColors.ContainsKey(channel) ? ChannelColors[channel] : Color.white;
-            AddEntry(sender, channel, message, color);
+            AddEntry(sender, channel, message, color, senderEntityId);
+
+            // Track last whisper sender for /r
+            if (channel == "Whisper" && sender != "You")
+                _lastWhisperFrom = sender;
+
+            // Trigger chat bubble for Say/Yell
+            if ((channel == "Say" || channel == "Yell") && senderEntityId > 0)
+            {
+                ChatBubbleManager.Instance?.ShowBubble(senderEntityId, message, channel == "Yell");
+            }
         }
 
-        private void AddEntry(string sender, string channel, string message, Color color)
+        public void ShowRateLimitWarning()
+        {
+            if (_rateLimitTimer <= 0)
+            {
+                AddEntry("System", "System", "You are sending messages too fast.", ChannelColors["System"]);
+                _rateLimitTimer = 3f;
+            }
+        }
+
+        public void ShowWhoResults(string results)
+        {
+            _whoResults = results;
+            _whoTimer = 10f;
+            AddSystemMessage(results);
+        }
+
+        public void ShowRollResult(string roller, int result, int min, int max)
+        {
+            AddEntry("System", "System", $"{roller} rolls {result} ({min}-{max})", new Color(1f, 0.85f, 0.3f));
+        }
+
+        private void AddEntry(string sender, string channel, string message, Color color, ulong senderEntityId = 0)
         {
             _messages.Add(new ChatEntry
             {
@@ -101,14 +176,14 @@ namespace Orlo.UI
                 Channel = channel,
                 Message = message,
                 Timestamp = Time.time,
-                ChannelColor = color
+                ChannelColor = color,
+                SenderEntityId = senderEntityId
             });
 
             if (_messages.Count > MaxMessages)
                 _messages.RemoveAt(0);
 
             _lastActivityTime = Time.time;
-            // Auto-scroll to bottom
             _scrollPos.y = float.MaxValue;
         }
 
@@ -120,28 +195,20 @@ namespace Orlo.UI
 
             if (string.IsNullOrEmpty(text)) return;
 
-            // Slash commands
             if (text.StartsWith("/"))
             {
                 HandleSlashCommand(text);
                 return;
             }
 
-            // Send to server
-            string channel = _activeChannel.ToString();
-            int channelId = _activeChannel switch
-            {
-                Channel.Global => 2,
-                Channel.Zone => 1,
-                Channel.Party => 3,
-                _ => 2
-            };
+            string channel = _activeChannelName;
+            int channelId = ChannelIds.ContainsKey(channel) ? ChannelIds[channel] : 0;
 
             var data = Network.PacketBuilder.ChatSend(channelId, text);
             Network.NetworkManager.Instance?.Send(data);
 
-            // Show locally immediately
-            AddEntry("You", channel, text, ChannelColors[channel]);
+            Color col = ChannelColors.ContainsKey(channel) ? ChannelColors[channel] : Color.white;
+            AddEntry("You", channel, text, col);
         }
 
         private void HandleSlashCommand(string text)
@@ -151,6 +218,54 @@ namespace Orlo.UI
 
             switch (cmd)
             {
+                // Channel shortcuts
+                case "/s":
+                case "/say":
+                    if (parts.Length >= 2)
+                        SendToChannel("Say", 0, string.Join(" ", parts, 1, parts.Length - 1));
+                    else _activeChannelName = "Say";
+                    break;
+                case "/y":
+                case "/yell":
+                    if (parts.Length >= 2)
+                        SendToChannel("Yell", 1, string.Join(" ", parts, 1, parts.Length - 1));
+                    else _activeChannelName = "Yell";
+                    break;
+                case "/zone":
+                    if (parts.Length >= 2)
+                        SendToChannel("Zone", 2, string.Join(" ", parts, 1, parts.Length - 1));
+                    else _activeChannelName = "Zone";
+                    break;
+                case "/trade":
+                    if (parts.Length >= 2)
+                        SendToChannel("Trade", 3, string.Join(" ", parts, 1, parts.Length - 1));
+                    else _activeChannelName = "Trade";
+                    break;
+                case "/lfg":
+                    if (parts.Length >= 2)
+                        SendToChannel("LFG", 4, string.Join(" ", parts, 1, parts.Length - 1));
+                    else _activeChannelName = "LFG";
+                    break;
+                case "/g":
+                case "/guild":
+                    if (parts.Length >= 2)
+                        SendToChannel("Guild", 5, string.Join(" ", parts, 1, parts.Length - 1));
+                    else _activeChannelName = "Guild";
+                    break;
+                case "/o":
+                case "/officer":
+                    if (parts.Length >= 2)
+                        SendToChannel("Officer", 6, string.Join(" ", parts, 1, parts.Length - 1));
+                    else _activeChannelName = "Officer";
+                    break;
+                case "/p":
+                case "/party":
+                    if (parts.Length >= 2)
+                        SendToChannel("Party", 7, string.Join(" ", parts, 1, parts.Length - 1));
+                    else _activeChannelName = "Party";
+                    break;
+
+                // Whisper
                 case "/w":
                 case "/whisper":
                 case "/tell":
@@ -158,34 +273,60 @@ namespace Orlo.UI
                     {
                         string target = parts[1];
                         string msg = string.Join(" ", parts, 2, parts.Length - 2);
-                        var data = Network.PacketBuilder.ChatSend(4, msg, target); // 4 = whisper
+                        var data = Network.PacketBuilder.ChatSend(8, msg, target);
                         Network.NetworkManager.Instance?.Send(data);
-                        AddEntry("You", "Whisper", $"-> {target}: {msg}", Color.magenta);
+                        AddEntry("You", "Whisper", $"-> {target}: {msg}", ChannelColors["Whisper"]);
                     }
                     else
                         AddSystemMessage("Usage: /w <name> <message>");
                     break;
 
-                case "/g":
-                    if (parts.Length >= 2)
+                // Reply to last whisper
+                case "/r":
+                case "/reply":
+                    if (string.IsNullOrEmpty(_lastWhisperFrom))
+                    {
+                        AddSystemMessage("No one to reply to.");
+                    }
+                    else if (parts.Length >= 2)
                     {
                         string msg = string.Join(" ", parts, 1, parts.Length - 1);
-                        var data = Network.PacketBuilder.ChatSend(2, msg);
+                        var data = Network.PacketBuilder.ChatSend(8, msg, _lastWhisperFrom);
                         Network.NetworkManager.Instance?.Send(data);
-                        AddEntry("You", "Global", msg, ChannelColors["Global"]);
+                        AddEntry("You", "Whisper", $"-> {_lastWhisperFrom}: {msg}", ChannelColors["Whisper"]);
+                    }
+                    else
+                        AddSystemMessage($"Usage: /r <message> (replying to {_lastWhisperFrom})");
+                    break;
+
+                // Social / utility
+                case "/who":
+                {
+                    string filter = parts.Length >= 2 ? parts[1] : "";
+                    Network.NetworkManager.Instance?.Send(Network.PacketBuilder.WhoRequest(filter));
+                    AddSystemMessage("Searching...");
+                    break;
+                }
+                case "/roll":
+                {
+                    int min = 1, max = 100;
+                    if (parts.Length >= 3 && int.TryParse(parts[1], out min) && int.TryParse(parts[2], out max)) { }
+                    else if (parts.Length >= 2 && int.TryParse(parts[1], out max)) { min = 1; }
+                    Network.NetworkManager.Instance?.Send(Network.PacketBuilder.RollRequest(min, max));
+                    break;
+                }
+                case "/e":
+                case "/me":
+                case "/emote":
+                    if (parts.Length >= 2)
+                    {
+                        string emoteText = string.Join(" ", parts, 1, parts.Length - 1);
+                        Network.NetworkManager.Instance?.Send(Network.PacketBuilder.EmoteRequestExtended(emoteText, 0));
+                        AddEntry("You", "Emote", emoteText, ChannelColors["Emote"]);
                     }
                     break;
 
-                case "/p":
-                    if (parts.Length >= 2)
-                    {
-                        string msg = string.Join(" ", parts, 1, parts.Length - 1);
-                        var data = Network.PacketBuilder.ChatSend(3, msg);
-                        Network.NetworkManager.Instance?.Send(data);
-                        AddEntry("You", "Party", msg, ChannelColors["Party"]);
-                    }
-                    break;
-
+                // Admin commands (unchanged from before)
                 case "/tp":
                 case "/teleport":
                     if (parts.Length >= 4 && AdminCheck())
@@ -213,8 +354,6 @@ namespace Orlo.UI
                                 Network.PacketBuilder.AdminSetSpeed(speed));
                             AddSystemMessage($"Speed set to {speed} m/s");
                         }
-                        else
-                            AddSystemMessage("Usage: /setspeed <number>");
                     }
                     break;
 
@@ -253,8 +392,6 @@ namespace Orlo.UI
                             AddSystemMessage($"Spawning {creatureType}...");
                         }
                     }
-                    else if (AdminCheck())
-                        AddSystemMessage("Usage: /spawn <creature_type>");
                     break;
 
                 case "/creatures":
@@ -263,7 +400,6 @@ namespace Orlo.UI
                         Network.NetworkManager.Instance?.Send(
                             Network.PacketBuilder.AdminListCreatures());
                         AddSystemMessage("Requesting creature list...");
-                        // CreatureBrowserUI will open when response arrives
                         var browser = FindFirstObjectByType<CreatureBrowserUI>();
                         if (browser == null)
                         {
@@ -274,10 +410,10 @@ namespace Orlo.UI
                     break;
 
                 case "/pos":
-                    var p = GameObject.FindWithTag("Player");
-                    if (p != null)
+                    var pp = GameObject.FindWithTag("Player");
+                    if (pp != null)
                     {
-                        var pos = p.transform.position;
+                        var pos = pp.transform.position;
                         AddSystemMessage($"Position: ({pos.x:F1}, {pos.y:F1}, {pos.z:F1})");
                     }
                     break;
@@ -285,7 +421,6 @@ namespace Orlo.UI
                 case "/respawn":
                 case "/home":
                 case "/threshold":
-                    // Teleport to Threshold nexus (512, 20, 510)
                     Network.NetworkManager.Instance?.Send(
                         Network.PacketBuilder.AdminTeleport(512f, 20f, 510f));
                     AddSystemMessage("Returning to Threshold...");
@@ -295,9 +430,7 @@ namespace Orlo.UI
                     if (HUDLayout.Instance != null)
                     {
                         HUDLayout.Instance.ToggleLock();
-                        AddSystemMessage(HUDLayout.Instance.IsLocked
-                            ? "HUD locked."
-                            : "HUD unlocked. Right-click drag to move windows. /hudlock to lock.");
+                        AddSystemMessage(HUDLayout.Instance.IsLocked ? "HUD locked." : "HUD unlocked.");
                     }
                     break;
 
@@ -305,18 +438,32 @@ namespace Orlo.UI
                     if (HUDLayout.Instance != null)
                     {
                         HUDLayout.Instance.ResetLayout();
-                        AddSystemMessage("HUD positions reset to defaults. Restart to apply.");
+                        AddSystemMessage("HUD positions reset.");
                     }
                     break;
 
+                case "/mail":
+                    MailUI.Instance?.Toggle();
+                    break;
+
                 case "/help":
-                    AddSystemMessage("Commands: /w /g /p /tp /fly /setspeed /god /spawn /creatures /respawn /pos /hudlock /hudreset /help");
+                    AddSystemMessage("Chat: /s /y /zone /trade /lfg /g /o /p /w <name> /r /who /roll /e /me");
+                    AddSystemMessage("Admin: /tp /fly /speed /god /spawn /creatures /respawn /pos /hudlock /hudreset");
+                    AddSystemMessage("UI: /mail");
                     break;
 
                 default:
-                    AddSystemMessage($"Unknown command: {cmd}. Type /help for commands.");
+                    AddSystemMessage($"Unknown command: {cmd}. Type /help.");
                     break;
             }
+        }
+
+        private void SendToChannel(string channelName, int channelId, string msg)
+        {
+            var data = Network.PacketBuilder.ChatSend(channelId, msg);
+            Network.NetworkManager.Instance?.Send(data);
+            Color col = ChannelColors.ContainsKey(channelName) ? ChannelColors[channelName] : Color.white;
+            AddEntry("You", channelName, msg, col);
         }
 
         private bool AdminCheck()
@@ -330,12 +477,13 @@ namespace Orlo.UI
             return true;
         }
 
+        // ---- OnGUI ----
+
         private const string HUD_KEY = "Chat";
         private bool _hudRegistered;
 
         private void OnGUI()
         {
-            // Register with HUDLayout for draggable positioning
             if (!_hudRegistered && HUDLayout.Instance != null)
             {
                 HUDLayout.Instance.Register(HUD_KEY, "Chat", 10f, Screen.height - WindowH - 10f, WindowW, WindowH);
@@ -355,14 +503,11 @@ namespace Orlo.UI
                 y = Screen.height - WindowH - 10f;
             }
 
-            // Check hover
             Rect fullRect = new Rect(x, y, WindowW, WindowH);
             _hovered = fullRect.Contains(Event.current.mousePosition);
 
-            // Fade logic
             float timeSinceActivity = Time.time - _lastActivityTime;
             float alpha = (_hovered || _inputFocused || timeSinceActivity < FadeDelay) ? 1f : FadedAlpha;
-            GUI.color = new Color(1, 1, 1, alpha);
 
             // Background
             GUI.color = new Color(0, 0, 0, 0.7f * alpha);
@@ -378,41 +523,55 @@ namespace Orlo.UI
 
             float contentY = y + 22;
 
-            // Channel selector buttons
-            float btnW = 60f;
-            float btnX = x + 4;
-            float btnY = contentY;
-            Channel[] channels = { Channel.Global, Channel.Zone, Channel.Party };
-            foreach (var ch in channels)
+            // Channel tabs (two rows if needed)
+            float tabW = 42f;
+            float tabX = x + 2;
+            float tabY = contentY;
+            for (int i = 0; i < ChannelTabs.Length; i++)
             {
-                bool selected = _activeChannel == ch;
-                Color btnColor = ChannelColors[ch.ToString()];
-                GUI.color = selected ? new Color(btnColor.r, btnColor.g, btnColor.b, 0.8f * alpha) : new Color(0.2f, 0.2f, 0.2f, 0.8f * alpha);
-                GUI.DrawTexture(new Rect(btnX, btnY, btnW, 18), Texture2D.whiteTexture);
+                string tab = ChannelTabs[i];
+                bool selected = _activeChannelName == tab;
+                Color tabColor = ChannelColors.ContainsKey(tab) ? ChannelColors[tab] : Color.white;
+
+                GUI.color = selected
+                    ? new Color(tabColor.r, tabColor.g, tabColor.b, 0.7f * alpha)
+                    : new Color(0.15f, 0.15f, 0.15f, 0.8f * alpha);
+                GUI.DrawTexture(new Rect(tabX, tabY, tabW, 16), Texture2D.whiteTexture);
                 GUI.color = new Color(1, 1, 1, alpha);
-                if (GUI.Button(new Rect(btnX, btnY, btnW, 18), ch.ToString(), SmallLabelCentered()))
+
+                if (GUI.Button(new Rect(tabX, tabY, tabW, 16), tab, TabLabel()))
                 {
-                    _activeChannel = ch;
+                    _activeChannelName = tab;
                     _lastActivityTime = Time.time;
                 }
-                btnX += btnW + 4;
+
+                tabX += tabW + 2;
+                if (tabX + tabW > x + WindowW - 2)
+                {
+                    tabX = x + 2;
+                    tabY += 18;
+                }
             }
 
-            float msgAreaY = btnY + 22;
+            float msgAreaY = tabY + 20;
             float inputH = 22f;
             float msgAreaH = WindowH - (msgAreaY - y) - inputH - 6;
 
-            // Message log
+            // Message log (filtered by visible channels)
             Rect msgArea = new Rect(x + 2, msgAreaY, WindowW - 4, msgAreaH);
-            float totalH = _messages.Count * 16f;
+            int visibleCount = 0;
+            for (int i = 0; i < _messages.Count; i++)
+                if (_visibleChannels.Contains(_messages[i].Channel)) visibleCount++;
+
+            float totalH = visibleCount * 16f;
             _scrollPos = GUI.BeginScrollView(msgArea, _scrollPos, new Rect(0, 0, WindowW - 24, Mathf.Max(totalH, msgAreaH)));
 
+            float lineY = 0;
             for (int i = 0; i < _messages.Count; i++)
             {
                 ChatEntry entry = _messages[i];
-                float lineY = i * 16f;
+                if (!_visibleChannels.Contains(entry.Channel)) continue;
 
-                // Channel prefix
                 string prefix = $"[{entry.Channel}]";
                 string line = entry.Sender == "System"
                     ? $"{prefix} {entry.Message}"
@@ -425,46 +584,48 @@ namespace Orlo.UI
                     wordWrap = false
                 };
                 GUI.Label(new Rect(2, lineY, WindowW - 28, 16), line, style);
+                lineY += 16f;
             }
 
             GUI.EndScrollView();
 
-            // Input field + Send button
+            // Input field
             float inputY = y + WindowH - inputH - 4;
             float sendBtnW = 50f;
             float inputW = WindowW - sendBtnW - 10;
 
+            // Channel indicator
+            Color chColor = ChannelColors.ContainsKey(_activeChannelName) ? ChannelColors[_activeChannelName] : Color.white;
+            GUI.color = new Color(chColor.r, chColor.g, chColor.b, 0.6f * alpha);
+            GUI.DrawTexture(new Rect(x + 2, inputY, 3, inputH), Texture2D.whiteTexture);
+
             GUI.color = new Color(0.1f, 0.1f, 0.1f, 0.9f * alpha);
-            GUI.DrawTexture(new Rect(x + 2, inputY, inputW, inputH), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(x + 5, inputY, inputW - 3, inputH), Texture2D.whiteTexture);
             GUI.color = new Color(1, 1, 1, alpha);
 
             GUI.SetNextControlName(_inputControlName);
-            _inputText = GUI.TextField(new Rect(x + 4, inputY + 1, inputW - 4, inputH - 2), _inputText, SmallInputStyle());
+            _inputText = GUI.TextField(new Rect(x + 7, inputY + 1, inputW - 5, inputH - 2), _inputText, SmallInputStyle());
 
-            // Sync _inputFocused with actual GUI focus (user may have clicked the text field)
             if (Event.current.type == EventType.Repaint)
             {
                 bool guiFocused = GUI.GetNameOfFocusedControl() == _inputControlName;
                 if (guiFocused && !_inputFocused)
-                    _inputFocused = true; // User clicked the text field
+                    _inputFocused = true;
             }
 
-            // Send button — use GUI.skin.button for reliable click detection
             var sendRect = new Rect(x + inputW + 4, inputY, sendBtnW, inputH);
             GUI.color = new Color(0.2f, 0.7f, 0.3f, 0.95f * alpha);
             if (GUI.Button(sendRect, "Send"))
             {
-                _pendingSend = true; // Process in same frame below
+                _pendingSend = true;
             }
             GUI.color = new Color(1, 1, 1, alpha);
 
-            // Focus management — keep text field focused while chat is active
             if (_inputFocused)
             {
                 GUI.FocusControl(_inputControlName);
             }
 
-            // Process pending send (from Enter key in Update or Send button click)
             if (_pendingSend)
             {
                 _pendingSend = false;
@@ -475,19 +636,23 @@ namespace Orlo.UI
                 }
                 else
                 {
-                    // Empty input — just unfocus
                     _inputFocused = false;
                     _inputText = "";
                 }
             }
 
-            // Reset GUI color
             GUI.color = Color.white;
         }
 
-        private GUIStyle SmallLabelCentered()
+        // ---- Style helpers ----
+
+        private GUIStyle TabLabel()
         {
-            return new GUIStyle(GUI.skin.label) { fontSize = 10, alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.white } };
+            return new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 9, alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = Color.white }
+            };
         }
 
         private GUIStyle BoldLabel()

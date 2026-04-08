@@ -570,6 +570,654 @@ namespace Orlo.Network
             return pkt.ToByteArray();
         }
 
+        // ─── Friends ────────────────────────────────────────────────────────
+
+        public static byte[] FriendRequest(string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/friend_request {targetName}",
+                WhisperTarget = targetName
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] FriendAccept(string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/friend_accept {targetName}",
+                WhisperTarget = targetName
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] FriendDecline(string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/friend_decline {targetName}",
+                WhisperTarget = targetName
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] FriendRemove(string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/friend_remove {targetName}",
+                WhisperTarget = targetName
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] FriendBlock(string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/block {targetName}",
+                WhisperTarget = targetName
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] FriendUnblock(string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/unblock {targetName}",
+                WhisperTarget = targetName
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] FriendNote(string targetName, string note)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/friend_note {targetName} {note}",
+                WhisperTarget = targetName
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] SetPlayerStatus(int status)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/status {status}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Party ──────────────────────────────────────────────────────────
+
+        public static byte[] PartyInvite(string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/party_invite {targetName}",
+                WhisperTarget = targetName
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] PartyAccept(string fromName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/party_accept {fromName}",
+                WhisperTarget = fromName
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Guild ──────────────────────────────────────────────────────────
+
+        public static byte[] CreateGuild(string name, string tag)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/guild_create {name} {tag}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] GuildInviteRequest(string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/guild_invite {targetName}",
+                WhisperTarget = targetName
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] GuildInviteResponse(bool accept)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = accept ? "/guild_accept" : "/guild_decline"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] LeaveGuild()
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = "/guild_leave"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] GuildKick(string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/guild_kick {targetName}",
+                WhisperTarget = targetName
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] GuildPromote(string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/guild_promote {targetName}",
+                WhisperTarget = targetName
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] GuildDemote(string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/guild_demote {targetName}",
+                WhisperTarget = targetName
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] SetGuildMOTD(string motd)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/guild_motd {motd}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] SetGuildRanks(GuildUI.GuildRank[] ranks)
+        {
+            // Serialize rank data as command — server parses
+            var sb = new System.Text.StringBuilder("/guild_ranks");
+            for (int i = 0; i < ranks.Length; i++)
+            {
+                var r = ranks[i];
+                sb.Append($" {i}:{r.Name}:{(r.CanInvite?1:0)}:{(r.CanKick?1:0)}:{(r.CanPromote?1:0)}:{(r.CanEditMotd?1:0)}:{(r.CanBankDeposit?1:0)}:{(r.CanBankWithdraw?1:0)}:{r.BankWithdrawLimit}");
+            }
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = sb.ToString()
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Guild Bank ─────────────────────────────────────────────────────
+
+        public static byte[] GuildBankOpen(int tab)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/gbank_open {tab}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] GuildBankDeposit(uint slotIndex, uint quantity)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/gbank_deposit {slotIndex} {quantity}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] GuildBankWithdraw(int bankTab, int slotIndex)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/gbank_withdraw {bankTab} {slotIndex}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] GuildBankLogRequest()
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = "/gbank_log"
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Mail ───────────────────────────────────────────────────────────
+
+        public static byte[] SendMail(string to, string subject, string body, long credits = 0, long codPrice = 0)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/mail_send {to}|{subject}|{body}|{credits}|{codPrice}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] MailListRequest()
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = "/mail_list"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] MailReadRequest(ulong mailId)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/mail_read {mailId}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] MailCollect(ulong mailId)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/mail_collect {mailId}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] MailDelete(ulong mailId)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/mail_delete {mailId}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Emotes & Social ────────────────────────────────────────────────
+
+        public static byte[] EmoteRequestExtended(string emoteId, ulong targetEntityId)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/emote {emoteId} {targetEntityId}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] WhoRequest(string filter = "")
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/who {filter}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] RollRequest(int min = 1, int max = 100)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/roll {min} {max}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] BlockPlayer(string targetName)
+        {
+            return FriendBlock(targetName);
+        }
+
+        public static byte[] ReportPlayer(string targetName, string reason)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/report {targetName} {reason}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] MutePlayer(string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/mute {targetName}",
+                WhisperTarget = targetName
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] CommendPlayer(string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/commend {targetName}",
+                WhisperTarget = targetName
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── LFG ───────────────────────────────────────────────────────────
+
+        public static byte[] PostLFG(string activity, string description, int maxSize, int minLevel, int maxLevel)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/lfg_post {activity}|{description}|{maxSize}|{minLevel}|{maxLevel}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] RemoveLFG(ulong listingId)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/lfg_remove {listingId}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] ApplyLFG(ulong listingId)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/lfg_apply {listingId}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] LFGBoardRequest()
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = "/lfg_list"
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Circles ────────────────────────────────────────────────────────
+
+        public static byte[] CreateCircle(string name)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/circle_create {name}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] CircleInvite(string circleName, string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/circle_invite {circleName} {targetName}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] CircleInviteResponse(string circleName, bool accept)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = accept ? $"/circle_accept {circleName}" : $"/circle_decline {circleName}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] CircleLeave(string circleName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/circle_leave {circleName}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] CircleKick(string circleName, string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/circle_kick {circleName} {targetName}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] CircleChat(string circleName, string message)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/circle_chat {circleName} {message}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Bulletin Board ─────────────────────────────────────────────────
+
+        public static byte[] PostBulletin(string category, string title, string body)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/bulletin_post {category}|{title}|{body}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] RemoveBulletin(ulong postId)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/bulletin_remove {postId}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] BulletinBoardRequest(string category)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/bulletin_list {category}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Strain ─────────────────────────────────────────────────────────
+
+        public static byte[] StrainCureRequest()
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = "/strain_cure"
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Player Profile ─────────────────────────────────────────────────
+
+        public static byte[] PlayerProfileRequest(string targetName)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/profile {targetName}",
+                WhisperTarget = targetName
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] SetPlayerProfile(string bio, int titleIndex)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/profile_set {titleIndex}|{bio}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Settings Sync ──────────────────────────────────────────────────
+
+        public static byte[] SettingsSyncRequest()
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = "/settings_sync"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] ServerStatusRequest()
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = "/server_status"
+            };
+            return pkt.ToByteArray();
+        }
+
+        // ─── Character Management ───────────────────────────────────────────
+
+        public static byte[] CharacterDeleteExtended(ulong characterId)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/char_delete {characterId}"
+            };
+            return pkt.ToByteArray();
+        }
+
+        public static byte[] CancelCharacterDelete(ulong characterId)
+        {
+            var pkt = NewPacket();
+            pkt.ChatSend = new ProtoSocial.ChatSend
+            {
+                Channel = ProtoSocial.ChatChannel.System,
+                Content = $"/char_delete_cancel {characterId}"
+            };
+            return pkt.ToByteArray();
+        }
+
         // ─── Quest Actions ──────────────────────────────────────────────────
 
         /// <summary>Accept a quest from an NPC.</summary>
