@@ -1,4 +1,5 @@
 using UnityEngine;
+using Orlo.UI.Settings;
 
 namespace Orlo.UI
 {
@@ -429,7 +430,7 @@ namespace Orlo.UI
 
             if (GUI.Button(gearRect, GUIContent.none, GUIStyle.none))
             {
-                var settings = FindObjectOfType<SettingsUI>();
+                var settings = FindFirstObjectByType<SettingsUI>();
                 if (settings != null)
                 {
                     // Toggle settings visibility via reflection or public method if available
