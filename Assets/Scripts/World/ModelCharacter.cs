@@ -80,9 +80,20 @@ namespace Orlo.World
                 _modelRoot = new GameObject("CharacterModel");
                 _modelRoot.transform.SetParent(transform, false);
 
-                // Meshy/glTF models are Z-up. Apply -90° X to stand upright (same as AssetLoader).
-                // Do NOT add 180° Y — that causes the character to lie flat.
-                _modelRoot.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+                // Auto-detect model orientation from mesh bounds:
+                // If the model is taller in Z than Y, it's Z-up and needs -90° X.
+                // If it's taller in Y, it's already Y-up (no correction needed).
+                Bounds combinedBounds = default;
+                bool boundsInit = false;
+                foreach (var m in meshes)
+                {
+                    if (!boundsInit) { combinedBounds = m.mesh.bounds; boundsInit = true; }
+                    else combinedBounds.Encapsulate(m.mesh.bounds);
+                }
+                bool isZUp = boundsInit && combinedBounds.size.z > combinedBounds.size.y * 1.2f;
+                if (isZUp)
+                    _modelRoot.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+                // else: Y-up model, no rotation needed
 
                 // Create a combined mesh from all primitives
                 foreach (var meshData in meshes)

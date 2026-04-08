@@ -263,15 +263,25 @@ namespace Orlo.World
         {
             var root = new GameObject($"Model_{assetId}");
 
-            // GLB models from Meshy are authored with Z-up. The -90° X correction
-            // goes on a CHILD pivot so the root's transform stays free for world
-            // positioning by EntityManager / ProceduralEntityFactory.
+            // Child pivot for Z-up correction (keeps root free for world positioning).
+            // Auto-detect: if combined mesh bounds are taller in Z than Y, it's Z-up.
             var pivot = new GameObject("ModelPivot");
             pivot.transform.SetParent(root.transform, false);
-            pivot.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
 
             Bounds combinedBounds = default;
             bool boundsInitialized = false;
+
+            // Pre-scan bounds to detect orientation
+            foreach (var entry in cached.entries)
+            {
+                if (!boundsInitialized) { combinedBounds = entry.mesh.bounds; boundsInitialized = true; }
+                else combinedBounds.Encapsulate(entry.mesh.bounds);
+            }
+            bool isZUp = boundsInitialized && combinedBounds.size.z > combinedBounds.size.y * 1.2f;
+            if (isZUp)
+                pivot.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+
+            boundsInitialized = false; // Reset for collider
 
             // Use URP Lit shader for GLB models (supports PBR textures from Meshy)
             var shader = Orlo.Rendering.OrloShaders.Lit;
