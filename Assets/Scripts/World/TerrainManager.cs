@@ -52,7 +52,7 @@ namespace Orlo.World
 
             _terrainMat = new Material(terrainShader);
             _terrainMat.color = Color.white;
-            _terrainMat.SetFloat("_Glossiness", 0.05f);
+            _terrainMat.SetFloat("_Smoothness", 0.05f);
 
             if (useTextured)
             {
@@ -67,7 +67,7 @@ namespace Orlo.World
                 _terrainMat.SetTexture("_DirtNorm", TerrainTextures.DirtNorm);
                 _terrainMat.SetTexture("_SandNorm", TerrainTextures.SandNorm);
 
-                _terrainMat.SetFloat("_TexScale", 0.1f);       // 10m repeat
+                _terrainMat.SetFloat("_TexScale", 0.25f);      // 4m repeat (more visible detail)
                 _terrainMat.SetFloat("_NormalStrength", 1.0f);
                 _terrainMat.SetFloat("_DetailNoiseStrength", 0.08f);
 
@@ -270,6 +270,21 @@ namespace Orlo.World
                 float rock = data.Splatmap[idx * 4 + 1] / 255f;
                 float dirt = data.Splatmap[idx * 4 + 2] / 255f;
                 float sand = data.Splatmap[idx * 4 + 3] / 255f;
+
+                // Normalize so weights always sum to 1.0 (prevents dark blending)
+                float total = grass + rock + dirt + sand;
+                if (total < 0.001f)
+                {
+                    grass = 1f; // Default to grass
+                }
+                else if (Mathf.Abs(total - 1f) > 0.01f)
+                {
+                    grass /= total;
+                    rock /= total;
+                    dirt /= total;
+                    sand /= total;
+                }
+
                 return new Color(grass, rock, dirt, sand);
             }
 
