@@ -114,37 +114,36 @@ namespace Orlo.World
         {
             if (skyboxMaterial == null) return;
 
-            // Golden hour sky — warm cinematic atmosphere
+            // Golden hour sky — warm cinematic atmosphere matching concept art
             float sunAngle = timeOfDay * 360f - 90f;
-            skyboxMaterial.SetFloat("_SunSize", 0.06f);               // Larger sun disk near horizon
-            skyboxMaterial.SetFloat("_SunSizeConvergence", 4f);       // Softer sun falloff
-            skyboxMaterial.SetFloat("_AtmosphereThickness", 1.6f);    // Thicker atmosphere for warm scattering
-            skyboxMaterial.SetColor("_SkyTint", DayTop);
-            skyboxMaterial.SetColor("_GroundColor", new Color(0.45f, 0.38f, 0.30f));   // Warm earthy ground
-            skyboxMaterial.SetFloat("_Exposure", 1.25f);
+            skyboxMaterial.SetFloat("_SunSize", 0.08f);               // Large sun disk near horizon
+            skyboxMaterial.SetFloat("_SunSizeConvergence", 3f);       // Soft warm sun falloff
+            skyboxMaterial.SetFloat("_AtmosphereThickness", 2.0f);    // Thick atmosphere for golden scattering
+            skyboxMaterial.SetColor("_SkyTint", new Color(0.45f, 0.55f, 0.75f));  // Warm blue-gold sky
+            skyboxMaterial.SetColor("_GroundColor", new Color(0.50f, 0.40f, 0.28f));   // Warm earthy ground
+            skyboxMaterial.SetFloat("_Exposure", 1.4f);               // Slightly brighter
 
             RenderSettings.skybox = skyboxMaterial;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.5f, 0.6f, 0.75f);             // Cool sky fill
-            RenderSettings.ambientEquatorColor = new Color(0.55f, 0.5f, 0.4f);          // Warm midtones
-            RenderSettings.ambientGroundColor = new Color(0.4f, 0.35f, 0.25f);          // Warm ground bounce
-            RenderSettings.ambientIntensity = 1.0f;
+            RenderSettings.ambientSkyColor = new Color(0.45f, 0.50f, 0.65f);           // Warm sky fill
+            RenderSettings.ambientEquatorColor = new Color(0.65f, 0.55f, 0.35f);        // Golden midtones
+            RenderSettings.ambientGroundColor = new Color(0.55f, 0.45f, 0.30f);         // Warm bounce
+            RenderSettings.ambientIntensity = 1.15f;
 
-            // Atmospheric fog — exponential squared for natural falloff
-            // PostProcessSetup.SetupFog() now manages fog via URP Volume integration
+            // Atmospheric fog — dense golden haze for depth and mood
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = 0.012f;
-            RenderSettings.fogColor = new Color(0.6f, 0.5f, 0.35f);                    // Warm golden hour haze
+            RenderSettings.fogDensity = 0.02f;                                          // Thicker than before
+            RenderSettings.fogColor = new Color(0.72f, 0.58f, 0.38f);                  // Rich golden haze
 
-            // Sun — golden hour directional light, low angle, deep shadows
+            // Sun — low golden hour angle, dramatic shadows
             if (directionalLight != null)
             {
-                directionalLight.color = new Color(1f, 0.92f, 0.75f);                  // Golden sun
-                directionalLight.intensity = 1.5f;
+                directionalLight.color = new Color(1f, 0.88f, 0.65f);                  // Deep golden sun
+                directionalLight.intensity = 2.0f;                                      // Brighter
                 directionalLight.shadows = LightShadows.Soft;
-                directionalLight.shadowStrength = 0.85f;
-                directionalLight.transform.rotation = Quaternion.Euler(35f, -30f, 0f);  // More frontal golden hour angle
+                directionalLight.shadowStrength = 0.8f;
+                directionalLight.transform.rotation = Quaternion.Euler(25f, -45f, 0f);  // Low dramatic golden hour
             }
 
             DynamicGI.UpdateEnvironment();
