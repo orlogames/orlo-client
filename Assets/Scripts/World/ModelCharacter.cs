@@ -508,15 +508,133 @@ namespace Orlo.World
 
         private void CreateFallbackPrimitive()
         {
-            _modelRoot = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            // Build a recognizable humanoid silhouette instead of a white capsule.
+            // Warm skin tone so it reads as a person even without textures.
+            Color skin = new Color(0.7f, 0.5f, 0.35f);
+            Color pants = new Color(0.15f, 0.12f, 0.1f);
+            Color shirt = new Color(0.25f, 0.22f, 0.2f);
+
+            _modelRoot = new GameObject("FallbackHumanoid");
             _modelRoot.transform.SetParent(transform, false);
-            _modelRoot.transform.localPosition = Vector3.up;
+
+            // Proportions for a ~1.8m humanoid
+            float h = 1.8f;
+            float hipY = h * 0.5f;          // 0.90
+            float torsoH = h * 0.30f;       // 0.54
+            float headR = h * 0.07f;        // 0.126
+            float shoulderW = 0.22f;
+            float limbR = 0.055f;
+            float upperLeg = h * 0.25f;
+            float lowerLeg = h * 0.23f;
+            float upperArm = h * 0.16f;
+            float lowerArm = h * 0.15f;
+
+            Shader shader = Orlo.Rendering.OrloShaders.Lit;
+
+            // --- Head (sphere) ---
+            float headY = hipY + torsoH + 0.06f + headR;
+            AddFallbackPart(_modelRoot, "Head",
+                ProceduralMeshBuilder.BuildSphere(headR, 10, 12),
+                new Vector3(0, headY, 0), skin, shader);
+
+            // --- Neck (small cylinder) ---
+            float neckY = hipY + torsoH;
+            AddFallbackPart(_modelRoot, "Neck",
+                ProceduralMeshBuilder.BuildCylinder(0.04f, 0.04f, 0.06f, 6),
+                new Vector3(0, neckY, 0), skin, shader);
+
+            // --- Torso (tapered cylinder: wider at shoulders, narrower at waist) ---
+            AddFallbackPart(_modelRoot, "Torso",
+                ProceduralMeshBuilder.BuildCylinder(0.16f, 0.20f, torsoH, 8),
+                new Vector3(0, hipY, 0), shirt, shader);
+
+            // --- Left upper arm ---
+            float armTopY = hipY + torsoH - 0.04f;
+            AddFallbackPart(_modelRoot, "LUpperArm",
+                ProceduralMeshBuilder.BuildCylinder(limbR * 0.85f, limbR, upperArm, 6),
+                new Vector3(-shoulderW, armTopY - upperArm * 0.5f, 0), skin, shader);
+
+            // --- Left lower arm ---
+            float lowerArmTopY = armTopY - upperArm;
+            AddFallbackPart(_modelRoot, "LLowerArm",
+                ProceduralMeshBuilder.BuildCylinder(limbR * 0.65f, limbR * 0.85f, lowerArm, 6),
+                new Vector3(-shoulderW, lowerArmTopY - lowerArm * 0.5f, 0), skin, shader);
+
+            // --- Right upper arm ---
+            AddFallbackPart(_modelRoot, "RUpperArm",
+                ProceduralMeshBuilder.BuildCylinder(limbR * 0.85f, limbR, upperArm, 6),
+                new Vector3(shoulderW, armTopY - upperArm * 0.5f, 0), skin, shader);
+
+            // --- Right lower arm ---
+            AddFallbackPart(_modelRoot, "RLowerArm",
+                ProceduralMeshBuilder.BuildCylinder(limbR * 0.65f, limbR * 0.85f, lowerArm, 6),
+                new Vector3(shoulderW, lowerArmTopY - lowerArm * 0.5f, 0), skin, shader);
+
+            // --- Left upper leg ---
+            float legSpread = 0.08f;
+            AddFallbackPart(_modelRoot, "LUpperLeg",
+                ProceduralMeshBuilder.BuildCylinder(limbR * 0.85f, limbR, upperLeg, 6),
+                new Vector3(-legSpread, hipY - upperLeg * 0.5f, 0), pants, shader);
+
+            // --- Left lower leg ---
+            float kneeY = hipY - upperLeg;
+            AddFallbackPart(_modelRoot, "LLowerLeg",
+                ProceduralMeshBuilder.BuildCylinder(limbR * 0.65f, limbR * 0.85f, lowerLeg, 6),
+                new Vector3(-legSpread, kneeY - lowerLeg * 0.5f, 0), skin, shader);
+
+            // --- Right upper leg ---
+            AddFallbackPart(_modelRoot, "RUpperLeg",
+                ProceduralMeshBuilder.BuildCylinder(limbR * 0.85f, limbR, upperLeg, 6),
+                new Vector3(legSpread, hipY - upperLeg * 0.5f, 0), pants, shader);
+
+            // --- Right lower leg ---
+            AddFallbackPart(_modelRoot, "RLowerLeg",
+                ProceduralMeshBuilder.BuildCylinder(limbR * 0.65f, limbR * 0.85f, lowerLeg, 6),
+                new Vector3(legSpread, kneeY - lowerLeg * 0.5f, 0), skin, shader);
+
+            // --- Feet (small boxes) ---
+            float footY = kneeY - lowerLeg;
+            AddFallbackPart(_modelRoot, "LFoot",
+                ProceduralMeshBuilder.BuildBox(new Vector3(0.08f, 0.04f, 0.14f)),
+                new Vector3(-legSpread, footY, 0.02f), pants, shader);
+            AddFallbackPart(_modelRoot, "RFoot",
+                ProceduralMeshBuilder.BuildBox(new Vector3(0.08f, 0.04f, 0.14f)),
+                new Vector3(legSpread, footY, 0.02f), pants, shader);
+
+            // --- Hands (small spheres) ---
+            float handY = lowerArmTopY - lowerArm;
+            AddFallbackPart(_modelRoot, "LHand",
+                ProceduralMeshBuilder.BuildSphere(limbR * 0.5f, 5, 6),
+                new Vector3(-shoulderW, handY, 0), skin, shader);
+            AddFallbackPart(_modelRoot, "RHand",
+                ProceduralMeshBuilder.BuildSphere(limbR * 0.5f, 5, 6),
+                new Vector3(shoulderW, handY, 0), skin, shader);
 
             _renderers = _modelRoot.GetComponentsInChildren<Renderer>();
             CacheInstancedMaterials();
 
             _loaded = true;
-            Debug.LogWarning("[ModelCharacter] Using fallback capsule");
+            Debug.LogWarning("[ModelCharacter] Using fallback humanoid (GLB not found)");
+        }
+
+        /// <summary>
+        /// Helper: attach a procedural mesh part to the fallback humanoid.
+        /// </summary>
+        private static void AddFallbackPart(GameObject parent, string name, Mesh mesh,
+            Vector3 localPos, Color color, Shader shader)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent.transform, false);
+            go.transform.localPosition = localPos;
+
+            var mf = go.AddComponent<MeshFilter>();
+            mf.mesh = mesh;
+
+            var mr = go.AddComponent<MeshRenderer>();
+            var mat = new Material(shader);
+            mat.SetColor("_BaseColor", color);
+            mat.color = color;
+            mr.material = mat;
         }
 
         private static void SetLayerRecursive(GameObject go, int layer)

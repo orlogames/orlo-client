@@ -654,6 +654,17 @@ namespace Orlo.World
                 frag.AddComponent<MeshRenderer>().material = fragMat;
             }
 
+            // Circular water plane at the base of the fountain
+            var waterMesh = ProceduralMeshBuilder.BuildCylinder(2.5f, 2.5f, 0.05f, 16);
+            var water = new GameObject("Water");
+            water.transform.SetParent(go.transform);
+            water.transform.localPosition = new Vector3(0, 0.15f, 0);
+            water.AddComponent<MeshFilter>().mesh = waterMesh;
+            var waterMat = Orlo.Rendering.OrloShaders.CreateTransparent(new Color(0.2f, 0.4f, 0.6f, 0.5f));
+            waterMat.SetColor("_EmissionColor", new Color(0.1f, 0.2f, 0.35f) * 0.8f);
+            waterMat.EnableKeyword("_EMISSION");
+            water.AddComponent<MeshRenderer>().material = waterMat;
+
             // VFX: pulsing crystal glow, teal base glow, upward mote particles
             go.AddComponent<NexusCrystalVFX>();
 
@@ -960,43 +971,69 @@ namespace Orlo.World
             go.transform.SetPositionAndRotation(position, rotation);
             var standard = GetFallbackShader();
 
-            // Use assetId hash for slight variation
-            int hash = assetId.GetHashCode();
-            float heightVar = 1f + (hash % 20) * 0.03f; // 1.0 to 1.57
+            // Use assetId hash for per-tree variation
+            int hash = Mathf.Abs(assetId.GetHashCode());
+            float heightVar = 1f + (hash % 20) * 0.02f; // 1.0 to 1.38
             float rotVar = (hash % 360);
 
             go.transform.localRotation *= Quaternion.Euler(0, rotVar, 0);
 
-            // Brown cylinder trunk (tall)
-            float trunkHeight = (8f + (hash % 5)) * heightVar; // 8-12 range
-            var trunkMesh = ProceduralMeshBuilder.BuildCylinder(0.2f, 0.35f, trunkHeight, 6);
+            // Tapered trunk: 0.3m base, 0.15m top, 8-12m tall
+            float trunkHeight = (8f + (hash % 5)) * heightVar;
+            var trunkMesh = ProceduralMeshBuilder.BuildCylinder(0.15f, 0.3f, trunkHeight, 8);
             var trunk = new GameObject("Trunk");
             trunk.transform.SetParent(go.transform);
             trunk.transform.localPosition = Vector3.zero;
             trunk.AddComponent<MeshFilter>().mesh = trunkMesh;
             trunk.AddComponent<MeshRenderer>().material =
-                new Material(standard) { color = new Color(0.4f, 0.25f, 0.1f) };
+                new Material(standard) { color = new Color(0.25f, 0.15f, 0.07f) }; // dark brown bark
 
-            // 4 stacked green cones of decreasing size (large canopy)
-            var greenMat = new Material(standard) { color = new Color(0.15f, 0.4f, 0.12f) };
-            float[] coneRadii = { 5.0f, 4.0f, 3.0f, 2.0f };
-            float[] coneHeights = { 3.5f, 3.0f, 2.5f, 2.0f };
-            float yOffset = trunkHeight * 0.5f;
+            // 5-6 layered canopy cones getting smaller toward top
+            int layerCount = 5 + (hash % 2); // 5 or 6 layers
+            float[] baseRadii = { 4.0f, 3.5f, 3.0f, 2.5f, 2.0f, 1.5f };
+            float layerHeight = 2.0f;
+            float yOffset = trunkHeight * 0.35f; // canopy starts ~35% up the trunk
 
-            for (int i = 0; i < 4; i++)
+            // Base green with slight per-tree variation
+            float rVar = ((hash >> 4) % 10 - 5) * 0.01f;
+            float gVar = ((hash >> 8) % 10 - 5) * 0.01f;
+            float bVar = ((hash >> 12) % 10 - 5) * 0.005f;
+            Color treeGreen = new Color(
+                Mathf.Clamp01(0.15f + rVar),
+                Mathf.Clamp01(0.30f + gVar),
+                Mathf.Clamp01(0.10f + bVar));
+
+            for (int i = 0; i < layerCount; i++)
             {
-                float r = coneRadii[i] * heightVar;
-                float h = coneHeights[i] * heightVar;
-                var coneMesh = ProceduralMeshBuilder.BuildCone(r, h, 8);
+                float r = baseRadii[i] * heightVar;
+                float h = layerHeight * heightVar;
+                var coneMesh = ProceduralMeshBuilder.BuildCone(r, h, 10);
                 var cone = new GameObject($"Canopy_{i}");
                 cone.transform.SetParent(go.transform);
                 cone.transform.localPosition = new Vector3(0, yOffset, 0);
+
+                // Slight random tilt per layer for organic feel (+-5 degrees)
+                float tiltX = ((hash + i * 37) % 11 - 5) * 1.0f;
+                float tiltZ = ((hash + i * 53) % 11 - 5) * 1.0f;
+                cone.transform.localRotation = Quaternion.Euler(tiltX, 0, tiltZ);
+
                 cone.AddComponent<MeshFilter>().mesh = coneMesh;
-                cone.AddComponent<MeshRenderer>().material = greenMat;
-                yOffset += h * 0.55f;
+                // Slight color variation per layer (darker at bottom, lighter at top)
+                float layerBrightness = 1.0f + i * 0.04f;
+                var layerMat = new Material(standard)
+                {
+                    color = new Color(
+                        treeGreen.r * layerBrightness,
+                        treeGreen.g * layerBrightness,
+                        treeGreen.b * layerBrightness)
+                };
+                cone.AddComponent<MeshRenderer>().material = layerMat;
+
+                // Each layer overlaps the one below by ~40%
+                yOffset += h * 0.6f;
             }
 
-            // Simple capsule collider area
+            // Capsule collider for the full tree
             var col = go.AddComponent<CapsuleCollider>();
             col.center = new Vector3(0, trunkHeight * 0.5f + 1.0f, 0);
             col.radius = 1.0f;
