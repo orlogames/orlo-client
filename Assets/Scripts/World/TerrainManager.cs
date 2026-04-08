@@ -272,17 +272,17 @@ namespace Orlo.World
                 float sand = data.Splatmap[idx * 4 + 3] / 255f;
 
                 // Normalize so weights always sum to 1.0 (prevents dark blending)
-                float total = grass + rock + dirt + sand;
-                if (total < 0.001f)
+                float splatTotal = grass + rock + dirt + sand;
+                if (splatTotal < 0.001f)
                 {
                     grass = 1f; // Default to grass
                 }
-                else if (Mathf.Abs(total - 1f) > 0.01f)
+                else if (Mathf.Abs(splatTotal - 1f) > 0.01f)
                 {
-                    grass /= total;
-                    rock /= total;
-                    dirt /= total;
-                    sand /= total;
+                    grass /= splatTotal;
+                    rock /= splatTotal;
+                    dirt /= splatTotal;
+                    sand /= splatTotal;
                 }
 
                 return new Color(grass, rock, dirt, sand);
