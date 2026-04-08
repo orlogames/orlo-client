@@ -263,8 +263,12 @@ namespace Orlo.World
         {
             var root = new GameObject($"Model_{assetId}");
 
-            // GLB models from Meshy are authored with Z-up; apply rotation correction
-            root.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+            // GLB models from Meshy are authored with Z-up. The -90° X correction
+            // goes on a CHILD pivot so the root's transform stays free for world
+            // positioning by EntityManager / ProceduralEntityFactory.
+            var pivot = new GameObject("ModelPivot");
+            pivot.transform.SetParent(root.transform, false);
+            pivot.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
 
             Bounds combinedBounds = default;
             bool boundsInitialized = false;
@@ -278,7 +282,7 @@ namespace Orlo.World
             foreach (var entry in cached.entries)
             {
                 var child = new GameObject($"Mesh_{entry.name}");
-                child.transform.SetParent(root.transform, false);
+                child.transform.SetParent(pivot.transform, false);
 
                 var mf = child.AddComponent<MeshFilter>();
                 mf.sharedMesh = entry.mesh;
