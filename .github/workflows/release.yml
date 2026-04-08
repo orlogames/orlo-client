@@ -337,6 +337,68 @@ jobs:
             --no-progress
           echo "Manifest published to Hetzner S3"
 
+      - name: Purge old client releases (>7 days)
+        run: |
+          echo "Purging client releases older than 7 days..."
+          CUTOFF=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-7d +%Y-%m-%dT%H:%M:%SZ)
+
+          for PREFIX in "client/files/" "client/releases/"; do
+            # List version folders
+            VERSIONS=$(aws s3api list-objects-v2 \
+              --bucket "${S3_BUCKET}" \
+              --prefix "${PREFIX}" \
+              --delimiter "/" \
+              --endpoint-url "${S3_ENDPOINT}" \
+              --query "CommonPrefixes[].Prefix" \
+              --output text 2>/dev/null || echo "")
+
+            if [ -z "$VERSIONS" ]; then
+              echo "  No versions found under ${PREFIX}"
+              continue
+            fi
+
+            # Count total versions (never delete the last one)
+            TOTAL=$(echo "$VERSIONS" | wc -w)
+            DELETED=0
+
+            for VER_PREFIX in $VERSIONS; do
+              # Skip latest pointers
+              echo "$VER_PREFIX" | grep -q "latest/" && continue
+
+              # Check age of first object in this version
+              LAST_MOD=$(aws s3api list-objects-v2 \
+                --bucket "${S3_BUCKET}" \
+                --prefix "${VER_PREFIX}" \
+                --max-items 1 \
+                --endpoint-url "${S3_ENDPOINT}" \
+                --query "Contents[0].LastModified" \
+                --output text 2>/dev/null || echo "")
+
+              if [ -z "$LAST_MOD" ] || [ "$LAST_MOD" = "None" ]; then
+                continue
+              fi
+
+              # Compare dates (keep if newer than cutoff)
+              if [[ "$LAST_MOD" < "$CUTOFF" ]]; then
+                # Safety: keep at least 1 version
+                REMAINING=$((TOTAL - DELETED))
+                if [ "$REMAINING" -le 1 ]; then
+                  echo "  Keeping ${VER_PREFIX} (last remaining version)"
+                  continue
+                fi
+
+                echo "  Purging ${VER_PREFIX} (older than 7 days)"
+                aws s3 rm "s3://${S3_BUCKET}/${VER_PREFIX}" \
+                  --recursive \
+                  --endpoint-url "${S3_ENDPOINT}" \
+                  --quiet
+                DELETED=$((DELETED + 1))
+              fi
+            done
+
+            echo "  ${PREFIX}: purged ${DELETED} old versions"
+          done
+
       - name: Register version with updater-api
         if: always()
         run: |
