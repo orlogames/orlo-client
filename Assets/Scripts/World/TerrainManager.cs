@@ -155,6 +155,9 @@ namespace Orlo.World
                 _activeChunks[coord] = BuildTerrainMesh(coord, data);
             }
 
+            // Rebuild adjacent chunks so their edges stitch to this new data
+            RebuildNeighborEdges(coord);
+
             Debug.Log($"[Terrain] Chunk {coord}: {resolution}x{resolution}, " +
                       $"splatmap={splatmapBytes?.Length ?? 0}B, seed={seed:X}");
 
@@ -327,6 +330,27 @@ namespace Orlo.World
         }
 
         /// <summary>
+        /// When a new chunk arrives, rebuild any visible neighbors so their edges
+        /// re-stitch against the new data. Fixes seams when chunks load out of order.
+        /// </summary>
+        private void RebuildNeighborEdges(Vector2Int coord)
+        {
+            Vector2Int[] dirs = {
+                new(1, 0), new(-1, 0), new(0, 1), new(0, -1)
+            };
+            foreach (var d in dirs)
+            {
+                var neighbor = coord + d;
+                if (_activeChunks.TryGetValue(neighbor, out var neighborGo) &&
+                    _chunks.TryGetValue(neighbor, out var neighborData))
+                {
+                    Destroy(neighborGo);
+                    _activeChunks[neighbor] = BuildTerrainMesh(neighbor, neighborData);
+                }
+            }
+        }
+
+        /// <summary>
         /// Stitch chunk edges with adjacent chunks by averaging heights at shared borders.
         /// This eliminates black seam artifacts caused by floating-point height mismatches.
         /// </summary>
@@ -418,50 +442,60 @@ namespace Orlo.World
 
         private GameObject CreatePlaceholderChunk(Vector2Int coord)
         {
+            // Estimate height from a neighbor chunk's edge to avoid Y=0 gap
+            float avgHeight = EstimateHeightFromNeighbors(coord);
+
             var go = GameObject.CreatePrimitive(PrimitiveType.Plane);
             go.name = $"ChunkPlaceholder_{coord.x}_{coord.y}";
             go.transform.position = new Vector3(
                 coord.x * chunkSize + chunkSize * 0.5f,
-                0,
+                avgHeight,
                 coord.y * chunkSize + chunkSize * 0.5f
             );
             go.transform.localScale = new Vector3(chunkSize * 0.1f, 1, chunkSize * 0.1f);
 
-            // Use terrain shader for placeholder instead of Standard (which gets stripped in builds)
             var mr = go.GetComponent<MeshRenderer>();
-            var placeholderShader = Resources.Load<Shader>("Shaders/TerrainVertexColor");
-            if (placeholderShader == null) placeholderShader = Shader.Find("Orlo/TerrainVertexColor");
-            if (placeholderShader == null) placeholderShader = Shader.Find("Legacy Shaders/Diffuse");
-            var mat = new Material(placeholderShader);
-            mat.color = new Color(0.15f, 0.25f, 0.10f); // Dark green
-            mat.SetFloat("_Glossiness", 0.05f);
-            mr.material = mat;
+            mr.material = _terrainMat;
 
             return go;
         }
 
+        /// <summary>
+        /// Sample a neighbor chunk's edge to get approximate height for placeholders.
+        /// </summary>
+        private float EstimateHeightFromNeighbors(Vector2Int coord)
+        {
+            Vector2Int[] dirs = { new(1, 0), new(-1, 0), new(0, 1), new(0, -1) };
+            foreach (var d in dirs)
+            {
+                if (_chunks.TryGetValue(coord + d, out var neighbor))
+                {
+                    // Sample center of the shared edge
+                    int res = neighbor.Resolution;
+                    int mid = res / 2;
+                    int idx;
+                    if (d.x == 1)       idx = mid * res;             // neighbor's left edge
+                    else if (d.x == -1) idx = mid * res + (res - 1); // neighbor's right edge
+                    else if (d.y == 1)  idx = mid;                   // neighbor's bottom edge
+                    else                idx = (res - 1) * res + mid; // neighbor's top edge
+                    return neighbor.Heightmap[idx];
+                }
+            }
+            return 5f; // Default settlement height
+        }
+
         private static float[] UnpackHeightmapF16(byte[] packed, int count)
         {
+            // Server packs as signed 16-bit fixed-point (value * 8).
+            // Unpack: read int16, divide by 8 to get float height.
+            // This deterministic format eliminates chunk edge seams.
             var result = new float[count];
             for (int i = 0; i < count && i * 2 + 1 < packed.Length; i++)
             {
-                ushort f16 = (ushort)(packed[i * 2] | (packed[i * 2 + 1] << 8));
-                result[i] = HalfToFloat(f16);
+                short fixedVal = (short)(packed[i * 2] | (packed[i * 2 + 1] << 8));
+                result[i] = fixedVal / 8f;
             }
             return result;
-        }
-
-        private static float HalfToFloat(ushort half)
-        {
-            int sign = (half >> 15) & 1;
-            int exp = (half >> 10) & 0x1F;
-            int mant = half & 0x3FF;
-
-            if (exp == 0) return sign == 1 ? -0f : 0f;
-            if (exp == 31) return sign == 1 ? float.NegativeInfinity : float.PositiveInfinity;
-
-            float value = Mathf.Pow(2, exp - 15) * (1f + mant / 1024f);
-            return sign == 1 ? -value : value;
         }
     }
 }
