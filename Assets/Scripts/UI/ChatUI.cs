@@ -58,14 +58,13 @@ namespace Orlo.UI
             {
                 if (!_inputFocused)
                 {
-                    // First Enter: focus the input field
+                    // Open chat input
                     _inputFocused = true;
                     _lastActivityTime = Time.time;
                 }
-                else if (!string.IsNullOrEmpty(_inputText.Trim()))
+                else
                 {
-                    // Second Enter while focused with text: send the message
-                    // (GUI.TextField consumes Return in OnGUI, so we handle it here)
+                    // Already focused — send whatever is in the box
                     _pendingSend = true;
                 }
             }
@@ -76,6 +75,12 @@ namespace Orlo.UI
                 _inputText = "";
             }
         }
+
+        /// <summary>
+        /// Returns true if the chat input is active (for other systems to know
+        /// not to process input, e.g. camera controller should not capture cursor).
+        /// </summary>
+        public bool IsInputActive => _inputFocused;
 
         public void AddSystemMessage(string text)
         {
@@ -436,31 +441,44 @@ namespace Orlo.UI
             GUI.SetNextControlName(_inputControlName);
             _inputText = GUI.TextField(new Rect(x + 4, inputY + 1, inputW - 4, inputH - 2), _inputText, SmallInputStyle());
 
-            // Send button
-            GUI.color = new Color(0.2f, 0.6f, 0.3f, 0.9f * alpha);
-            GUI.DrawTexture(new Rect(x + inputW + 4, inputY, sendBtnW, inputH), Texture2D.whiteTexture);
-            GUI.color = new Color(1, 1, 1, alpha);
-            if (GUI.Button(new Rect(x + inputW + 4, inputY, sendBtnW, inputH), "Send", SmallLabelCentered()))
+            // Sync _inputFocused with actual GUI focus (user may have clicked the text field)
+            if (Event.current.type == EventType.Repaint)
             {
-                if (!string.IsNullOrEmpty(_inputText))
-                {
-                    SendMessage();
-                    _lastActivityTime = Time.time;
-                }
+                bool guiFocused = GUI.GetNameOfFocusedControl() == _inputControlName;
+                if (guiFocused && !_inputFocused)
+                    _inputFocused = true; // User clicked the text field
             }
 
-            // Focus management
+            // Send button — use GUI.skin.button for reliable click detection
+            var sendRect = new Rect(x + inputW + 4, inputY, sendBtnW, inputH);
+            GUI.color = new Color(0.2f, 0.7f, 0.3f, 0.95f * alpha);
+            if (GUI.Button(sendRect, "Send"))
+            {
+                _pendingSend = true; // Process in same frame below
+            }
+            GUI.color = new Color(1, 1, 1, alpha);
+
+            // Focus management — keep text field focused while chat is active
             if (_inputFocused)
             {
                 GUI.FocusControl(_inputControlName);
             }
 
-            // Process pending send from Update() (Enter key)
+            // Process pending send (from Enter key in Update or Send button click)
             if (_pendingSend)
             {
                 _pendingSend = false;
-                SendMessage();
-                _lastActivityTime = Time.time;
+                if (!string.IsNullOrEmpty(_inputText.Trim()))
+                {
+                    SendMessage();
+                    _lastActivityTime = Time.time;
+                }
+                else
+                {
+                    // Empty input — just unfocus
+                    _inputFocused = false;
+                    _inputText = "";
+                }
             }
 
             // Reset GUI color
