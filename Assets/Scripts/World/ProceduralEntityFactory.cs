@@ -853,15 +853,15 @@ namespace Orlo.World
             go.transform.SetPositionAndRotation(position, rotation);
             var standard = GetFallbackShader();
 
-            // Flat dark grey quad at ground level
+            // Flat cobblestone quad slightly above ground to avoid z-fighting
             var quadMesh = ProceduralMeshBuilder.BuildQuad(2f, 2f);
             var quad = new GameObject("Surface");
             quad.transform.SetParent(go.transform);
-            quad.transform.localPosition = new Vector3(0, 0.02f, 0);
+            quad.transform.localPosition = new Vector3(0, 0.05f, 0);
             quad.transform.localRotation = Quaternion.Euler(90, 0, 0);
             quad.AddComponent<MeshFilter>().mesh = quadMesh;
             quad.AddComponent<MeshRenderer>().material =
-                new Material(standard) { color = new Color(0.35f, 0.33f, 0.3f) };
+                new Material(standard) { color = new Color(0.55f, 0.52f, 0.48f) };
             quad.AddComponent<BoxCollider>().size = new Vector3(2f, 0.04f, 2f);
 
             return go;

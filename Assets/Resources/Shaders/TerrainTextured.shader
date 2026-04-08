@@ -113,6 +113,14 @@ Shader "Orlo/TerrainTextured"
                 half dw = input.vertColor.b;
                 half sw = input.vertColor.a;
 
+                // If all weights are zero (no splatmap data), default to grass
+                // to prevent black patches on the terrain
+                half totalWeight = gw + rw + dw + sw;
+                if (totalWeight < 0.001)
+                {
+                    gw = 1.0;
+                }
+
                 // Sample and blend albedo textures
                 half3 albedo = SAMPLE_TEXTURE2D(_GrassTex, sampler_GrassTex, uv).rgb * gw
                              + SAMPLE_TEXTURE2D(_RockTex,  sampler_RockTex,  uv).rgb * rw
