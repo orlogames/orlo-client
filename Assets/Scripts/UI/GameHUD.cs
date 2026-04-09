@@ -154,6 +154,7 @@ namespace Orlo.UI
 
         private void OnGUI()
         {
+            if (UIToolkitRoot.IsActive("GameHUD")) return;
             var style = new GUIStyle(GUI.skin.label)
             {
                 fontSize = UIScaler.ScaledFontSize(14),
