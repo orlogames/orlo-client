@@ -11,6 +11,7 @@ using ProtoEconomy = Orlo.Proto.Economy;
 using ProtoTMD = Orlo.Proto.TMD;
 using ProtoResource = Orlo.Proto.Resource;
 using ProtoInventory = Orlo.Proto.Inventory;
+using ProtoCombat = Orlo.Proto.Combat;
 using ProtoSocial = Orlo.Proto.Social;
 using ProtoLobby = Orlo.Proto.Lobby;
 using ProtoBadges = Orlo.Proto.Badges;
@@ -1273,6 +1274,16 @@ namespace Orlo.Network
         {
             var pkt = NewPacket();
             pkt.BadgeListRequest = new ProtoBadges.BadgeListRequest();
+            return pkt.ToByteArray();
+        }
+
+        // ─── Respawn ─────────────────────────────────────────────────────────
+
+        /// <summary>Request respawn after death. Server knows which session is requesting.</summary>
+        public static byte[] RespawnRequest()
+        {
+            var pkt = NewPacket();
+            pkt.RespawnRequest = new ProtoCombat.RespawnRequest();
             return pkt.ToByteArray();
         }
 

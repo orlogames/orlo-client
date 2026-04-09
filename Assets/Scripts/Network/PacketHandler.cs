@@ -125,6 +125,7 @@ namespace Orlo.Network
                 case Packet.PayloadOneofCase.HealthUpdate:
                 case Packet.PayloadOneofCase.CombatAction:
                 case Packet.PayloadOneofCase.LootDrop:
+                case Packet.PayloadOneofCase.RespawnResponse:
                     HandleCombatPacket(packet);
                     break;
 
@@ -408,6 +409,9 @@ namespace Orlo.Network
                 case Packet.PayloadOneofCase.LootDrop:
                     HandleLootDrop(packet.LootDrop);
                     break;
+                case Packet.PayloadOneofCase.RespawnResponse:
+                    HandleRespawnResponse(packet.RespawnResponse);
+                    break;
                 default:
                     Debug.Log($"[Combat] Unhandled sub-type: {packet.PayloadCase}");
                     break;
@@ -509,7 +513,8 @@ namespace Orlo.Network
                 yield return null;
             }
 
-            _deathOverlayActive = false;
+            // Send respawn request to server
+            NetworkManager.Instance.Send(PacketBuilder.RespawnRequest());
         }
 
         private void OnGUI()
@@ -554,6 +559,47 @@ namespace Orlo.Network
                 "You will respawn at the nearest settlement.", hintStyle);
 
             GUI.color = Color.white;
+        }
+
+        private void HandleRespawnResponse(ProtoCombat.RespawnResponse response)
+        {
+            Debug.Log($"[Combat] Respawn at ({response.Position?.X}, {response.Position?.Y}, {response.Position?.Z}) zone={response.ZoneName}");
+
+            // Clear death overlay
+            _deathOverlayActive = false;
+
+            // Teleport player to respawn position
+            if (response.Position != null)
+            {
+                var bootstrap = FindFirstObjectByType<GameBootstrap>();
+                if (bootstrap != null)
+                {
+                    var playerGo = EntityManager.Instance?.GetEntity(bootstrap.PlayerEntityId);
+                    if (playerGo != null)
+                    {
+                        playerGo.transform.position = new Vector3(
+                            response.Position.X,
+                            response.Position.Y,
+                            response.Position.Z);
+                    }
+                }
+            }
+
+            // Restore health display via CombatHUD
+            CombatHUD.Instance?.UpdatePools(
+                response.Vitality, response.MaxVitality,
+                response.Stamina, response.MaxStamina,
+                response.Focus, response.MaxFocus);
+
+            // Show XP penalty if any
+            if (response.XpPenalty > 0)
+            {
+                NotificationUI.Instance?.Show("Death Penalty",
+                    $"-{response.XpPenalty} XP lost on death", 0, 5f);
+            }
+
+            var chatUI = FindFirstObjectByType<ChatUI>();
+            chatUI?.AddSystemMessage($"You have respawned at {response.ZoneName}.");
         }
 
         private System.Collections.IEnumerator DeathAnimation(GameObject go, ulong entityId)
@@ -1223,6 +1269,24 @@ namespace Orlo.Network
             var questData = ProtoQuestToData(q);
             // Show as offer — NPC name comes from the NPC interaction context
             questDialog.ShowQuestOffer(0, "Quest Giver", q.Description, questData);
+
+            // Auto-track this quest if nothing is currently tracked (first quest scenario)
+            var tracker = QuestTrackerHUD.Instance;
+            if (tracker != null && q.Objectives != null)
+            {
+                var trackerObjs = new QuestTrackerHUD.ObjectiveData[q.Objectives.Count];
+                for (int i = 0; i < q.Objectives.Count; i++)
+                {
+                    trackerObjs[i] = new QuestTrackerHUD.ObjectiveData
+                    {
+                        Description = q.Objectives[i].Description,
+                        Current = (int)q.Objectives[i].CurrentCount,
+                        Target = (int)q.Objectives[i].RequiredCount,
+                        Completed = q.Objectives[i].CurrentCount >= q.Objectives[i].RequiredCount
+                    };
+                }
+                tracker.SetTrackedQuest(q.QuestId, q.Name, trackerObjs);
+            }
         }
 
         private void HandleQuestProgress(ProtoProgression.QuestProgress progress)
@@ -1232,6 +1296,13 @@ namespace Orlo.Network
 
             // Update quest dialog if open
             QuestDialogUI.Instance?.UpdateObjective(
+                progress.QuestId,
+                (int)progress.ObjectiveIndex,
+                (int)progress.CurrentCount,
+                (int)progress.RequiredCount);
+
+            // Update quest tracker HUD
+            QuestTrackerHUD.Instance?.UpdateObjective(
                 progress.QuestId,
                 (int)progress.ObjectiveIndex,
                 (int)progress.CurrentCount,

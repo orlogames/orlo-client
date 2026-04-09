@@ -406,6 +406,13 @@ namespace Orlo
                 go.AddComponent<QuestJournalUI>();
             }
 
+            // Quest objective tracker (top-right HUD)
+            if (QuestTrackerHUD.Instance == null)
+            {
+                var go = new GameObject("QuestTrackerHUD");
+                go.AddComponent<QuestTrackerHUD>();
+            }
+
             // Register UIs with progressive disclosure system
             // Level 1: movement + combat bar (always visible)
             // Level 3: inventory + minimap
