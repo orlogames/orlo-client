@@ -484,6 +484,7 @@ namespace Orlo.UI
 
         private void OnGUI()
         {
+            if (!GameBootstrap.InWorld) return;
             if (!_hudRegistered && HUDLayout.Instance != null)
             {
                 HUDLayout.Instance.Register(HUD_KEY, "Chat", 10f, Screen.height - WindowH - 10f, WindowW, WindowH);

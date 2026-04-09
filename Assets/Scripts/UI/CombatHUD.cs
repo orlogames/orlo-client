@@ -56,6 +56,7 @@ namespace Orlo.UI
 
         private void OnGUI()
         {
+            if (!GameBootstrap.InWorld) return;
             float s = UIScaler.Scale;
             float barW = 200f * s;
             float barH = 16f * s;

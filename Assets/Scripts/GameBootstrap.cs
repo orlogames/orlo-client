@@ -40,6 +40,8 @@ namespace Orlo
         private LoginUI _loginUI;
         private ConnectionStatusUI _connectionUI;
         private bool _characterSpawned = false;
+        /// <summary>True when the player is in the game world (not lobby/login). HUD components check this.</summary>
+        public static bool InWorld { get; private set; }
         private string _launcherToken;
         private CharacterPreviewManager _lobbyPreviewManager;
         private bool _showWelcomeAfterSpawn;
@@ -745,6 +747,7 @@ namespace Orlo
 
             _characterEntityId = spawn.EntityId.Id;
             _characterSpawned = true;
+            InWorld = true;
 
             // Ensure TerrainManager exists to receive terrain chunks from server
             if (FindFirstObjectByType<TerrainManager>() == null)
@@ -953,6 +956,7 @@ namespace Orlo
             _sessionId = 0;
             _accountId = 0;
             _characterSpawned = false;
+            InWorld = false;
             _launcherToken = null;
             ShowLoginUI();
         }

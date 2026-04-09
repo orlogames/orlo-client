@@ -63,10 +63,27 @@ namespace Orlo.Player
             UpdatePosition();
         }
 
+        /// <summary>Set true to block camera mouse input (UI overlays, menus, welcome screen).</summary>
+        public static bool BlockInput;
+
         private void HandleInput()
         {
             bool wasLmb = _lmbHeld;
             bool wasRmb = _rmbHeld;
+
+            // Don't capture mouse when UI overlays are active
+            if (BlockInput)
+            {
+                _lmbHeld = false;
+                _rmbHeld = false;
+                if (wasLmb || wasRmb)
+                {
+                    Cursor.lockState = CursorLockMode.None;
+                    Cursor.visible = true;
+                }
+                return;
+            }
+
             _lmbHeld = Input.GetMouseButton(0);
             _rmbHeld = Input.GetMouseButton(1);
 

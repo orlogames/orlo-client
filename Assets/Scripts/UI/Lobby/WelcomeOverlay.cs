@@ -51,6 +51,9 @@ namespace Orlo.UI.Lobby
         public void ShowFirstTime()
         {
             _mode = Mode.FirstTime;
+            Orlo.Player.OrbitCamera.BlockInput = true;
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
         }
 
         public void ShowReturning(string playerName, string[] events, int unreadMail, string patchVersion)
@@ -67,6 +70,7 @@ namespace Orlo.UI.Lobby
 
         public void Hide()
         {
+            Orlo.Player.OrbitCamera.BlockInput = false;
             if (_mode == Mode.FirstTime)
             {
                 PlayerPrefs.SetInt("welcome_shown", 1);

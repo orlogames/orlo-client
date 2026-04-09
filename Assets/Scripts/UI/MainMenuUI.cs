@@ -75,6 +75,7 @@ namespace Orlo.UI
         private void OpenMenu()
         {
             _menuOpen = true;
+            Orlo.Player.OrbitCamera.BlockInput = true;
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
@@ -83,6 +84,7 @@ namespace Orlo.UI
         {
             _menuOpen = false;
             _creditsOpen = false;
+            Orlo.Player.OrbitCamera.BlockInput = false;
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
@@ -100,6 +102,7 @@ namespace Orlo.UI
 
         private void OnGUI()
         {
+            if (!GameBootstrap.InWorld) return;
             DrawIconBar();
 
             if (_menuOpen)
