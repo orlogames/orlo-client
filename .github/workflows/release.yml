@@ -118,30 +118,34 @@ jobs:
 
       - name: Download assets-pak from S3
         id: pak
-        shell: bash
+        shell: pwsh
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.HETZNER_S3_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.HETZNER_S3_SECRET_KEY }}
           AWS_DEFAULT_REGION: fsn1
           S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
         run: |
-          mkdir -p Assets/StreamingAssets
-          echo "Fetching latest assets.pak from S3..."
-          PAK_FOUND=false
+          New-Item -ItemType Directory -Force -Path Assets/StreamingAssets | Out-Null
+          Write-Host "Fetching latest assets.pak from S3..."
+          $pakFound = $false
 
           # Try latest pak from Hetzner S3
-          aws s3 cp "s3://orlo-cdn/paks/latest/assets.pak" Assets/StreamingAssets/assets.pak \
-            --endpoint-url "$S3_ENDPOINT" 2>/dev/null && PAK_FOUND=true
+          try {
+            aws s3 cp "s3://orlo-cdn/paks/latest/assets.pak" "Assets/StreamingAssets/assets.pak" --endpoint-url "$env:S3_ENDPOINT" 2>$null
+            if ($LASTEXITCODE -eq 0) { $pakFound = $true }
+          } catch {
+            $pakFound = $false
+          }
 
-          if [ "$PAK_FOUND" = "true" ]; then
-            SIZE=$(stat -c%s Assets/StreamingAssets/assets.pak 2>/dev/null || stat -f%z Assets/StreamingAssets/assets.pak 2>/dev/null)
-            SIZE_MB=$((SIZE / 1048576))
-            echo "SUCCESS: assets.pak downloaded (${SIZE_MB} MB)"
-            echo "has_pak=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "WARNING: Could not download assets.pak - build will have NO 3D models!"
-            echo "has_pak=false" >> "$GITHUB_OUTPUT"
-          fi
+          if ($pakFound) {
+            $fileInfo = Get-Item "Assets/StreamingAssets/assets.pak"
+            $sizeMB = [math]::Floor($fileInfo.Length / 1048576)
+            Write-Host "SUCCESS: assets.pak downloaded (${sizeMB} MB)"
+            echo "has_pak=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "WARNING: Could not download assets.pak - build will have NO 3D models!"
+            echo "has_pak=false" >> $env:GITHUB_OUTPUT
+          }
 
       - name: Build with Unity
         shell: powershell
@@ -173,35 +177,35 @@ jobs:
           Compress-Archive -Path build/windows/* -DestinationPath "OrloClient-Windows-${{ needs.version.outputs.version }}.zip"
 
       - name: Upload CI artifacts to S3
-        shell: bash
+        shell: pwsh
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.HETZNER_S3_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.HETZNER_S3_SECRET_KEY }}
           AWS_DEFAULT_REGION: fsn1
           S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
         run: |
-          SHA="${{ github.sha }}"
-          ZIP_FILE="OrloClient-Windows-${{ needs.version.outputs.version }}.zip"
+          $sha = "${{ github.sha }}"
+          $zipFile = "OrloClient-Windows-${{ needs.version.outputs.version }}.zip"
 
           # Upload client zip
-          tar czf orlo-client-windows.tar.gz "$ZIP_FILE"
-          aws s3 cp orlo-client-windows.tar.gz \
-            "s3://orlo-cdn/ci/orlo-client/orlo-client-windows-${SHA}.tar.gz" \
-            --endpoint-url "$S3_ENDPOINT"
+          tar czf orlo-client-windows.tar.gz $zipFile
+          aws s3 cp orlo-client-windows.tar.gz `
+            "s3://orlo-cdn/ci/orlo-client/orlo-client-windows-${sha}.tar.gz" `
+            --endpoint-url "$env:S3_ENDPOINT"
 
           # Upload loose client files
           tar czf orlo-client-files.tar.gz -C build/windows .
-          aws s3 cp orlo-client-files.tar.gz \
-            "s3://orlo-cdn/ci/orlo-client/orlo-client-files-${SHA}.tar.gz" \
-            --endpoint-url "$S3_ENDPOINT"
+          aws s3 cp orlo-client-files.tar.gz `
+            "s3://orlo-cdn/ci/orlo-client/orlo-client-files-${sha}.tar.gz" `
+            --endpoint-url "$env:S3_ENDPOINT"
 
           # Upload manifest
           tar czf orlo-client-manifest.tar.gz -C build manifest.json
-          aws s3 cp orlo-client-manifest.tar.gz \
-            "s3://orlo-cdn/ci/orlo-client/orlo-client-manifest-${SHA}.tar.gz" \
-            --endpoint-url "$S3_ENDPOINT"
+          aws s3 cp orlo-client-manifest.tar.gz `
+            "s3://orlo-cdn/ci/orlo-client/orlo-client-manifest-${sha}.tar.gz" `
+            --endpoint-url "$env:S3_ENDPOINT"
 
-          echo "Uploaded all CI artifacts to S3"
+          Write-Host "Uploaded all CI artifacts to S3"
 
   release:
     name: Create GitHub Release
