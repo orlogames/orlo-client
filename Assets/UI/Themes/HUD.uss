@@ -1,0 +1,143 @@
+/* ============================================================
+   HUD.uss — Game HUD and Combat HUD layout styles
+   Phase 2 — Orlo UI Toolkit Migration
+   ============================================================ */
+
+/* Root overlay — full screen, no pointer intercept */
+.hud-root {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    width: 100%; height: 100%;
+    -unity-overflow-clip-box: content-box;
+    pointer-events: none;
+}
+
+/* ── Status strip (top-left) ─────────────────────────────── */
+.status-strip {
+    position: absolute;
+    top: 8px; left: 8px;
+    flex-direction: row;
+    align-items: center;
+    column-gap: 8px;
+}
+.status-label { font-size: 11px; opacity: 0.7; }
+.status-dot { font-size: 14px; }
+.status-dot.connected    { color: var(--color-success, #4caf50); }
+.status-dot.disconnected { color: var(--color-error,   #f44336); }
+
+/* ── Compass (top-center) ────────────────────────────────── */
+.compass-container {
+    position: absolute;
+    top: 8px; left: 50%; translate: -50% 0;
+    flex-direction: row;
+    align-items: center;
+    column-gap: 6px;
+}
+.compass-label  { font-size: 18px; font-style: bold; }
+.compass-heading { font-size: 12px; opacity: 0.7; }
+
+/* ── Target frame (top-center, below compass) ────────────── */
+.target-frame {
+    position: absolute;
+    top: 48px; left: 50%; translate: -50% 0;
+    min-width: 240px;
+}
+.target-name  { font-size: 14px; font-style: bold; flex-grow: 1; }
+.target-level { font-size: 12px; opacity: 0.75; }
+.target-health-row { flex-direction: row; align-items: center; column-gap: 8px; margin-top: 4px; }
+.target-health-bar { flex-grow: 1; height: 12px; }
+.target-frame.hostile  { border-color: var(--color-error,   #f44336); }
+.target-frame.neutral  { border-color: var(--color-warning, #ff9800); }
+.target-frame.friendly { border-color: var(--color-success, #4caf50); }
+
+/* ── Buff row (top-right) ────────────────────────────────── */
+.buff-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    column-gap: 4px;
+    row-gap: 4px;
+}
+.player-buff-row {
+    position: absolute;
+    top: 8px; right: 8px;
+    max-width: 220px;
+    justify-content: flex-end;
+}
+
+/* ── Notifications (top-center, below target) ────────────── */
+.notification-container {
+    position: absolute;
+    top: 140px; left: 50%; translate: -50% 0;
+    align-items: center;
+    row-gap: 4px;
+}
+.notification-banner {
+    background-color: rgba(0,0,0,0.6);
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 13px;
+    transition-property: opacity;
+    transition-duration: 0.3s;
+}
+
+/* ── Currency (bottom-right) ─────────────────────────────── */
+.currency-display {
+    position: absolute;
+    bottom: 32px; right: 8px;
+    padding: 4px 10px;
+}
+.currency-display .tmd-label { font-size: 13px; }
+
+/* ── XP bar (bottom full-width) ──────────────────────────── */
+.xp-bar-container {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 20px;
+    flex-direction: row;
+    align-items: center;
+}
+.xp-bar {
+    flex-grow: 1;
+    height: 6px;
+    border-radius: 0;
+}
+.xp-fill { background-color: var(--color-xp, #b39ddb); }
+.xp-label {
+    position: absolute;
+    right: 8px; bottom: 2px;
+    font-size: 10px; opacity: 0.6;
+}
+
+/* ── Combat HUD root (bottom-left) ──────────────────────────*/
+.combat-hud-root { pointer-events: none; }
+.resource-bars {
+    position: absolute;
+    bottom: 28px; left: 8px;
+    min-width: 220px;
+    row-gap: 4px;
+    padding: 8px;
+}
+.resource-row {
+    flex-direction: row;
+    align-items: center;
+    column-gap: 8px;
+    height: 20px;
+}
+.resource-label { width: 28px; font-size: 11px; opacity: 0.75; }
+.resource-bar   { flex-grow: 1; height: 14px; }
+.resource-value { width: 36px; font-size: 11px; text-align: right; }
+
+/* Resource fill colours */
+.vitality-fill { background-color: #e53935; }
+.stamina-fill  { background-color: #43a047; }
+.focus-fill    { background-color: #1e88e5; }
+.strain-fill   { background-color: #fb8c00; }
+.strain-fill.strain--critical { background-color: #e53935; }
+
+/* ── Damage flash overlay ────────────────────────────────── */
+.damage-flash {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    background-color: rgba(229, 57, 53, 0.35);
+    pointer-events: none;
+}
