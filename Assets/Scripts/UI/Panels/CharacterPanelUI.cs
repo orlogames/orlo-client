@@ -228,7 +228,7 @@ namespace Orlo.UI.Panels
         // ================================================================
 
         // ---- Palette helpers ----
-        private RacePalette P => TMDTheme.Instance?.Palette ?? RacePalette.Solari;
+        private static RacePalette P => TMDTheme.Instance?.Palette ?? RacePalette.Solari;
 
         private void OnGUI()
         {
