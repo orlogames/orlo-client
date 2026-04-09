@@ -137,6 +137,8 @@ jobs:
             $pakFound = $false
           }
 
+          $global:LASTEXITCODE = 0
+
           if ($pakFound) {
             $fileInfo = Get-Item "Assets/StreamingAssets/assets.pak"
             $sizeMB = [math]::Floor($fileInfo.Length / 1048576)
@@ -146,6 +148,8 @@ jobs:
             Write-Host "WARNING: Could not download assets.pak - build will have NO 3D models!"
             echo "has_pak=false" >> $env:GITHUB_OUTPUT
           }
+
+          exit 0
 
       - name: Build with Unity
         shell: powershell
