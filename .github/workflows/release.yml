@@ -17,11 +17,6 @@ on:
 permissions:
   contents: write
 
-env:
-  S3_ENDPOINT: https://fsn1.your-objectstorage.com
-  S3_BUCKET: orlo-cdn
-  S3_REGION: fsn1
-
 jobs:
   version:
     name: Determine Version
@@ -275,30 +270,24 @@ jobs:
           prerelease: false
 
   publish-cdn:
-    name: Publish to Hetzner S3
+    name: Publish to Dropbox
     needs: [version, build-windows, release]
     runs-on: ubuntu-latest
     if: always() && needs.build-windows.result == 'success'
     env:
       VERSION: ${{ needs.version.outputs.version }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.HETZNER_S3_ACCESS_KEY }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.HETZNER_S3_SECRET_KEY }}
-      AWS_DEFAULT_REGION: fsn1
+      DROPBOX_ACCESS_TOKEN: ${{ secrets.DROPBOX_ACCESS_TOKEN }}
     steps:
-      - name: Download orlo-client-files from Dropbox
-        env:
-          DROPBOX_ACCESS_TOKEN: ${{ secrets.DROPBOX_ACCESS_TOKEN }}
+      - name: Download orlo-client-files from Dropbox CI artifacts
         run: |
           curl -X POST https://content.dropboxapi.com/2/files/download \
             --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
             --header "Dropbox-API-Arg: {\"path\": \"/ci/orlo-client/orlo-client-files-${{ github.sha }}.tar.gz\"}" \
             -o orlo-client-files.tar.gz
-          mkdir -p build-files/
-          tar xzf orlo-client-files.tar.gz -C build-files/
+          mkdir -p client-files/
+          tar xzf orlo-client-files.tar.gz -C client-files/
 
-      - name: Download orlo-client-manifest from Dropbox
-        env:
-          DROPBOX_ACCESS_TOKEN: ${{ secrets.DROPBOX_ACCESS_TOKEN }}
+      - name: Download orlo-client-manifest from Dropbox CI artifacts
         run: |
           curl -X POST https://content.dropboxapi.com/2/files/download \
             --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
@@ -306,9 +295,7 @@ jobs:
             -o orlo-client-manifest.tar.gz
           tar xzf orlo-client-manifest.tar.gz
 
-      - name: Download orlo-client-windows from Dropbox
-        env:
-          DROPBOX_ACCESS_TOKEN: ${{ secrets.DROPBOX_ACCESS_TOKEN }}
+      - name: Download orlo-client-windows from Dropbox CI artifacts
         run: |
           curl -X POST https://content.dropboxapi.com/2/files/download \
             --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
@@ -317,126 +304,198 @@ jobs:
           mkdir -p dist/
           tar xzf orlo-client-windows.tar.gz -C dist/
 
-      - name: Install AWS CLI
-        run: |
-          if ! command -v aws &> /dev/null; then
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip -q awscliv2.zip
-            sudo ./aws/install
-          fi
-
-      - name: Upload individual files to Hetzner S3
+      - name: Upload individual files to Dropbox
         run: |
           echo "Uploading client files for version ${VERSION}..."
-          aws s3 sync build-files/ "s3://${S3_BUCKET}/client/files/${VERSION}/" \
-            --endpoint-url "${S3_ENDPOINT}" \
-            --no-progress
-          echo "All files uploaded for version ${VERSION}"
+          UPLOADED=0
+          FAILED=0
+          CHUNK_SIZE=157286400  # 150MB
+
+          for file in $(find client-files/ -type f); do
+            relpath="${file#client-files/}"
+            FILE_SIZE=$(stat -c%s "$file")
+            DROPBOX_PATH="/releases/client/${VERSION}/${relpath}"
+
+            if [ "$FILE_SIZE" -gt "$CHUNK_SIZE" ]; then
+              echo "  Large file ($(( FILE_SIZE / 1048576 ))MB): ${relpath} — using upload session"
+
+              # Start upload session
+              SESSION_ID=$(curl -s -X POST https://content.dropboxapi.com/2/files/upload_session/start \
+                --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+                --header "Dropbox-API-Arg: {\"close\": false}" \
+                --header "Content-Type: application/octet-stream" \
+                --data-binary @/dev/null | jq -r '.session_id')
+
+              if [ -z "$SESSION_ID" ] || [ "$SESSION_ID" = "null" ]; then
+                echo "  FAILED to start upload session for ${relpath}"
+                FAILED=$((FAILED + 1))
+                continue
+              fi
+
+              # Upload in chunks
+              OFFSET=0
+              while [ $OFFSET -lt $FILE_SIZE ]; do
+                REMAINING=$((FILE_SIZE - OFFSET))
+                THIS_CHUNK=$((REMAINING < CHUNK_SIZE ? REMAINING : CHUNK_SIZE))
+                dd if="$file" bs=1048576 skip=$((OFFSET / 1048576)) count=$(( (THIS_CHUNK + 1048575) / 1048576 )) 2>/dev/null | \
+                  head -c "$THIS_CHUNK" | \
+                curl -s -X POST https://content.dropboxapi.com/2/files/upload_session/append_v2 \
+                  --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+                  --header "Dropbox-API-Arg: {\"cursor\": {\"session_id\": \"${SESSION_ID}\", \"offset\": ${OFFSET}}, \"close\": false}" \
+                  --header "Content-Type: application/octet-stream" \
+                  --data-binary @-
+                OFFSET=$((OFFSET + THIS_CHUNK))
+              done
+
+              # Finish session
+              RESULT=$(curl -s -X POST https://content.dropboxapi.com/2/files/upload_session/finish \
+                --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+                --header "Dropbox-API-Arg: {\"cursor\": {\"session_id\": \"${SESSION_ID}\", \"offset\": ${FILE_SIZE}}, \"commit\": {\"path\": \"${DROPBOX_PATH}\", \"mode\": \"overwrite\"}}" \
+                --header "Content-Type: application/octet-stream" \
+                --data-binary @/dev/null)
+
+              if echo "$RESULT" | jq -e '.path_display' > /dev/null 2>&1; then
+                echo "  OK: ${relpath} ($(( FILE_SIZE / 1048576 ))MB, session upload)"
+                UPLOADED=$((UPLOADED + 1))
+              else
+                echo "  FAILED: ${relpath} — ${RESULT}"
+                FAILED=$((FAILED + 1))
+              fi
+            else
+              # Simple upload for files <= 150MB
+              RESULT=$(curl -s -X POST https://content.dropboxapi.com/2/files/upload \
+                --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+                --header "Dropbox-API-Arg: {\"path\": \"${DROPBOX_PATH}\", \"mode\": \"overwrite\"}" \
+                --header "Content-Type: application/octet-stream" \
+                --data-binary @"$file")
+
+              if echo "$RESULT" | jq -e '.path_display' > /dev/null 2>&1; then
+                echo "  OK: ${relpath} ($(( FILE_SIZE / 1024 ))KB)"
+                UPLOADED=$((UPLOADED + 1))
+              else
+                echo "  FAILED: ${relpath} — ${RESULT}"
+                FAILED=$((FAILED + 1))
+              fi
+            fi
+          done
+
+          echo "Upload complete: ${UPLOADED} succeeded, ${FAILED} failed"
+          if [ "$FAILED" -gt 0 ]; then
+            echo "ERROR: Some files failed to upload!"
+            exit 1
+          fi
 
       - name: Upload zip fallback
         run: |
-          aws s3 cp \
-            "dist/OrloClient-Windows-${VERSION}.zip" \
-            "s3://${S3_BUCKET}/client/releases/${VERSION}/OrloClient-Windows-${VERSION}.zip" \
-            --endpoint-url "${S3_ENDPOINT}" \
-            --no-progress
+          ZIP_FILE="dist/OrloClient-Windows-${VERSION}.zip"
+          DROPBOX_PATH="/releases/client/${VERSION}/OrloClient-Windows-${VERSION}.zip"
+          FILE_SIZE=$(stat -c%s "$ZIP_FILE")
+          CHUNK_SIZE=157286400
+
+          if [ "$FILE_SIZE" -gt "$CHUNK_SIZE" ]; then
+            echo "Uploading zip via session ($(( FILE_SIZE / 1048576 ))MB)..."
+            SESSION_ID=$(curl -s -X POST https://content.dropboxapi.com/2/files/upload_session/start \
+              --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+              --header "Dropbox-API-Arg: {\"close\": false}" \
+              --header "Content-Type: application/octet-stream" \
+              --data-binary @/dev/null | jq -r '.session_id')
+
+            OFFSET=0
+            while [ $OFFSET -lt $FILE_SIZE ]; do
+              REMAINING=$((FILE_SIZE - OFFSET))
+              THIS_CHUNK=$((REMAINING < CHUNK_SIZE ? REMAINING : CHUNK_SIZE))
+              dd if="$ZIP_FILE" bs=1048576 skip=$((OFFSET / 1048576)) count=$(( (THIS_CHUNK + 1048575) / 1048576 )) 2>/dev/null | \
+                head -c "$THIS_CHUNK" | \
+              curl -s -X POST https://content.dropboxapi.com/2/files/upload_session/append_v2 \
+                --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+                --header "Dropbox-API-Arg: {\"cursor\": {\"session_id\": \"${SESSION_ID}\", \"offset\": ${OFFSET}}, \"close\": false}" \
+                --header "Content-Type: application/octet-stream" \
+                --data-binary @-
+              OFFSET=$((OFFSET + THIS_CHUNK))
+            done
+
+            curl -s -X POST https://content.dropboxapi.com/2/files/upload_session/finish \
+              --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+              --header "Dropbox-API-Arg: {\"cursor\": {\"session_id\": \"${SESSION_ID}\", \"offset\": ${FILE_SIZE}}, \"commit\": {\"path\": \"${DROPBOX_PATH}\", \"mode\": \"overwrite\"}}" \
+              --header "Content-Type: application/octet-stream" \
+              --data-binary @/dev/null
+          else
+            curl -s -X POST https://content.dropboxapi.com/2/files/upload \
+              --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+              --header "Dropbox-API-Arg: {\"path\": \"${DROPBOX_PATH}\", \"mode\": \"overwrite\"}" \
+              --header "Content-Type: application/octet-stream" \
+              --data-binary @"$ZIP_FILE"
+          fi
+          echo "Zip fallback uploaded to Dropbox"
 
       - name: Verify critical files exist before publishing manifest
         run: |
-          echo "Verifying key files on S3..."
+          echo "Verifying key files on Dropbox..."
           MISSING=0
           for CHECK in "OrloClient.exe" "UnityPlayer.dll"; do
-            if aws s3api head-object \
-              --bucket "${S3_BUCKET}" \
-              --key "client/files/${VERSION}/${CHECK}" \
-              --endpoint-url "${S3_ENDPOINT}" 2>/dev/null; then
-              echo "  OK: ${CHECK}"
+            RESULT=$(curl -s -X POST https://api.dropboxapi.com/2/files/get_metadata \
+              --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data "{\"path\": \"/releases/client/${VERSION}/${CHECK}\"}")
+
+            if echo "$RESULT" | jq -e '.path_display' > /dev/null 2>&1; then
+              SIZE=$(echo "$RESULT" | jq -r '.size')
+              echo "  OK: ${CHECK} (${SIZE} bytes)"
             else
               echo "  MISSING: ${CHECK}"
               MISSING=$((MISSING + 1))
             fi
           done
           if [ "$MISSING" -gt 0 ]; then
-            echo "ERROR: Critical files missing on S3!"
+            echo "ERROR: Critical files missing on Dropbox!"
             exit 1
           fi
 
       - name: Publish manifest (LAST — after files verified)
         run: |
           echo "Publishing manifest for v${VERSION}..."
-          aws s3 cp manifest.json "s3://${S3_BUCKET}/client/manifest.json" \
-            --endpoint-url "${S3_ENDPOINT}" \
-            --content-type "application/json" \
-            --cache-control "public, max-age=30" \
-            --no-progress
-          echo "Manifest published to Hetzner S3"
+          curl -s -X POST https://content.dropboxapi.com/2/files/upload \
+            --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+            --header "Dropbox-API-Arg: {\"path\": \"/releases/client/manifest.json\", \"mode\": \"overwrite\"}" \
+            --header "Content-Type: application/octet-stream" \
+            --data-binary @manifest.json
+          echo "Manifest published to Dropbox"
 
-      - name: Purge old client releases (>7 days)
+      - name: Purge old client releases (keep last 5 versions)
         run: |
-          echo "Purging client releases older than 7 days..."
-          CUTOFF=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-7d +%Y-%m-%dT%H:%M:%SZ)
+          echo "Checking for old versions to purge..."
 
-          for PREFIX in "client/files/" "client/releases/"; do
-            # List version folders
-            VERSIONS=$(aws s3api list-objects-v2 \
-              --bucket "${S3_BUCKET}" \
-              --prefix "${PREFIX}" \
-              --delimiter "/" \
-              --endpoint-url "${S3_ENDPOINT}" \
-              --query "CommonPrefixes[].Prefix" \
-              --output text 2>/dev/null || echo "")
+          # List folders under /releases/client/
+          RESULT=$(curl -s -X POST https://api.dropboxapi.com/2/files/list_folder \
+            --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data "{\"path\": \"/releases/client\", \"recursive\": false}")
 
-            if [ -z "$VERSIONS" ]; then
-              echo "  No versions found under ${PREFIX}"
-              continue
-            fi
+          # Extract version folders (exclude manifest.json), sorted by name
+          VERSIONS=$(echo "$RESULT" | jq -r '.entries[] | select(.".tag" == "folder") | .name' | sort -V)
+          TOTAL=$(echo "$VERSIONS" | grep -c . || echo 0)
 
-            # Count total versions (never delete the last one)
-            TOTAL=$(echo "$VERSIONS" | wc -w)
-            DELETED=0
+          if [ "$TOTAL" -le 5 ]; then
+            echo "  Only ${TOTAL} versions found, nothing to purge (keeping last 5)"
+          else
+            KEEP=5
+            DELETE_COUNT=$((TOTAL - KEEP))
+            echo "  Found ${TOTAL} versions, purging oldest ${DELETE_COUNT}..."
 
-            for VER_PREFIX in $VERSIONS; do
-              # Skip latest pointers
-              echo "$VER_PREFIX" | grep -q "latest/" && continue
-
-              # Check age of first object in this version
-              LAST_MOD=$(aws s3api list-objects-v2 \
-                --bucket "${S3_BUCKET}" \
-                --prefix "${VER_PREFIX}" \
-                --max-items 1 \
-                --endpoint-url "${S3_ENDPOINT}" \
-                --query "Contents[0].LastModified" \
-                --output text 2>/dev/null || echo "")
-
-              if [ -z "$LAST_MOD" ] || [ "$LAST_MOD" = "None" ]; then
-                continue
-              fi
-
-              # Compare dates (keep if newer than cutoff)
-              if [[ "$LAST_MOD" < "$CUTOFF" ]]; then
-                # Safety: keep at least 1 version
-                REMAINING=$((TOTAL - DELETED))
-                if [ "$REMAINING" -le 1 ]; then
-                  echo "  Keeping ${VER_PREFIX} (last remaining version)"
-                  continue
-                fi
-
-                echo "  Purging ${VER_PREFIX} (older than 7 days)"
-                aws s3 rm "s3://${S3_BUCKET}/${VER_PREFIX}" \
-                  --recursive \
-                  --endpoint-url "${S3_ENDPOINT}" \
-                  --quiet
-                DELETED=$((DELETED + 1))
-              fi
+            echo "$VERSIONS" | head -n "$DELETE_COUNT" | while read -r OLD_VER; do
+              echo "  Purging /releases/client/${OLD_VER}..."
+              curl -s -X POST https://api.dropboxapi.com/2/files/delete_v2 \
+                --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+                --header "Content-Type: application/json" \
+                --data "{\"path\": \"/releases/client/${OLD_VER}\"}" > /dev/null
             done
-
-            echo "  ${PREFIX}: purged ${DELETED} old versions"
-          done
+            echo "  Purge complete"
+          fi
 
       - name: Register version with updater-api
         if: always()
         run: |
-          MANIFEST_URL="https://orlo-cdn.fsn1.your-objectstorage.com/client/manifest.json"
+          MANIFEST_URL="dropbox:///releases/client/manifest.json"
           TOTAL_SIZE=$(cat manifest.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_size',0))" 2>/dev/null || echo "0")
           FILES_COUNT=$(cat manifest.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_files',0))" 2>/dev/null || echo "0")
 
