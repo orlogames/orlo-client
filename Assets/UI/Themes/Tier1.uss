@@ -1,0 +1,14 @@
+/* Tier 1 — Salvaged (starter TMD) */
+:root {
+    --scanline-intensity: 0.35;
+    --chromatic-aberration: 3px;
+    --glow-multiplier: 0.6;
+    --dot-grid-spacing: 16px;
+    --text-jitter: 0.5px;
+    --glow-opacity: 0.6;
+}
+
+/* Tier 1: slight opacity reduction to suggest noise/grain */
+.tmd-panel {
+    opacity: 0.95;
+}

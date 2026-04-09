@@ -1,0 +1,12 @@
+/* Korrath — ember orange, volcanic-adapted */
+:root {
+    --color-primary: #FF6600;
+    --color-secondary: #FF4400;
+    --color-bg: rgba(26, 12, 4, 0.92);
+    --color-border: #4A2A10;
+    --color-text: #F5D8C0;
+    --color-text-dim: rgba(245, 216, 192, 0.6);
+    --color-glow: #FF8833;
+    --color-danger: #FF2222;
+    --color-success: #88FF44;
+}

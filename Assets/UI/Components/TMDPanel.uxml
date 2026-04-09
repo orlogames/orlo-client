@@ -1,0 +1,7 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements">
+    <ui:VisualElement class="tmd-panel" name="Panel">
+        <ui:Label class="tmd-panel__header" name="Title" text="Panel Title" />
+        <ui:VisualElement class="tmd-separator" />
+        <ui:VisualElement name="Content" class="tmd-panel__content" />
+    </ui:VisualElement>
+</ui:UXML>

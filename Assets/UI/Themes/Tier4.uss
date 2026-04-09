@@ -1,0 +1,14 @@
+/* Tier 4 — Precursor-Enhanced */
+:root {
+    --scanline-intensity: 0.03;
+    --chromatic-aberration: 0px;
+    --glow-multiplier: 1.3;
+    --dot-grid-spacing: 4px;
+    --text-jitter: 0px;
+    --glow-opacity: 1.0;
+}
+
+.tmd-button--primary {
+    /* Secondary halo effect — matches TMDTierSettings.SecondaryHalo = true */
+    -unity-slice-scale: 1.05;
+}

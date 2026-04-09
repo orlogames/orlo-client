@@ -1,0 +1,12 @@
+/* Vael — bioluminescent green, plant-symbiotic */
+:root {
+    --color-primary: #00FF88;
+    --color-secondary: #44DDAA;
+    --color-bg: rgba(8, 26, 16, 0.92);
+    --color-border: #1A4A2A;
+    --color-text: #C8F5D8;
+    --color-text-dim: rgba(200, 245, 216, 0.6);
+    --color-glow: #66FFB2;
+    --color-danger: #FF6644;
+    --color-success: #88FF88;
+}

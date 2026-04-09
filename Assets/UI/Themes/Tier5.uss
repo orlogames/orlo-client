@@ -1,0 +1,33 @@
+/* Tier 5 — Awakened (hidden class) */
+/* TMDTierSettings: DotGridAnimates=true, SecondaryHalo=true, EdgeParticles=true */
+:root {
+    --scanline-intensity: 0.00;
+    --chromatic-aberration: 0px;
+    --glow-multiplier: 1.6;
+    --dot-grid-spacing: 4px;
+    --text-jitter: 0px;
+    --glow-opacity: 1.0;
+}
+
+.tmd-button--primary {
+    /* Secondary halo effect */
+    -unity-slice-scale: 1.05;
+}
+
+/* Tier 5: animated dot-grid and edge-particle cues via USS class markers.
+   DotGridOverlay.cs and edge-particle systems check TMDTheme.TierSettings.DotGridAnimates
+   and EdgeParticles at runtime; these USS classes signal intent to those systems. */
+.tmd-panel {
+    /* Full opacity — cleanest tier, no degradation */
+    opacity: 1.0;
+}
+
+/* Animated dots marker — consumed by DotGridOverlay.cs runtime check */
+.tmd-panel--tier5-dots {
+    /* Placeholder: dot-grid animation driven by DotGridOverlay MonoBehaviour */
+}
+
+/* Edge particle marker — consumed by particle system runtime check */
+.tmd-panel--tier5-particles {
+    /* Placeholder: edge particles driven by TMD particle system */
+}

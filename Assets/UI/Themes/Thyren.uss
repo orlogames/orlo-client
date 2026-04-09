@@ -1,0 +1,12 @@
+/* Thyren — void purple, void-touched */
+:root {
+    --color-primary: #AA66FF;
+    --color-secondary: #6644CC;
+    --color-bg: rgba(12, 8, 22, 0.92);
+    --color-border: #2A1A4A;
+    --color-text: #D8C8F5;
+    --color-text-dim: rgba(216, 200, 245, 0.6);
+    --color-glow: #BB88FF;
+    --color-danger: #FF4466;
+    --color-success: #66FFAA;
+}

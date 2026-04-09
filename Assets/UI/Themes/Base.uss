@@ -1,0 +1,167 @@
+:root {
+    /* Typography */
+    --font-size-xs: 10px;
+    --font-size-sm: 12px;
+    --font-size-md: 14px;
+    --font-size-lg: 18px;
+    --font-size-xl: 24px;
+    --font-size-2xl: 32px;
+    --font-size-title: 48px;
+
+    /* Spacing (4px grid) */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+
+    /* Borders */
+    --radius-sm: 2px;
+    --radius-md: 4px;
+    --radius-lg: 8px;
+    --border-width: 1px;
+
+    /* Transitions */
+    --transition-fast: 100ms;
+    --transition-med: 200ms;
+    --transition-slow: 350ms;
+
+    /* Z-order (sort order) */
+    --z-hud: 100;
+    --z-window: 200;
+    --z-modal: 300;
+    --z-tooltip: 400;
+    --z-notification: 500;
+
+    /* Race palette defaults (Solari) — overridden by race USS */
+    --color-primary: #FFD700;
+    --color-secondary: #FFA500;
+    --color-bg: rgba(26, 20, 8, 0.92);
+    --color-border: #4A3A20;
+    --color-text: #F5E6C8;
+    --color-text-dim: rgba(245, 230, 200, 0.6);
+    --color-glow: #FFE066;
+    --color-danger: #FF4444;
+    --color-success: #66FF66;
+    --color-warning: #FFAA00;
+
+    /* Tier defaults (Tier 1) — overridden by tier USS */
+    --scanline-intensity: 0.35;
+    --chromatic-aberration: 3px;
+    --glow-multiplier: 0.6;
+    --dot-grid-spacing: 16px;
+}
+
+/* Base panel style */
+.tmd-panel {
+    background-color: var(--color-bg);
+    border-color: var(--color-border);
+    border-width: var(--border-width);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+}
+
+/* Panel header */
+.tmd-panel__header {
+    color: var(--color-primary);
+    font-size: var(--font-size-lg);
+    padding-bottom: var(--space-2);
+    border-bottom-color: var(--color-border);
+    border-bottom-width: 1px;
+    margin-bottom: var(--space-3);
+}
+
+/* Base button */
+.tmd-button {
+    background-color: rgba(0, 0, 0, 0.4);
+    border-color: var(--color-border);
+    border-width: 1px;
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    font-size: var(--font-size-md);
+    padding: var(--space-2) var(--space-4);
+    height: 32px;
+    transition-duration: var(--transition-fast);
+}
+
+.tmd-button:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.tmd-button:active {
+    background-color: rgba(255, 255, 255, 0.15);
+    scale: 0.97;
+}
+
+.tmd-button--primary {
+    background-color: var(--color-primary);
+    color: rgba(0, 0, 0, 0.9);
+    border-color: var(--color-glow);
+    font-size: var(--font-size-md);
+}
+
+/* Progress bar */
+.tmd-progress-bar {
+    height: 8px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-color: var(--color-border);
+    border-width: 1px;
+    border-radius: var(--radius-sm);
+}
+
+.tmd-progress-bar__fill {
+    background-color: var(--color-primary);
+    border-radius: var(--radius-sm);
+    height: 100%;
+    transition-duration: var(--transition-med);
+}
+
+.tmd-progress-bar--health .tmd-progress-bar__fill { background-color: #44DD66; }
+.tmd-progress-bar--stamina .tmd-progress-bar__fill { background-color: #DDAA44; }
+.tmd-progress-bar--focus .tmd-progress-bar__fill { background-color: #4488FF; }
+.tmd-progress-bar--danger .tmd-progress-bar__fill { background-color: var(--color-danger); }
+
+/* Input field */
+.tmd-input {
+    background-color: rgba(0, 0, 0, 0.6);
+    border-color: var(--color-border);
+    border-width: 1px;
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    font-size: var(--font-size-md);
+    padding: var(--space-2) var(--space-3);
+    height: 32px;
+}
+
+.tmd-input:focus {
+    border-color: var(--color-primary);
+}
+
+/* Scrollview */
+.tmd-scroll {
+    background-color: transparent;
+}
+
+.tmd-scroll > .unity-scroll-view__content-and-vertical-scroll-container > .unity-scroller--vertical > .unity-base-slider__dragger {
+    background-color: var(--color-primary);
+    border-radius: var(--radius-sm);
+    opacity: 0.7;
+}
+
+/* Label variants */
+.tmd-label { color: var(--color-text); font-size: var(--font-size-md); }
+.tmd-label--dim { color: var(--color-text-dim); font-size: var(--font-size-sm); }
+.tmd-label--header { color: var(--color-primary); font-size: var(--font-size-lg); }
+.tmd-label--danger { color: var(--color-danger); }
+.tmd-label--success { color: var(--color-success); }
+
+/* Separator */
+.tmd-separator {
+    height: 1px;
+    background-color: var(--color-border);
+    margin: var(--space-3) 0;
+}

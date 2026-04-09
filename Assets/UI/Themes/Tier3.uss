@@ -1,0 +1,9 @@
+/* Tier 3 — Military */
+:root {
+    --scanline-intensity: 0.10;
+    --chromatic-aberration: 1px;
+    --glow-multiplier: 1.0;
+    --dot-grid-spacing: 8px;
+    --text-jitter: 0px;
+    --glow-opacity: 1.0;
+}

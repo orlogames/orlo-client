@@ -1,0 +1,5 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement class="tmd-progress-bar" name="ProgressBar">
+        <ui:VisualElement class="tmd-progress-bar__fill" name="Fill" />
+    </ui:VisualElement>
+</ui:UXML>

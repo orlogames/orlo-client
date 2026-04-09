@@ -1,0 +1,9 @@
+/* Tier 2 — Standard */
+:root {
+    --scanline-intensity: 0.20;
+    --chromatic-aberration: 2px;
+    --glow-multiplier: 0.8;
+    --dot-grid-spacing: 12px;
+    --text-jitter: 0px;
+    --glow-opacity: 0.8;
+}
