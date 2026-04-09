@@ -6,7 +6,7 @@ on:
     tags:
       - 'v*'
   repository_dispatch:
-    types: [proto-updated]
+    types: [proto-updated, assets-updated]
   workflow_dispatch:
     inputs:
       version:
