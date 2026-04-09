@@ -164,7 +164,7 @@ namespace Orlo.UI.Panels
         {
             _name = name; _race = race; _level = level; _title = title;
             _guildTag = guildTag; _criminalRating = criminalRating;
-            _xpCurrent = xpCurrent; _xpMax = Mathf.Max(xpMax, 1);
+            _xpCurrent = xpCurrent; _xpMax = System.Math.Max(xpMax, 1L);
         }
 
         public void SetHealthPools(float vit, float maxVit, float sta, float maxSta,

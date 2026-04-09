@@ -9,6 +9,7 @@ using Orlo.Rendering;
 using Orlo.VFX;
 using Orlo.UI.CharacterCreation;
 using Orlo.UI.Lobby;
+using Orlo.UI.Panels;
 using Orlo.Proto;
 using ProtoAuth = Orlo.Proto.Auth;
 using Color = UnityEngine.Color;
