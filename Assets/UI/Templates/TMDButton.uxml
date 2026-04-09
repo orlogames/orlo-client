@@ -1,0 +1,23 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements"
+         xsi="http://www.w3.org/2001/XMLSchema-instance"
+         noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd"
+         editor-extension-mode="False">
+
+    <!--
+        TMDButton.uxml — TMD-themed button with optional SDF icon.
+
+        Usage:
+            var btn = tmdButtonTemplate.Instantiate();
+            btn.Q<Label>("button-label").text = "Craft";
+            btn.Q<VisualElement>("button-icon").style.backgroundImage = iconTexture;
+            // Hide icon: btn.Q<VisualElement>("button-icon").style.display = DisplayStyle.None;
+    -->
+
+    <ui:Button name="tmd-button" class="tmd-button">
+        <!-- Optional SDF icon — set background-image in code or USS.
+             Hide with display:none when unused. -->
+        <ui:VisualElement name="button-icon" class="tmd-button__icon" />
+        <ui:Label name="button-label" class="tmd-button__label" text="Button" />
+    </ui:Button>
+
+</ui:UXML>

@@ -1,0 +1,191 @@
+/*
+ * TMD Design System — Master Variables
+ * =====================================
+ * All design tokens for the TMD holographic UI.
+ * Race palettes sourced from RacePalette.cs.
+ * Shared constants from orlo-ui-redesign.md spec (sections 3.1-3.7).
+ *
+ * Usage: @import url("tmd-variables.uss") at the top of any USS file.
+ */
+
+:root {
+
+    /* ================================================================
+     * RACE PALETTES
+     * Each race has: primary, secondary, accent, background, border,
+     * text, glow, danger, success
+     * ================================================================ */
+
+    /* Solari — warm gold, human-descended */
+    --solari-primary:    #FFD700;
+    --solari-secondary:  #FFA500;
+    --solari-accent:     #FFFFFF;
+    --solari-background: rgba(26, 20, 8, 0.92);
+    --solari-border:     #4A3A20;
+    --solari-text:       #F5E6C8;
+    --solari-glow:       #FFE066;
+    --solari-danger:     #FF4444;
+    --solari-success:    #66FF66;
+
+    /* Vael — bioluminescent green, plant-symbiotic */
+    --vael-primary:    #00FF88;
+    --vael-secondary:  #44DDAA;
+    --vael-accent:     #AAFFCC;
+    --vael-background: rgba(8, 26, 16, 0.92);
+    --vael-border:     #1A4A2A;
+    --vael-text:       #C8F5D8;
+    --vael-glow:       #66FFB2;
+    --vael-danger:     #FF6644;
+    --vael-success:    #88FF88;
+
+    /* Korrath — ember orange, volcanic-adapted */
+    --korrath-primary:    #FF6600;
+    --korrath-secondary:  #FF4400;
+    --korrath-accent:     #FFCC88;
+    --korrath-background: rgba(26, 12, 4, 0.92);
+    --korrath-border:     #4A2A10;
+    --korrath-text:       #F5D8C0;
+    --korrath-glow:       #FF8833;
+    --korrath-danger:     #FF2222;
+    --korrath-success:    #88FF44;
+
+    /* Thyren — void purple, void-touched */
+    --thyren-primary:    #AA66FF;
+    --thyren-secondary:  #6644CC;
+    --thyren-accent:     #DDBBFF;
+    --thyren-background: rgba(12, 8, 22, 0.92);
+    --thyren-border:     #2A1A4A;
+    --thyren-text:       #D8C8F5;
+    --thyren-glow:       #BB88FF;
+    --thyren-danger:     #FF4466;
+    --thyren-success:    #66FFAA;
+
+
+    /* ================================================================
+     * ACTIVE RACE (default: Solari)
+     * Swap these at runtime via C# to change the active palette.
+     * All components reference --tmd-* variables, never race-specific ones.
+     * ================================================================ */
+
+    --tmd-primary:    var(--solari-primary);
+    --tmd-secondary:  var(--solari-secondary);
+    --tmd-accent:     var(--solari-accent);
+    --tmd-background: var(--solari-background);
+    --tmd-border:     var(--solari-border);
+    --tmd-text:       var(--solari-text);
+    --tmd-glow:       var(--solari-glow);
+    --tmd-danger:     var(--solari-danger);
+    --tmd-success:    var(--solari-success);
+
+
+    /* ================================================================
+     * RARITY COLORS
+     * ================================================================ */
+
+    --rarity-common:    #B0B0B0;
+    --rarity-uncommon:  #4AE34A;
+    --rarity-rare:      #4A8EFF;
+    --rarity-epic:      #B84AFF;
+    --rarity-legendary: #FF9A2E;
+
+
+    /* ================================================================
+     * TOOLTIP
+     * ================================================================ */
+
+    --tooltip-background: rgba(12, 12, 18, 0.96);
+    --tooltip-border:     rgba(255, 255, 255, 0.08);
+
+
+    /* ================================================================
+     * SHADOWS
+     * Note: USS uses text-shadow syntax. Box shadows require
+     * VisualElement.style in C# or custom rendering.
+     * ================================================================ */
+
+    --shadow-small-color:   rgba(0, 0, 0, 0.25);
+    --shadow-small-offset:  2px;
+    --shadow-small-blur:    4px;
+
+    --shadow-medium-color:  rgba(0, 0, 0, 0.40);
+    --shadow-medium-offset: 4px;
+    --shadow-medium-blur:   12px;
+
+    --shadow-large-color:   rgba(0, 0, 0, 0.50);
+    --shadow-large-offset:  8px;
+    --shadow-large-blur:    24px;
+
+
+    /* ================================================================
+     * OVERLAY
+     * ================================================================ */
+
+    --overlay-scrim: rgba(0, 0, 0, 0.70);
+
+
+    /* ================================================================
+     * SPACING GRID (4px base)
+     * ================================================================ */
+
+    --space-xxs:  4px;
+    --space-xs:   8px;
+    --space-sm:  12px;
+    --space-md:  16px;
+    --space-lg:  24px;
+    --space-xl:  32px;
+    --space-xxl: 48px;
+
+
+    /* ================================================================
+     * CORNER RADII
+     * ================================================================ */
+
+    --radius-none: 0px;
+    --radius-sm:   2px;
+    --radius-md:   4px;
+    --radius-lg:   8px;
+    --radius-full: 50%;
+
+
+    /* ================================================================
+     * BUTTON HEIGHTS
+     * ================================================================ */
+
+    --btn-xs: 24px;
+    --btn-sm: 32px;
+    --btn-md: 40px;
+    --btn-lg: 48px;
+
+
+    /* ================================================================
+     * TYPOGRAPHY SIZES
+     * Base values — multiply by AccessibilityManager.FontSizeMultiplier
+     * ================================================================ */
+
+    --font-size-splash-title: 72px;
+    --font-size-hud-callout:  24px;
+    --font-size-window-title: 16px;
+    --font-size-section:      14px;
+    --font-size-body:         13px;
+    --font-size-chat:         12px;
+    --font-size-numeric:      12px;
+    --font-size-label:        11px;
+    --font-size-small:        10px;
+
+    --font-tracking-splash:  0.12em;
+    --font-tracking-callout: 0.06em;
+    --font-tracking-title:   0.08em;
+    --font-tracking-section: 0.04em;
+    --font-tracking-label:   0.02em;
+
+
+    /* ================================================================
+     * ANIMATION DURATIONS
+     * ================================================================ */
+
+    --duration-hover:        100ms;
+    --duration-panel:        250ms;
+    --duration-tab-switch:   150ms;
+    --duration-notification: 300ms;
+    --duration-screen:       500ms;
+}

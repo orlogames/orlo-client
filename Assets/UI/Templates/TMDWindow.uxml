@@ -1,0 +1,66 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements"
+         xsi="http://www.w3.org/2001/XMLSchema-instance"
+         noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd"
+         editor-extension-mode="False">
+
+    <!--
+        TMDWindow.uxml — Full window frame with header, tab bar, and scrollable content.
+        Builds on TMDPanel as the base container. Used for Inventory, Quest Log,
+        Guild Panel, Settings, etc.
+
+        Usage:
+            var window = tmdWindowTemplate.Instantiate();
+            window.Q<Label>("panel-title").text = "Inventory";
+            // Add tab buttons to "window-tab-bar":
+            var tab = new Button { text = "Items", name = "tab-items" };
+            tab.AddToClassList("tmd-window__tab");
+            window.Q("window-tab-bar").Add(tab);
+            // Add content to "window-scroll-content":
+            window.Q("window-scroll-content").Add(inventoryGrid);
+    -->
+
+    <!-- Use TMDPanel as the root structure -->
+    <ui:Template name="TMDPanel" src="TMDPanel.uxml" />
+    <ui:Instance template="TMDPanel" name="tmd-window-base">
+
+        <!-- Inject window-specific elements into panel-content.
+             This nesting is done via code (TMDPanelController or window-specific controllers)
+             since UXML template slots are limited. The structure below documents the
+             expected hierarchy that controllers should build inside panel-content. -->
+
+    </ui:Instance>
+
+    <!--
+        The following elements are the canonical children that go inside panel-content.
+        Controllers instantiate TMDWindow.uxml, then query "panel-content" from the
+        nested TMDPanel instance and add these elements programmatically.
+        We define them here as a standalone fragment for reference and for controllers
+        that prefer to clone from this template.
+    -->
+
+    <ui:VisualElement name="tmd-window-inner" class="tmd-window" style="display: none;">
+
+        <!-- Window control buttons (minimize + close) — placed in header by controller -->
+        <ui:VisualElement name="window-header-controls" class="tmd-window__header-controls">
+            <ui:Button name="window-minimize-btn" class="tmd-window__minimize-btn">
+                <ui:Label text="&#x2500;" class="tmd-window__control-icon" />
+            </ui:Button>
+            <ui:Button name="window-close-btn" class="tmd-window__close-btn">
+                <ui:Label text="&#x2715;" class="tmd-window__control-icon" />
+            </ui:Button>
+        </ui:VisualElement>
+
+        <!-- Optional tab bar — hide with display:none if window has no tabs -->
+        <ui:VisualElement name="window-tab-bar" class="tmd-window__tab-bar" />
+
+        <!-- Scrollable content area -->
+        <ui:ScrollView name="window-scroll-view" class="tmd-window__scroll-view"
+                       vertical-scroller-visibility="Auto"
+                       horizontal-scroller-visibility="Hidden"
+                       mode="Vertical">
+            <ui:VisualElement name="window-scroll-content" class="tmd-window__scroll-content" />
+        </ui:ScrollView>
+
+    </ui:VisualElement>
+
+</ui:UXML>

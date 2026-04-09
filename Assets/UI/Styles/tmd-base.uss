@@ -1,0 +1,218 @@
+/*
+ * TMD Design System — Base Element Styles
+ * ========================================
+ * Default styling for core visual elements: text, panels, scrollbars,
+ * focus rings. All styles reference --tmd-* variables from tmd-variables.uss.
+ */
+
+@import url("tmd-variables.uss");
+
+
+/* ================================================================
+ * DEFAULT TEXT
+ * ================================================================ */
+
+* {
+    /* Inter is the primary font. Set via PanelTextSettings asset;
+       -unity-font-definition references the Font Asset. */
+    -unity-font-definition: url("/Assets/UI/Fonts/Inter-Regular SDF.asset");
+    font-size: var(--font-size-body);
+    color: var(--tmd-text);
+    -unity-text-align: middle-left;
+}
+
+.tmd-text--title {
+    -unity-font-definition: url("/Assets/UI/Fonts/Inter-Bold SDF.asset");
+    font-size: var(--font-size-window-title);
+    letter-spacing: var(--font-tracking-title);
+    -unity-font-style: bold;
+    color: var(--tmd-primary);
+}
+
+.tmd-text--section {
+    -unity-font-definition: url("/Assets/UI/Fonts/Inter-SemiBold SDF.asset");
+    font-size: var(--font-size-section);
+    letter-spacing: var(--font-tracking-section);
+    -unity-font-style: bold;
+    color: var(--tmd-text);
+}
+
+.tmd-text--body {
+    font-size: var(--font-size-body);
+    color: var(--tmd-text);
+}
+
+.tmd-text--label {
+    -unity-font-definition: url("/Assets/UI/Fonts/Inter-Medium SDF.asset");
+    font-size: var(--font-size-label);
+    letter-spacing: var(--font-tracking-label);
+    color: var(--tmd-text);
+    opacity: 0.7;
+}
+
+.tmd-text--small {
+    font-size: var(--font-size-small);
+    letter-spacing: var(--font-tracking-label);
+    color: var(--tmd-text);
+    opacity: 0.5;
+}
+
+.tmd-text--numeric {
+    -unity-font-definition: url("/Assets/UI/Fonts/JetBrainsMono-Medium SDF.asset");
+    font-size: var(--font-size-numeric);
+    color: var(--tmd-primary);
+}
+
+.tmd-text--chat {
+    font-size: var(--font-size-chat);
+    color: var(--tmd-text);
+}
+
+.tmd-text--hud-callout {
+    -unity-font-definition: url("/Assets/UI/Fonts/Inter-Bold SDF.asset");
+    font-size: var(--font-size-hud-callout);
+    letter-spacing: var(--font-tracking-callout);
+    -unity-font-style: bold;
+    color: var(--tmd-primary);
+}
+
+
+/* ================================================================
+ * PANEL / WINDOW CHROME
+ * ================================================================ */
+
+.tmd-window {
+    background-color: var(--tmd-background);
+    border-width: 1px;
+    border-color: var(--tmd-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md);
+    overflow: hidden;
+}
+
+.tmd-window__titlebar {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: var(--space-xs);
+    margin-bottom: var(--space-sm);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--tmd-border);
+}
+
+.tmd-window__titlebar .tmd-text--title {
+    flex-grow: 1;
+}
+
+.tmd-window__close-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-sm);
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    -unity-text-align: middle-center;
+    color: var(--tmd-text);
+    font-size: 14px;
+    transition-property: background-color, color;
+    transition-duration: var(--duration-hover);
+}
+
+.tmd-window__close-btn:hover {
+    background-color: rgba(255, 68, 68, 0.2);
+    color: var(--tmd-danger);
+}
+
+.tmd-window__content {
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+
+/* ================================================================
+ * SCROLLBAR STYLING
+ * ================================================================ */
+
+Scroller {
+    width: 8px;
+}
+
+Scroller #unity-slider {
+    margin: 0;
+    padding: 0;
+}
+
+Scroller #unity-tracker {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-width: 0;
+    border-radius: var(--radius-md);
+}
+
+Scroller #unity-dragger {
+    background-color: var(--tmd-border);
+    border-radius: var(--radius-md);
+    border-width: 0;
+    min-height: 24px;
+    transition-property: background-color;
+    transition-duration: var(--duration-hover);
+}
+
+Scroller #unity-dragger:hover {
+    background-color: var(--tmd-primary);
+}
+
+Scroller RepeatButton {
+    display: none;
+}
+
+
+/* ================================================================
+ * FOCUS RING (ACCESSIBILITY)
+ * ================================================================ */
+
+*:focus {
+    /* 2px glow outline using the race primary color at 60% opacity */
+    border-width: 2px;
+    border-color: var(--tmd-primary);
+    transition-property: border-color;
+    transition-duration: var(--duration-hover);
+}
+
+.tmd-focus-visible:focus {
+    /* Stronger focus ring for keyboard navigation (WCAG 2.1 AA) */
+    border-width: 2px;
+    border-color: var(--tmd-glow);
+}
+
+
+/* ================================================================
+ * SEPARATOR / DIVIDER
+ * ================================================================ */
+
+.tmd-divider {
+    height: 1px;
+    background-color: var(--tmd-border);
+    margin-top: var(--space-xs);
+    margin-bottom: var(--space-xs);
+}
+
+.tmd-divider--glow {
+    height: 1px;
+    background-color: var(--tmd-primary);
+    opacity: 0.4;
+    margin-top: var(--space-xs);
+    margin-bottom: var(--space-xs);
+}
+
+
+/* ================================================================
+ * OVERLAY / SCRIM
+ * ================================================================ */
+
+.tmd-scrim {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--overlay-scrim);
+}

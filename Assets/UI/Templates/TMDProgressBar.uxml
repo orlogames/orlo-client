@@ -1,0 +1,42 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements"
+         xsi="http://www.w3.org/2001/XMLSchema-instance"
+         noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd"
+         editor-extension-mode="False">
+
+    <!--
+        TMDProgressBar.uxml — Health/resource/XP bar with TMD theming.
+        Supports primary fill, delayed secondary fill (for damage visualization),
+        and an overlay label ("450/600").
+
+        Bindings:
+            - Primary fill width: set via style.width (percentage) on "bar-fill"
+            - Secondary fill width: set on "bar-fill-delayed" for damage trail
+            - Label text: set on "bar-label"
+
+        Usage:
+            var bar = tmdProgressBarTemplate.Instantiate();
+            bar.Q<VisualElement>("bar-fill").style.width = new Length(75, LengthUnit.Percent);
+            bar.Q<Label>("bar-label").text = "450/600";
+    -->
+
+    <ui:VisualElement name="tmd-progress-bar" class="tmd-progress-bar">
+
+        <!-- Background track -->
+        <ui:VisualElement name="bar-track" class="tmd-progress-bar__track">
+
+            <!-- Secondary fill — delayed damage visualization.
+                 Sits behind primary fill, fades down after damage taken.
+                 Set width to previous health %, then animate to match primary. -->
+            <ui:VisualElement name="bar-fill-delayed" class="tmd-progress-bar__fill-delayed" />
+
+            <!-- Primary fill — current value -->
+            <ui:VisualElement name="bar-fill" class="tmd-progress-bar__fill" />
+
+        </ui:VisualElement>
+
+        <!-- Optional value label overlay (centered on the bar) -->
+        <ui:Label name="bar-label" class="tmd-progress-bar__label" text="" picking-mode="Ignore" />
+
+    </ui:VisualElement>
+
+</ui:UXML>

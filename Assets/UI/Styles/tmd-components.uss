@@ -1,0 +1,386 @@
+/*
+ * TMD Design System — Shared Component Styles
+ * =============================================
+ * Reusable component classes for panels, buttons, inputs, progress bars,
+ * badges, and tooltips. All reference --tmd-* variables from tmd-variables.uss.
+ */
+
+@import url("tmd-variables.uss");
+
+
+/* ================================================================
+ * PANEL  (.tmd-panel)
+ * Dark background + border + outer glow. Used for floating panels,
+ * HUD containers, inventory grid backgrounds, etc.
+ * ================================================================ */
+
+.tmd-panel {
+    background-color: var(--tmd-background);
+    border-width: 1px;
+    border-color: var(--tmd-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-sm);
+    /* Outer glow simulated via border shadow (USS limitation) */
+    transition-property: border-color;
+    transition-duration: var(--duration-hover);
+}
+
+.tmd-panel:hover {
+    border-color: var(--tmd-glow);
+}
+
+.tmd-panel--flush {
+    padding: 0;
+    border-radius: var(--radius-none);
+}
+
+.tmd-panel--elevated {
+    background-color: var(--tmd-background);
+    border-width: 1px;
+    border-color: var(--tmd-glow);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md);
+}
+
+
+/* ================================================================
+ * BUTTONS
+ * ================================================================ */
+
+/* Base button — all variants extend this */
+.tmd-button {
+    height: var(--btn-md);
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+    border-radius: var(--radius-sm);
+    border-width: 1px;
+    border-color: var(--tmd-border);
+    background-color: rgba(0, 0, 0, 0.3);
+    color: var(--tmd-text);
+    font-size: var(--font-size-body);
+    -unity-text-align: middle-center;
+    -unity-font-style: normal;
+    transition-property: background-color, border-color, color;
+    transition-duration: var(--duration-hover);
+    cursor: link;
+}
+
+.tmd-button:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-color: var(--tmd-primary);
+    color: var(--tmd-primary);
+}
+
+.tmd-button:active {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--tmd-primary);
+    color: var(--tmd-primary);
+}
+
+.tmd-button:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+/* Primary variant — filled with race primary color */
+.tmd-button--primary {
+    height: var(--btn-md);
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+    border-radius: var(--radius-sm);
+    border-width: 1px;
+    border-color: var(--tmd-primary);
+    background-color: var(--tmd-primary);
+    color: #0A0A0F;
+    font-size: var(--font-size-body);
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+    transition-property: background-color, border-color, color;
+    transition-duration: var(--duration-hover);
+    cursor: link;
+}
+
+.tmd-button--primary:hover {
+    background-color: var(--tmd-glow);
+    border-color: var(--tmd-glow);
+    color: #0A0A0F;
+}
+
+.tmd-button--primary:active {
+    background-color: var(--tmd-secondary);
+    border-color: var(--tmd-secondary);
+}
+
+.tmd-button--primary:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+/* Danger variant — destructive actions */
+.tmd-button--danger {
+    height: var(--btn-md);
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+    border-radius: var(--radius-sm);
+    border-width: 1px;
+    border-color: var(--tmd-danger);
+    background-color: rgba(0, 0, 0, 0.3);
+    color: var(--tmd-danger);
+    font-size: var(--font-size-body);
+    -unity-text-align: middle-center;
+    -unity-font-style: normal;
+    transition-property: background-color, border-color, color;
+    transition-duration: var(--duration-hover);
+    cursor: link;
+}
+
+.tmd-button--danger:hover {
+    background-color: rgba(255, 68, 68, 0.15);
+    border-color: var(--tmd-danger);
+    color: #FF6666;
+}
+
+.tmd-button--danger:active {
+    background-color: rgba(255, 68, 68, 0.25);
+}
+
+.tmd-button--danger:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+/* Size modifiers */
+.tmd-button--xs {
+    height: var(--btn-xs);
+    padding-left: var(--space-xs);
+    padding-right: var(--space-xs);
+    font-size: var(--font-size-small);
+}
+
+.tmd-button--sm {
+    height: var(--btn-sm);
+    padding-left: var(--space-sm);
+    padding-right: var(--space-sm);
+    font-size: var(--font-size-label);
+}
+
+.tmd-button--lg {
+    height: var(--btn-lg);
+    padding-left: var(--space-lg);
+    padding-right: var(--space-lg);
+    font-size: var(--font-size-section);
+    -unity-font-style: bold;
+}
+
+
+/* ================================================================
+ * INPUT FIELD
+ * ================================================================ */
+
+.tmd-input-field {
+    height: var(--btn-md);
+    padding-left: var(--space-sm);
+    padding-right: var(--space-sm);
+    border-width: 1px;
+    border-color: var(--tmd-border);
+    border-radius: var(--radius-sm);
+    background-color: rgba(0, 0, 0, 0.4);
+    color: var(--tmd-text);
+    font-size: var(--font-size-body);
+    transition-property: border-color, background-color;
+    transition-duration: var(--duration-hover);
+}
+
+.tmd-input-field:focus {
+    border-color: var(--tmd-primary);
+    background-color: rgba(0, 0, 0, 0.55);
+}
+
+.tmd-input-field:hover {
+    border-color: var(--tmd-glow);
+}
+
+.tmd-input-field > .unity-text-field__input {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    color: var(--tmd-text);
+    padding: 0;
+}
+
+.tmd-input-field > .unity-text-field__input:focus {
+    border-width: 0;
+}
+
+/* Placeholder text */
+.tmd-input-field .unity-text-element--placeholder {
+    color: var(--tmd-text);
+    opacity: 0.35;
+}
+
+
+/* ================================================================
+ * PROGRESS BAR
+ * ================================================================ */
+
+.tmd-progress-bar {
+    height: 8px;
+    border-radius: var(--radius-none);
+    background-color: rgba(0, 0, 0, 0.5);
+    border-width: 1px;
+    border-color: var(--tmd-border);
+    overflow: hidden;
+}
+
+.tmd-progress-bar__fill {
+    height: 100%;
+    background-color: var(--tmd-primary);
+    border-radius: var(--radius-none);
+    transition-property: width;
+    transition-duration: var(--duration-panel);
+}
+
+/* Leading edge glow — thin bright line at the fill boundary */
+.tmd-progress-bar__fill::after {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background-color: var(--tmd-glow);
+    opacity: 0.6;
+}
+
+/* Rarity-colored progress variants */
+.tmd-progress-bar--uncommon .tmd-progress-bar__fill {
+    background-color: var(--rarity-uncommon);
+}
+
+.tmd-progress-bar--rare .tmd-progress-bar__fill {
+    background-color: var(--rarity-rare);
+}
+
+.tmd-progress-bar--epic .tmd-progress-bar__fill {
+    background-color: var(--rarity-epic);
+}
+
+.tmd-progress-bar--legendary .tmd-progress-bar__fill {
+    background-color: var(--rarity-legendary);
+}
+
+/* Thicker variant for XP bars, health bars */
+.tmd-progress-bar--thick {
+    height: 16px;
+    border-radius: var(--radius-sm);
+}
+
+
+/* ================================================================
+ * BADGE (rarity / status indicators)
+ * ================================================================ */
+
+.tmd-badge {
+    padding-left: var(--space-xs);
+    padding-right: var(--space-xs);
+    padding-top: 2px;
+    padding-bottom: 2px;
+    border-radius: var(--radius-sm);
+    border-width: 1px;
+    font-size: var(--font-size-small);
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+}
+
+.tmd-badge--common {
+    border-color: var(--rarity-common);
+    color: var(--rarity-common);
+    background-color: rgba(176, 176, 176, 0.1);
+}
+
+.tmd-badge--uncommon {
+    border-color: var(--rarity-uncommon);
+    color: var(--rarity-uncommon);
+    background-color: rgba(74, 227, 74, 0.1);
+}
+
+.tmd-badge--rare {
+    border-color: var(--rarity-rare);
+    color: var(--rarity-rare);
+    background-color: rgba(74, 142, 255, 0.1);
+}
+
+.tmd-badge--epic {
+    border-color: var(--rarity-epic);
+    color: var(--rarity-epic);
+    background-color: rgba(184, 74, 255, 0.1);
+}
+
+.tmd-badge--legendary {
+    border-color: var(--rarity-legendary);
+    color: var(--rarity-legendary);
+    background-color: rgba(255, 154, 46, 0.1);
+}
+
+/* Status badges */
+.tmd-badge--success {
+    border-color: var(--tmd-success);
+    color: var(--tmd-success);
+    background-color: rgba(102, 255, 102, 0.1);
+}
+
+.tmd-badge--danger {
+    border-color: var(--tmd-danger);
+    color: var(--tmd-danger);
+    background-color: rgba(255, 68, 68, 0.1);
+}
+
+.tmd-badge--info {
+    border-color: var(--tmd-primary);
+    color: var(--tmd-primary);
+    background-color: rgba(255, 215, 0, 0.08);
+}
+
+
+/* ================================================================
+ * TOOLTIP
+ * ================================================================ */
+
+.tmd-tooltip {
+    position: absolute;
+    background-color: var(--tooltip-background);
+    border-width: 1px;
+    border-color: var(--tooltip-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-xs) var(--space-sm);
+    max-width: 320px;
+    min-width: 120px;
+    /* Layer above everything */
+    overflow: visible;
+}
+
+.tmd-tooltip__title {
+    font-size: var(--font-size-body);
+    -unity-font-style: bold;
+    color: var(--tmd-primary);
+    margin-bottom: var(--space-xxs);
+}
+
+.tmd-tooltip__body {
+    font-size: var(--font-size-label);
+    color: var(--tmd-text);
+    opacity: 0.85;
+    white-space: normal;
+}
+
+.tmd-tooltip__divider {
+    height: 1px;
+    background-color: var(--tooltip-border);
+    margin-top: var(--space-xxs);
+    margin-bottom: var(--space-xxs);
+}
+
+/* Rarity-tinted tooltip header borders */
+.tmd-tooltip--common    { border-top-color: var(--rarity-common);    border-top-width: 2px; }
+.tmd-tooltip--uncommon  { border-top-color: var(--rarity-uncommon);  border-top-width: 2px; }
+.tmd-tooltip--rare      { border-top-color: var(--rarity-rare);      border-top-width: 2px; }
+.tmd-tooltip--epic      { border-top-color: var(--rarity-epic);      border-top-width: 2px; }
+.tmd-tooltip--legendary { border-top-color: var(--rarity-legendary); border-top-width: 2px; }

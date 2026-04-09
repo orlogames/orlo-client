@@ -1,0 +1,42 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements"
+         xsi="http://www.w3.org/2001/XMLSchema-instance"
+         noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd"
+         editor-extension-mode="False">
+
+    <!--
+        TMDTooltip.uxml — Floating tooltip popup with TMD theming.
+        Supports title, description, stat grid, and rarity badge.
+        Positioned at cursor by TooltipSystem controller.
+
+        Usage:
+            var tip = tmdTooltipTemplate.Instantiate();
+            tip.Q<Label>("tooltip-title").text = "Plasma Rifle";
+            tip.Q<Label>("tooltip-description").text = "High-energy ranged weapon.";
+            tip.Q<Label>("tooltip-rarity-badge").text = "Rare";
+            // Add stat rows to "tooltip-stats-grid" dynamically.
+    -->
+
+    <ui:VisualElement name="tmd-tooltip" class="tmd-tooltip" picking-mode="Ignore">
+
+        <!-- Header row: title + optional rarity badge -->
+        <ui:VisualElement name="tooltip-header" class="tmd-tooltip__header">
+            <ui:Label name="tooltip-title" class="tmd-tooltip__title" text="Item Name" />
+            <ui:Label name="tooltip-rarity-badge" class="tmd-tooltip__rarity-badge" text="" />
+        </ui:VisualElement>
+
+        <!-- Divider line -->
+        <ui:VisualElement name="tooltip-divider" class="tmd-tooltip__divider" />
+
+        <!-- Description text -->
+        <ui:Label name="tooltip-description" class="tmd-tooltip__description" text="" />
+
+        <!-- Stat grid — populated dynamically with stat-name / stat-value pairs.
+             Each row is a VisualElement with two Labels inside. -->
+        <ui:VisualElement name="tooltip-stats-grid" class="tmd-tooltip__stats-grid" />
+
+        <!-- Footer — requirements, level, binding info -->
+        <ui:Label name="tooltip-footer" class="tmd-tooltip__footer" text="" />
+
+    </ui:VisualElement>
+
+</ui:UXML>

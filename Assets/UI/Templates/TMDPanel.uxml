@@ -1,0 +1,36 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements"
+         xsi="http://www.w3.org/2001/XMLSchema-instance"
+         noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd"
+         editor-extension-mode="False">
+
+    <!--
+        TMDPanel.uxml — Reusable TMD-themed panel/window component.
+        Root container with optional header bar (title + close), content slot,
+        and scanline overlay driven by TMD tier settings.
+
+        Usage:
+            var panel = tmDPanelTemplate.Instantiate();
+            panel.Q<Label>("panel-title").text = "Inventory";
+            panel.Q<VisualElement>("panel-content").Add(yourContent);
+    -->
+
+    <ui:VisualElement name="tmd-panel" class="tmd-panel">
+
+        <!-- Scanline overlay — full-panel, sits above background but below content.
+             Opacity/visibility controlled by TMDPanelController based on tier. -->
+        <ui:VisualElement name="scanline-overlay" class="tmd-panel__scanline-overlay" picking-mode="Ignore" />
+
+        <!-- Optional header bar — hide by toggling display via class or code -->
+        <ui:VisualElement name="panel-header" class="tmd-panel__header">
+            <ui:Label name="panel-title" class="tmd-panel__title" text="Panel Title" />
+            <ui:Button name="panel-close-btn" class="tmd-panel__close-btn">
+                <ui:Label text="&#x2715;" class="tmd-panel__close-icon" />
+            </ui:Button>
+        </ui:VisualElement>
+
+        <!-- Content container — consumers add children here -->
+        <ui:VisualElement name="panel-content" class="tmd-panel__content" />
+
+    </ui:VisualElement>
+
+</ui:UXML>

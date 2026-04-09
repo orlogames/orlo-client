@@ -1,0 +1,31 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements"
+         xsi="http://www.w3.org/2001/XMLSchema-instance"
+         noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd"
+         editor-extension-mode="False">
+
+    <!--
+        TMDInputField.uxml — Text input with TMD holographic styling.
+        Wraps a TextField with optional external label.
+
+        Usage:
+            var input = tmdInputFieldTemplate.Instantiate();
+            var tf = input.Q<TextField>("tmd-text-field");
+            tf.label = "Character Name";
+            tf.value = "";
+    -->
+
+    <ui:VisualElement name="tmd-input-field" class="tmd-input-field">
+
+        <!-- Optional label above the field — set text in code, or hide with display:none -->
+        <ui:Label name="input-label" class="tmd-input-field__label" text="" />
+
+        <!-- The actual text field. Unity TextField includes its own internal label
+             (set via tf.label) and the text input area.
+             Placeholder text is applied via code: tf.textEdition.placeholder -->
+        <ui:TextField name="tmd-text-field" class="tmd-input-field__field"
+                      is-delayed="false"
+                      max-length="256" />
+
+    </ui:VisualElement>
+
+</ui:UXML>
