@@ -1,0 +1,35 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="combat-hud-root" class="hud-root combat-hud-root">
+        <ui:VisualElement name="resource-bars" class="tmd-panel resource-bars">
+            <ui:VisualElement name="vitality-row" class="resource-row">
+                <ui:Label class="tmd-label resource-label" text="VIT" />
+                <ui:VisualElement name="vitality-bar" class="tmd-progress-bar resource-bar">
+                    <ui:VisualElement name="vitality-fill" class="tmd-progress-bar__fill vitality-fill" />
+                </ui:VisualElement>
+                <ui:Label name="vitality-label" class="tmd-label resource-value" text="100" />
+            </ui:VisualElement>
+            <ui:VisualElement name="stamina-row" class="resource-row">
+                <ui:Label class="tmd-label resource-label" text="STA" />
+                <ui:VisualElement name="stamina-bar" class="tmd-progress-bar resource-bar">
+                    <ui:VisualElement name="stamina-fill" class="tmd-progress-bar__fill stamina-fill" />
+                </ui:VisualElement>
+                <ui:Label name="stamina-label" class="tmd-label resource-value" text="100" />
+            </ui:VisualElement>
+            <ui:VisualElement name="focus-row" class="resource-row">
+                <ui:Label class="tmd-label resource-label" text="FOC" />
+                <ui:VisualElement name="focus-bar" class="tmd-progress-bar resource-bar">
+                    <ui:VisualElement name="focus-fill" class="tmd-progress-bar__fill focus-fill" />
+                </ui:VisualElement>
+                <ui:Label name="focus-label" class="tmd-label resource-value" text="100" />
+            </ui:VisualElement>
+            <ui:VisualElement name="strain-row" class="resource-row strain-row" style="display: none;">
+                <ui:Label class="tmd-label resource-label" text="STR" />
+                <ui:VisualElement name="strain-bar" class="tmd-progress-bar resource-bar">
+                    <ui:VisualElement name="strain-fill" class="tmd-progress-bar__fill strain-fill" />
+                </ui:VisualElement>
+                <ui:Label name="strain-label" class="tmd-label resource-value" text="0" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="damage-flash" class="damage-flash" style="display: none;" />
+    </ui:VisualElement>
+</ui:UXML>
