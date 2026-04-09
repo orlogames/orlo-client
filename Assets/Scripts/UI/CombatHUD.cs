@@ -61,6 +61,7 @@ namespace Orlo.UI
 
         private void OnGUI()
         {
+            if (UIToolkitRoot.IsActive("CombatHUD")) return;
             if (!GameBootstrap.InWorld) return;
             float s = UIScaler.Scale;
             float barW = 200f * s;
