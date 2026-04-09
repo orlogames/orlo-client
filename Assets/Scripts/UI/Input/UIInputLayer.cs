@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-namespace Orlo.UI.Input
+namespace Orlo.UI.InputManagement
 {
     /// <summary>
     /// Unified input management for UI Toolkit. Implements:

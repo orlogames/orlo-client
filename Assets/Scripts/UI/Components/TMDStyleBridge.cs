@@ -1,8 +1,37 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Orlo.UI.TMD
 {
+    /// <summary>
+    /// Extension methods for VisualElement to store/retrieve typed properties
+    /// via a Dictionary kept in the userData slot.
+    /// </summary>
+    internal static class VisualElementPropertyExtensions
+    {
+        private static Dictionary<string, object> GetOrCreateProps(VisualElement ve)
+        {
+            if (ve.userData is Dictionary<string, object> dict)
+                return dict;
+            dict = new Dictionary<string, object>();
+            ve.userData = dict;
+            return dict;
+        }
+
+        public static void SetProperty(this VisualElement ve, string key, object value)
+        {
+            GetOrCreateProps(ve)[key] = value;
+        }
+
+        public static object GetProperty(this VisualElement ve, string key)
+        {
+            if (ve.userData is Dictionary<string, object> dict && dict.TryGetValue(key, out var val))
+                return val;
+            return null;
+        }
+    }
+
     /// <summary>
     /// Bridges TMDTheme runtime state to UI Toolkit USS custom properties.
     /// Attach to a GameObject that also has a UIDocument component.
