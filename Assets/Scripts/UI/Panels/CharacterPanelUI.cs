@@ -944,7 +944,7 @@ namespace Orlo.UI.Panels
         // Lookup Helpers
         // ================================================================
 
-        private static Color GetQualityColor(int quality)
+        private Color GetQualityColor(int quality)
         {
             switch (quality)
             {
@@ -956,7 +956,7 @@ namespace Orlo.UI.Panels
             }
         }
 
-        private static Color GetRarityColor(int rarity)
+        private Color GetRarityColor(int rarity)
         {
             switch (rarity)
             {
@@ -969,7 +969,7 @@ namespace Orlo.UI.Panels
             }
         }
 
-        private static Color GetTierColor(string tier)
+        private Color GetTierColor(string tier)
         {
             if (tier == null) return P.TextDim;
             switch (tier)
@@ -984,7 +984,7 @@ namespace Orlo.UI.Panels
             }
         }
 
-        private static Color GetEventColor(int type)
+        private Color GetEventColor(int type)
         {
             switch (type)
             {
