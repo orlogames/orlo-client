@@ -206,7 +206,7 @@ jobs:
   release:
     name: Create GitHub Release
     needs: [version, build-windows]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v4
 
@@ -263,7 +263,7 @@ jobs:
   publish-cdn:
     name: Publish to S3
     needs: [version, build-windows, release]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     if: always() && needs.build-windows.result == 'success'
     env:
       VERSION: ${{ needs.version.outputs.version }}
