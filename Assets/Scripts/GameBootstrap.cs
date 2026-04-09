@@ -340,25 +340,25 @@ namespace Orlo
             }
 
             // Toolbar panels (Character, Skills, Combat, Quests)
-            if (Panels.CharacterPanelUI.Instance == null)
+            if (CharacterPanelUI.Instance == null)
             {
                 var go = new GameObject("CharacterPanelUI");
-                go.AddComponent<Panels.CharacterPanelUI>();
+                go.AddComponent<CharacterPanelUI>();
             }
-            if (Panels.SkillsPanelUI.Instance == null)
+            if (SkillsPanelUI.Instance == null)
             {
                 var go = new GameObject("SkillsPanelUI");
-                go.AddComponent<Panels.SkillsPanelUI>();
+                go.AddComponent<SkillsPanelUI>();
             }
-            if (Panels.CombatPanelUI.Instance == null)
+            if (CombatPanelUI.Instance == null)
             {
                 var go = new GameObject("CombatPanelUI");
-                go.AddComponent<Panels.CombatPanelUI>();
+                go.AddComponent<CombatPanelUI>();
             }
-            if (Panels.QuestJournalUI.Instance == null)
+            if (QuestJournalUI.Instance == null)
             {
                 var go = new GameObject("QuestJournalUI");
-                go.AddComponent<Panels.QuestJournalUI>();
+                go.AddComponent<QuestJournalUI>();
             }
 
             // Register UIs with progressive disclosure system
