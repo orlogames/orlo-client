@@ -20,7 +20,7 @@ permissions:
 jobs:
   version:
     name: Determine Version
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     outputs:
       version: ${{ steps.ver.outputs.version }}
       tag: ${{ steps.ver.outputs.tag }}
