@@ -94,7 +94,7 @@ namespace Orlo.UI.Panels
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.J)) Toggle();
+            if (Input.GetKeyDown(KeyCode.J) && !ChatUI.Instance?.IsInputActive == true) Toggle();
             if (_visible && Input.GetKeyDown(KeyCode.Escape)) { _visible = false; }
             if (_missionRefreshSeconds > 0) _missionRefreshSeconds -= Time.deltaTime;
         }

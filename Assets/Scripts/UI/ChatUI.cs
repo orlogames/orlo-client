@@ -100,6 +100,8 @@ namespace Orlo.UI
 
         private void Update()
         {
+            EscapeConsumedThisFrame = false;
+
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
             {
                 if (!_inputFocused)
@@ -117,6 +119,21 @@ namespace Orlo.UI
             {
                 _inputFocused = false;
                 _inputText = "";
+                EscapeConsumedThisFrame = true;
+            }
+
+            // Click outside chat window to unfocus
+            if (_inputFocused && Input.GetMouseButtonDown(0))
+            {
+                Vector2 mouse = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
+                if (HUDLayout.Instance != null)
+                {
+                    Rect chatRect = HUDLayout.Instance.GetWindowRect(HUD_KEY);
+                    if (chatRect.width > 0 && !chatRect.Contains(mouse))
+                    {
+                        _inputFocused = false;
+                    }
+                }
             }
 
             if (_rateLimitTimer > 0) _rateLimitTimer -= Time.deltaTime;
@@ -124,6 +141,7 @@ namespace Orlo.UI
         }
 
         public bool IsInputActive => _inputFocused;
+        public bool EscapeConsumedThisFrame { get; private set; }
 
         // ---- Public API ----
 

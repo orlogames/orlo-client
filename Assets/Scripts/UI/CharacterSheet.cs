@@ -29,7 +29,7 @@ namespace Orlo.UI
         private void Update()
         {
             // Character sheet toggled via C key (P is now PlayerProfileUI)
-            if (Input.GetKeyDown(KeyCode.C)) _visible = !_visible;
+            if (Input.GetKeyDown(KeyCode.C) && !ChatUI.Instance?.IsInputActive == true) _visible = !_visible;
         }
 
         private void OnGUI()

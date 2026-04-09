@@ -94,7 +94,7 @@ namespace Orlo.UI
             }
 
             // Toggle survey with V key
-            if (Input.GetKeyDown(KeyCode.V))
+            if (Input.GetKeyDown(KeyCode.V) && !ChatUI.Instance?.IsInputActive == true)
             {
                 Dismiss();
             }

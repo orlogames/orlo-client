@@ -75,7 +75,7 @@ namespace Orlo.UI
         private void Update()
         {
             // Toggle TMD mode with T
-            if (Input.GetKeyDown(KeyCode.T))
+            if (Input.GetKeyDown(KeyCode.T) && !ChatUI.Instance?.IsInputActive == true)
             {
                 _active = !_active;
                 _previewCircle.enabled = _active;
@@ -94,7 +94,7 @@ namespace Orlo.UI
             // Operation selection: keys 1-5
             for (int i = 0; i < 5; i++)
             {
-                if (Input.GetKeyDown(KeyCode.Alpha1 + i))
+                if (Input.GetKeyDown(KeyCode.Alpha1 + i) && !ChatUI.Instance?.IsInputActive == true)
                 {
                     _selectedOp = i;
                     ShowStatus($"{_opNames[i]} selected");

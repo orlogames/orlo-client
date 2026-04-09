@@ -84,8 +84,11 @@ namespace Orlo.Player
                 return;
             }
 
-            _lmbHeld = Input.GetMouseButton(0);
-            _rmbHeld = Input.GetMouseButton(1);
+            bool overUI = GUIUtility.hotControl != 0
+                || (UI.HUDLayout.Instance != null && UI.HUDLayout.Instance.IsMouseOverAnyWindow());
+
+            _lmbHeld = Input.GetMouseButton(0) && !overUI;
+            _rmbHeld = Input.GetMouseButton(1) && !overUI;
 
             bool anyMouseHeld = _lmbHeld || _rmbHeld;
             bool anyMouseWasHeld = wasLmb || wasRmb;

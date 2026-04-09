@@ -158,8 +158,8 @@ namespace Orlo.UI
         public void Hide()
         {
             _visible = false;
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
         }
 
         private void Update()

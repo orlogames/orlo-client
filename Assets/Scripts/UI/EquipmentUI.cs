@@ -288,7 +288,7 @@ namespace Orlo.UI
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.C))
+            if (Input.GetKeyDown(KeyCode.C) && !ChatUI.Instance?.IsInputActive == true)
             {
                 _visible = !_visible;
                 _contextMenuOpen = false;

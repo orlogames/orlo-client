@@ -89,8 +89,11 @@ namespace Orlo.Player
             float v = Input.GetAxisRaw("Vertical");
 
             // LMB + RMB held = auto-run forward (WoW/SWG style)
-            _rmbHeld = Input.GetMouseButton(1);
-            _lmbHeld = Input.GetMouseButton(0);
+            bool overUI = GUIUtility.hotControl != 0
+                || (HUDLayout.Instance != null && HUDLayout.Instance.IsMouseOverAnyWindow());
+
+            _rmbHeld = Input.GetMouseButton(1) && !overUI;
+            _lmbHeld = Input.GetMouseButton(0) && !overUI;
             if (_lmbHeld && _rmbHeld && v == 0)
                 v = 1f;
 

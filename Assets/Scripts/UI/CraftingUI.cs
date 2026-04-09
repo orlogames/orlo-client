@@ -117,7 +117,8 @@ namespace Orlo.UI
         private void Update()
         {
             if (Input.GetKeyDown(KeyCode.C) && !Input.GetKey(KeyCode.LeftControl)
-                && !Input.GetKey(KeyCode.LeftShift))
+                && !Input.GetKey(KeyCode.LeftShift)
+                && !ChatUI.Instance?.IsInputActive == true)
             {
                 if (_visible && _phase == CraftPhase.RecipeSelect)
                 {

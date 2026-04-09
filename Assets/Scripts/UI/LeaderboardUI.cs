@@ -58,7 +58,7 @@ namespace Orlo.UI
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.L))
+            if (Input.GetKeyDown(KeyCode.L) && !ChatUI.Instance?.IsInputActive == true)
             {
                 _visible = !_visible;
                 if (_visible) RequestBoardIfStale(_activeTab);

@@ -13,6 +13,8 @@ namespace Orlo.UI
     {
         private bool _menuOpen;
         private bool _creditsOpen;
+        private CursorLockMode _savedCursorLockState;
+        private bool _savedCursorVisible;
         private Texture2D _pixel;
         private string _hoveredTooltip = "";
         private float _tooltipX, _tooltipY;
@@ -61,6 +63,9 @@ namespace Orlo.UI
 
         private void Update()
         {
+            if (ChatUI.Instance != null && ChatUI.Instance.EscapeConsumedThisFrame)
+                return;
+
             if (Input.GetKeyDown(KeyCode.Escape))
             {
                 if (_creditsOpen)
@@ -74,6 +79,8 @@ namespace Orlo.UI
 
         private void OpenMenu()
         {
+            _savedCursorLockState = Cursor.lockState;
+            _savedCursorVisible = Cursor.visible;
             _menuOpen = true;
             Orlo.Player.OrbitCamera.BlockInput = true;
             Cursor.lockState = CursorLockMode.None;
@@ -85,8 +92,8 @@ namespace Orlo.UI
             _menuOpen = false;
             _creditsOpen = false;
             Orlo.Player.OrbitCamera.BlockInput = false;
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
+            Cursor.lockState = _savedCursorLockState;
+            Cursor.visible = _savedCursorVisible;
         }
 
         private void OpenSettings()

@@ -105,11 +105,11 @@ namespace Orlo.UI
             }
 
             // V = toggle world map
-            if (Input.GetKeyDown(KeyCode.V))
+            if (Input.GetKeyDown(KeyCode.V) && !ChatUI.Instance?.IsInputActive == true)
                 _worldMapOpen = !_worldMapOpen;
 
             // M = toggle minimap
-            if (Input.GetKeyDown(KeyCode.M))
+            if (Input.GetKeyDown(KeyCode.M) && !ChatUI.Instance?.IsInputActive == true)
                 _minimapVisible = !_minimapVisible;
 
             // Update fog of war based on player position

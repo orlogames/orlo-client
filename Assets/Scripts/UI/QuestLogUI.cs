@@ -58,7 +58,7 @@ namespace Orlo.UI
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.J)) _visible = !_visible;
+            if (Input.GetKeyDown(KeyCode.J) && !ChatUI.Instance?.IsInputActive == true) _visible = !_visible;
         }
 
         private void OnGUI()

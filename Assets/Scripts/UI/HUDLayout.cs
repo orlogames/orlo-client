@@ -70,6 +70,28 @@ namespace Orlo.UI
             return Vector2.zero;
         }
 
+        /// <summary>Returns true if screen-space mouse position is over any registered HUD window.</summary>
+        public bool IsMouseOverAnyWindow()
+        {
+            // Convert screen mouse to IMGUI coordinates (flip Y)
+            Vector2 mouse = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
+            foreach (var kvp in _windows)
+            {
+                var s = kvp.Value;
+                if (new Rect(s.X, s.Y, s.Width, s.Height).Contains(mouse))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>Returns the IMGUI rect for a registered HUD window, or Rect.zero if not found.</summary>
+        public Rect GetWindowRect(string key)
+        {
+            if (_windows.TryGetValue(key, out var state))
+                return new Rect(state.X, state.Y, state.Width, state.Height);
+            return Rect.zero;
+        }
+
         /// <summary>Update window size if content changes.</summary>
         public void UpdateSize(string key, float width, float height)
         {

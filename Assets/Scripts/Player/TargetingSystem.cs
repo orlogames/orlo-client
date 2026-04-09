@@ -60,7 +60,7 @@ namespace Orlo.Player
             UpdateTargetHealth();
 
             // Tab key to clear target
-            if (Input.GetKeyDown(KeyCode.Tab))
+            if (Input.GetKeyDown(KeyCode.Tab) && !ChatUI.Instance?.IsInputActive == true)
                 ClearTarget();
 
             if (_targetFlashTimer > 0)
@@ -221,7 +221,7 @@ namespace Orlo.Player
         {
             if (!_showLootPrompt || NearbyLootEntityId == 0) return;
 
-            if (Input.GetKeyDown(KeyCode.F))
+            if (Input.GetKeyDown(KeyCode.F) && !ChatUI.Instance?.IsInputActive == true)
             {
                 Debug.Log($"[Loot] Sending pickup request for loot entity {NearbyLootEntityId}");
                 var data = PacketBuilder.LootPickup(NearbyLootEntityId);
@@ -265,7 +265,7 @@ namespace Orlo.Player
             if (!_showNpcPrompt || TargetEntityId == 0)
                 return;
 
-            if (Input.GetKeyDown(KeyCode.F))
+            if (Input.GetKeyDown(KeyCode.F) && !ChatUI.Instance?.IsInputActive == true)
             {
                 Debug.Log($"[NPC] Sending interact request for NPC entity {TargetEntityId}");
                 var data = PacketBuilder.NPCInteract(TargetEntityId);
