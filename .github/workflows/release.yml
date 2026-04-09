@@ -342,10 +342,15 @@ jobs:
       - name: Publish manifest (LAST — after files verified)
         run: |
           echo "Publishing manifest for v${VERSION}..."
+          # Versioned copy — used as the canonical manifest_url in updater-api
+          aws s3 cp manifest.json \
+            "s3://${S3_BUCKET}/releases/client/${VERSION}/manifest.json" \
+            --endpoint-url "$S3_ENDPOINT"
+          # Rolling pointer — used by launcher as fallback when updater-api is unreachable
           aws s3 cp manifest.json \
             "s3://${S3_BUCKET}/releases/client/manifest.json" \
             --endpoint-url "$S3_ENDPOINT"
-          echo "Manifest published to S3"
+          echo "Manifest published to S3 (versioned + rolling pointer)"
 
       - name: Purge old client releases (keep last 5 versions)
         run: |
@@ -383,7 +388,7 @@ jobs:
       - name: Register version with updater-api
         if: always()
         run: |
-          MANIFEST_URL="s3://${S3_BUCKET}/releases/client/manifest.json"
+          MANIFEST_URL="https://orlo-cdn.fsn1.your-objectstorage.com/releases/client/${VERSION}/manifest.json"
           TOTAL_SIZE=$(python3 -c "import json; print(json.load(open('manifest.json')).get('total_size',0))" 2>/dev/null || echo "0")
           FILES_COUNT=$(python3 -c "import json; print(json.load(open('manifest.json')).get('total_files',0))" 2>/dev/null || echo "0")
 
