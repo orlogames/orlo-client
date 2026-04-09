@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI
 {
@@ -275,8 +276,11 @@ namespace Orlo.UI
             float x = Screen.width - MINIMAP_SIZE - MINIMAP_MARGIN;
             float y = MINIMAP_MARGIN;
 
-            // Border
-            GUI.Box(new Rect(x - 4, y - 4, MINIMAP_SIZE + 8, MINIMAP_SIZE + 8 + 20), "", _borderStyle);
+            var p = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
+
+            // TMD panel border around minimap
+            Rect borderRect = new Rect(x - 4, y - 4, MINIMAP_SIZE + 8, MINIMAP_SIZE + 8 + 20);
+            TMDTheme.DrawPanel(borderRect);
 
             // Circular mask effect via texture clipping
             if (_minimapTerrain != null)
@@ -285,28 +289,35 @@ namespace Orlo.UI
                 GUI.DrawTexture(new Rect(x, y, MINIMAP_SIZE, MINIMAP_SIZE), _minimapTerrain);
             }
 
-            // Draw fog overlay on minimap
+            // Draw fog overlay on minimap (race-tinted)
             DrawMinimapFog(x, y);
 
             // Draw markers
             DrawMarkers(x, y, MINIMAP_SIZE, MINIMAP_RANGE, false);
 
-            // Player arrow (center)
+            // Player arrow (center) — race-colored
             DrawPlayerIndicator(x + MINIMAP_SIZE / 2, y + MINIMAP_SIZE / 2, 14f);
 
             // Coordinates below
             string coords = $"({_playerPosition.x:F0}, {_playerPosition.z:F0})";
+            _coordStyle.normal.textColor = p.Text;
             GUI.Label(new Rect(x, y + MINIMAP_SIZE + 2, MINIMAP_SIZE, 18), coords, _coordStyle);
 
             // Hint text
             var hintStyle = new GUIStyle(_coordStyle);
             hintStyle.fontSize = 9;
-            hintStyle.normal.textColor = new Color(0.5f, 0.5f, 0.5f, 0.6f);
+            hintStyle.normal.textColor = p.TextDim;
             GUI.Label(new Rect(x, y - 16, MINIMAP_SIZE, 14), "V - World Map  |  M - Toggle", hintStyle);
+
+            // TMD scanlines
+            TMDTheme.DrawScanlines(new Rect(x, y, MINIMAP_SIZE, MINIMAP_SIZE));
         }
 
         private void DrawMinimapFog(float mapX, float mapY)
         {
+            // Race-tinted fog of war
+            var fp = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
+
             // Calculate fog UV region centered on player
             float fogU = _playerPosition.x / FOG_WORLD_SIZE + 0.5f;
             float fogV = _playerPosition.z / FOG_WORLD_SIZE + 0.5f;
@@ -316,7 +327,8 @@ namespace Orlo.UI
             // Since OnGUI can't easily do UV-offset textures, we'll create a cropped view
             // For performance, draw a semi-transparent dark overlay and punch holes for explored areas
             var oldColor = GUI.color;
-            GUI.color = new Color(0.02f, 0.02f, 0.04f, 0.75f);
+            // Fog tinted toward race palette background
+            GUI.color = new Color(fp.Background.r * 0.3f, fp.Background.g * 0.3f, fp.Background.b * 0.3f, 0.75f);
 
             // Draw fog as a grid of small cells
             int cells = 16;
@@ -338,7 +350,7 @@ namespace Orlo.UI
 
                     if (explored < 0.9f)
                     {
-                        GUI.color = new Color(0.02f, 0.02f, 0.04f, (1f - explored) * 0.8f);
+                        GUI.color = new Color(fp.Background.r * 0.3f, fp.Background.g * 0.3f, fp.Background.b * 0.3f, (1f - explored) * 0.8f);
                         GUI.DrawTexture(
                             new Rect(mapX + cx * cellSize, mapY + cy * cellSize, cellSize + 1, cellSize + 1),
                             Texture2D.whiteTexture);
@@ -356,14 +368,19 @@ namespace Orlo.UI
             float mapX = (Screen.width - mapSize) / 2;
             float mapY = (Screen.height - mapSize) / 2;
 
-            // Dark background covering full screen
-            GUI.Box(new Rect(0, 0, Screen.width, Screen.height), "", _worldMapBgStyle);
+            var wp = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
 
-            // Title
+            // Dark background covering full screen
+            GUI.color = new Color(0.02f, 0.02f, 0.04f, 0.92f);
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            // Title with race primary color
+            _titleStyle.normal.textColor = wp.Primary;
             GUI.Label(new Rect(mapX, mapY - 35, mapSize, 30), "VERIDIAN PRIME", _titleStyle);
 
-            // Map border
-            GUI.Box(new Rect(mapX - 3, mapY - 3, mapSize + 6, mapSize + 6), "", _borderStyle);
+            // Map border — TMD panel
+            TMDTheme.DrawPanel(new Rect(mapX - 3, mapY - 3, mapSize + 6, mapSize + 6));
 
             // Draw terrain texture
             if (_minimapTerrain != null)
@@ -381,19 +398,23 @@ namespace Orlo.UI
 
             // Coordinates
             string coords = $"Position: ({_playerPosition.x:F0}, {_playerPosition.z:F0})";
+            _coordStyle.normal.textColor = wp.Text;
             GUI.Label(new Rect(mapX, mapY + mapSize + 8, mapSize, 20), coords, _coordStyle);
 
             // Close hint
             var hintStyle = new GUIStyle(_coordStyle);
             hintStyle.fontSize = 12;
+            hintStyle.normal.textColor = wp.TextDim;
             GUI.Label(new Rect(mapX, mapY + mapSize + 28, mapSize, 20), "Press V to close", hintStyle);
+
+            // TMD scanlines over the map
+            TMDTheme.DrawScanlines(new Rect(mapX, mapY, mapSize, mapSize));
         }
 
         private void DrawWorldMapFog(float mapX, float mapY, float mapSize)
         {
-            // Draw the fog texture directly over the map
-            // Black = unexplored, white = explored
-            // We draw it as a multiply-like overlay
+            // Draw the fog texture directly over the map — race-tinted
+            var wfp = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
             var oldColor = GUI.color;
 
             int cells = 64; // Higher resolution for world map
@@ -413,7 +434,7 @@ namespace Orlo.UI
 
                     if (explored < 0.9f)
                     {
-                        GUI.color = new Color(0.02f, 0.02f, 0.04f, (1f - explored) * 0.85f);
+                        GUI.color = new Color(wfp.Background.r * 0.3f, wfp.Background.g * 0.3f, wfp.Background.b * 0.3f, (1f - explored) * 0.85f);
                         GUI.DrawTexture(
                             new Rect(mapX + cx * cellSize, mapY + cy * cellSize, cellSize + 1, cellSize + 1),
                             Texture2D.whiteTexture);
@@ -492,16 +513,17 @@ namespace Orlo.UI
 
         private void DrawPlayerIndicator(float cx, float cy, float size)
         {
-            // Draw player arrow/chevron pointing in movement direction
+            // Draw player arrow/chevron pointing in movement direction — race-colored
             var oldColor = GUI.color;
+            var pp = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
 
-            // Glow behind arrow
-            GUI.color = new Color(0.2f, 0.8f, 1f, 0.4f);
+            // Glow behind arrow (race glow color)
+            GUI.color = new Color(pp.Glow.r, pp.Glow.g, pp.Glow.b, 0.4f);
             float glowSize = size * 1.5f;
             GUI.DrawTexture(new Rect(cx - glowSize / 2, cy - glowSize / 2, glowSize, glowSize), _dotTexture);
 
-            // Arrow rotated by player facing
-            GUI.color = new Color(0.3f, 0.9f, 1f, 1f);
+            // Arrow rotated by player facing (race primary color)
+            GUI.color = pp.Primary;
             var pivot = new Vector2(cx, cy);
             var matrixBackup = GUI.matrix;
             GUIUtility.RotateAroundPivot(_playerRotationY, pivot);

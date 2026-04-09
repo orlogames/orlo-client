@@ -151,6 +151,34 @@ namespace Orlo
                 go.AddComponent<TMDFontManager>();
             }
 
+            // TMD Precursor Detector (drives interference near ruins)
+            if (PrecursorDetector.Instance == null)
+            {
+                var go = new GameObject("PrecursorDetector");
+                go.AddComponent<PrecursorDetector>();
+            }
+
+            // TMD Sound Designer (procedural UI audio)
+            if (TMDSoundDesigner.Instance == null)
+            {
+                var go = new GameObject("TMDSoundDesigner");
+                go.AddComponent<TMDSoundDesigner>();
+            }
+
+            // TMD Upgrade System (tier progression + persistence)
+            if (TMDUpgradeSystem.Instance == null)
+            {
+                var go = new GameObject("TMDUpgradeSystem");
+                go.AddComponent<TMDUpgradeSystem>();
+            }
+
+            // TMD Dot Grid Overlay (GMUNK-style holographic substrate)
+            if (DotGridOverlay.Instance == null)
+            {
+                var go = new GameObject("DotGridOverlay");
+                go.AddComponent<DotGridOverlay>();
+            }
+
             // Asset loading pipeline (must init before EntityManager/Factory)
             if (AssetLoader.Instance == null)
             {

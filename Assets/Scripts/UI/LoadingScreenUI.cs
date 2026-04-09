@@ -1,4 +1,5 @@
 using UnityEngine;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI
 {
@@ -190,69 +191,102 @@ namespace Orlo.UI
             // Background
             GUI.DrawTexture(new Rect(0, 0, w, h), _bgTex);
 
-            // Nebula washes
+            // Nebula washes — tinted toward race palette
             var prevColor = GUI.color;
+            Color raceTint = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.Primary
+                : new Color(0.4f, 0.5f, 0.8f);
             for (int i = 0; i < _nebulaPos.Length; i++)
             {
                 float r = _nebulaRadius[i] * Mathf.Max(w, h);
                 float nx = _nebulaPos[i].x * w - r * 0.5f;
                 float ny = _nebulaPos[i].y * h - r * 0.5f;
-                GUI.color = _nebulaColor[i];
+                // Blend nebula color subtly toward race palette
+                Color nebColor = Color.Lerp(_nebulaColor[i], new Color(raceTint.r * 0.15f, raceTint.g * 0.15f, raceTint.b * 0.15f, _nebulaColor[i].a), 0.3f);
+                GUI.color = nebColor;
                 GUI.DrawTexture(new Rect(nx, ny, r, r), _nebulaTex);
             }
 
-            // Dust motes
+            // Dust motes — race-tinted
+            Color moteColor = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.GlowHalf
+                : new Color(0.7f, 0.75f, 0.9f, 0.5f);
             for (int i = 0; i < MoteCount; i++)
             {
-                GUI.color = new Color(0.7f, 0.75f, 0.9f, _moteAlpha[i]);
+                GUI.color = new Color(moteColor.r, moteColor.g, moteColor.b, _moteAlpha[i]);
                 float s = _moteSize[i];
                 GUI.DrawTexture(new Rect(_motePos[i].x * w - s, _motePos[i].y * h - s, s * 2, s * 2), _whiteTex);
             }
             GUI.color = prevColor;
 
-            // Zone name — glow passes then main
-            float zoneY = h * 0.22f;
-            var zoneGlow = MakeStyle(28, FontStyle.Bold, new Color(0.4f, 0.5f, 0.8f, 0.15f));
+            // Zone name — TMD panel background
+            float zoneY = h * 0.18f;
+            float zonePanelW = 500f;
+            float zonePanelH = 60f;
+            var zonePanelRect = new Rect((w - zonePanelW) * 0.5f, zoneY, zonePanelW, zonePanelH);
+            TMDTheme.DrawPanel(zonePanelRect);
+            TMDTheme.DrawScanlines(zonePanelRect);
+
+            // Zone name text with race-colored glow
+            Color zoneGlowColor = TMDTheme.Instance != null
+                ? new Color(TMDTheme.Instance.Palette.Glow.r, TMDTheme.Instance.Palette.Glow.g, TMDTheme.Instance.Palette.Glow.b, 0.15f)
+                : new Color(0.4f, 0.5f, 0.8f, 0.15f);
+            var zoneGlow = MakeStyle(28, FontStyle.Bold, zoneGlowColor);
             for (int dx = -2; dx <= 2; dx++)
                 for (int dy = -2; dy <= 2; dy++)
                     if (dx != 0 || dy != 0)
-                        GUI.Label(new Rect(dx, zoneY + dy, w, 40), _zoneName, zoneGlow);
+                        GUI.Label(new Rect(dx, zoneY + 10 + dy, w, 40), _zoneName, zoneGlow);
 
-            var zoneStyle = MakeStyle(28, FontStyle.Bold, new Color(0.8f, 0.85f, 0.95f));
-            GUI.Label(new Rect(0, zoneY, w, 40), _zoneName, zoneStyle);
+            Color zoneTextColor = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.Primary
+                : new Color(0.8f, 0.85f, 0.95f);
+            var zoneStyle = MakeStyle(28, FontStyle.Bold, zoneTextColor);
+            GUI.Label(new Rect(0, zoneY + 10, w, 40), _zoneName, zoneStyle);
 
-            // Lore quote
-            var loreStyle = MakeStyle(14, FontStyle.Italic, new Color(0.6f, 0.65f, 0.75f), true);
+            // Lore quote — TMD label styled
+            Color loreColor = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.TextDim
+                : new Color(0.6f, 0.65f, 0.75f);
+            var loreStyle = MakeStyle(14, FontStyle.Italic, loreColor, true);
             GUI.Label(new Rect(w * 0.15f, h * 0.42f, w * 0.7f, 60), $"\"{_loreQuote}\"", loreStyle);
 
-            // Progress bar
-            float barW = 400f, barH = 6f;
+            // Progress bar — TMD race-colored via DrawProgressBar
+            float barW = 400f, barH = 10f;
             float barX = (w - barW) * 0.5f, barY = h * 0.62f;
-            DrawRect(barX, barY, barW, barH, new Color(0.1f, 0.1f, 0.15f));
-            float fillW = barW * _progress;
-            if (fillW > 0)
-            {
-                DrawRect(barX, barY, fillW, barH, new Color(0.3f, 0.5f, 0.9f));
-                // Leading glow
-                if (fillW > 2)
-                    DrawRect(barX + fillW - 4, barY - 1, 8, barH + 2, new Color(0.85f, 0.92f, 1f, 0.7f));
-            }
+            TMDTheme.DrawProgressBar(new Rect(barX, barY, barW, barH), _progress);
 
-            // Percentage above bar
-            var pctStyle = MakeStyle(14, FontStyle.Normal, new Color(0.7f, 0.75f, 0.85f));
+            // Percentage above bar — race text
+            Color pctColor = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.Text
+                : new Color(0.7f, 0.75f, 0.85f);
+            var pctStyle = MakeStyle(14, FontStyle.Normal, pctColor);
             GUI.Label(new Rect(0, barY - 24, w, 20), $"{Mathf.RoundToInt(_progress * 100)}%", pctStyle);
 
             // Status below bar
-            var statStyle = MakeStyle(12, FontStyle.Normal, new Color(0.45f, 0.5f, 0.6f));
+            Color statColor = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.TextDim
+                : new Color(0.45f, 0.5f, 0.6f);
+            var statStyle = MakeStyle(12, FontStyle.Normal, statColor);
             GUI.Label(new Rect(0, barY + barH + 6, w, 20), _statusText, statStyle);
 
-            // Tip at bottom
+            // Tip at bottom — TMD styled panel
             string tip = Tips[_currentTip];
-            float tipY = h * 0.82f;
-            var tipPrefixStyle = MakeStyle(13, FontStyle.Normal, new Color(0.6f, 0.7f, 0.9f));
-            var tipBodyStyle = MakeStyle(13, FontStyle.Normal, new Color(0.5f, 0.5f, 0.6f), true);
-            GUI.Label(new Rect(0, tipY, w, 20), "TIP:", tipPrefixStyle);
-            GUI.Label(new Rect(w * 0.1f, tipY + 20, w * 0.8f, 40), tip, tipBodyStyle);
+            float tipY = h * 0.78f;
+            float tipPanelW = w * 0.7f;
+            float tipPanelH = 70f;
+            var tipPanelRect = new Rect((w - tipPanelW) * 0.5f, tipY, tipPanelW, tipPanelH);
+            TMDTheme.DrawPanel(tipPanelRect);
+
+            Color tipPrefixColor = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.Accent
+                : new Color(0.6f, 0.7f, 0.9f);
+            Color tipBodyColor = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.TextDim
+                : new Color(0.5f, 0.5f, 0.6f);
+            var tipPrefixStyle = MakeStyle(13, FontStyle.Bold, tipPrefixColor);
+            var tipBodyStyle = MakeStyle(13, FontStyle.Normal, tipBodyColor, true);
+            GUI.Label(new Rect(0, tipY + 8, w, 20), "TIP", tipPrefixStyle);
+            GUI.Label(new Rect(w * 0.1f, tipY + 28, w * 0.8f, 36), tip, tipBodyStyle);
         }
 
         private GUIStyle MakeStyle(int size, FontStyle font, Color color, bool wrap = false)

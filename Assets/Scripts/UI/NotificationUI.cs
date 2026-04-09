@@ -1,11 +1,13 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI
 {
     /// <summary>
-    /// Notification toast system — slides notifications in from the right.
+    /// Notification toast system — slides notifications in from the right using spring animation.
     /// Supports Info, Warning, Error, Achievement, and Discovery types.
+    /// TMD Integration: panel backgrounds, race-colored borders, spring-animated slide-in.
     /// </summary>
     public class NotificationUI : MonoBehaviour
     {
@@ -15,7 +17,8 @@ namespace Orlo.UI
             public string message;
             public int type; // 0=Info, 1=Warning, 2=Error, 3=Achievement, 4=Discovery
             public float timeRemaining;
-            public float slideIn; // 0..1 animation
+            public SpringValue slideSpring; // Spring-animated X position
+            public float fadeAlpha; // For exit fade
         }
 
         private List<Notification> notifications = new List<Notification>();
@@ -24,12 +27,6 @@ namespace Orlo.UI
         private const float NOTIFICATION_WIDTH = 320f;
         private const float NOTIFICATION_HEIGHT = 60f;
         private const float SPACING = 8f;
-        private const float SLIDE_SPEED = 5f;
-
-        private GUIStyle boxStyle;
-        private GUIStyle titleStyle;
-        private GUIStyle messageStyle;
-        private bool stylesInitialized = false;
 
         private static NotificationUI instance;
         public static NotificationUI Instance => instance;
@@ -48,13 +45,17 @@ namespace Orlo.UI
             if (duration <= 0f) duration = DEFAULT_DURATION;
             if (type == 3) duration = 8f; // Achievements stay longer
 
+            // Spring-animated slide-in from right edge
+            var spring = SpringPresets.NotificationSlideIn(Screen.width);
+
             notifications.Add(new Notification
             {
                 title = title,
                 message = message,
                 type = type,
                 timeRemaining = duration,
-                slideIn = 0f
+                slideSpring = spring,
+                fadeAlpha = 1f
             });
 
             // Cap the list
@@ -73,11 +74,19 @@ namespace Orlo.UI
 
         private void Update()
         {
+            float dt = Time.deltaTime;
             for (int i = notifications.Count - 1; i >= 0; i--)
             {
                 var n = notifications[i];
-                n.timeRemaining -= Time.deltaTime;
-                n.slideIn = Mathf.Min(1f, n.slideIn + Time.deltaTime * SLIDE_SPEED);
+                n.timeRemaining -= dt;
+
+                // Update spring animation
+                n.slideSpring.Update(dt);
+
+                // Fade out in last second
+                if (n.timeRemaining < 1f)
+                    n.fadeAlpha = Mathf.Clamp01(n.timeRemaining);
+
                 notifications[i] = n;
 
                 if (n.timeRemaining <= 0f)
@@ -85,28 +94,11 @@ namespace Orlo.UI
             }
         }
 
-        private void InitStyles()
-        {
-            if (stylesInitialized) return;
-            stylesInitialized = true;
-
-            boxStyle = new GUIStyle(GUI.skin.box);
-            boxStyle.padding = new RectOffset(12, 12, 8, 8);
-
-            titleStyle = new GUIStyle(GUI.skin.label);
-            titleStyle.fontStyle = FontStyle.Bold;
-            titleStyle.fontSize = 13;
-
-            messageStyle = new GUIStyle(GUI.skin.label);
-            messageStyle.fontSize = 11;
-            messageStyle.wordWrap = true;
-            messageStyle.normal.textColor = new Color(0.85f, 0.85f, 0.85f);
-        }
-
         private void OnGUI()
         {
             if (notifications.Count == 0) return;
-            InitStyles();
+
+            var p = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
 
             int visible = Mathf.Min(notifications.Count, (int)MAX_VISIBLE);
             float startY = 80f;
@@ -114,35 +106,26 @@ namespace Orlo.UI
             for (int i = 0; i < visible; i++)
             {
                 var n = notifications[notifications.Count - 1 - i];
+                float alpha = n.fadeAlpha;
 
-                // Slide from right
-                float slideOffset = (1f - n.slideIn) * (NOTIFICATION_WIDTH + 20f);
-                // Fade out in last second
-                float alpha = Mathf.Clamp01(n.timeRemaining);
-
-                Color bgColor = n.type switch
-                {
-                    1 => new Color(0.5f, 0.4f, 0.1f, 0.9f * alpha),  // Warning
-                    2 => new Color(0.5f, 0.1f, 0.1f, 0.9f * alpha),  // Error
-                    3 => new Color(0.3f, 0.2f, 0.5f, 0.92f * alpha), // Achievement
-                    4 => new Color(0.1f, 0.3f, 0.4f, 0.9f * alpha),  // Discovery
-                    _ => new Color(0.1f, 0.12f, 0.18f, 0.9f * alpha), // Info
-                };
-
-                Color titleColor = n.type switch
-                {
-                    3 => new Color(1f, 0.8f, 0.2f),       // Achievement gold
-                    4 => new Color(0.3f, 0.9f, 0.9f),     // Discovery cyan
-                    2 => new Color(1f, 0.4f, 0.4f),       // Error red
-                    1 => new Color(1f, 0.85f, 0.3f),      // Warning yellow
-                    _ => Color.white,
-                };
-
-                float x = Screen.width - NOTIFICATION_WIDTH - 20f + slideOffset;
+                // Spring-animated X position
+                float x = n.slideSpring.Value;
                 float y = startY + i * (NOTIFICATION_HEIGHT + SPACING);
 
-                boxStyle.normal.background = MakeTex(1, 1, bgColor);
-                GUI.Box(new Rect(x, y, NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT), "", boxStyle);
+                Rect notifRect = new Rect(x, y, NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT);
+
+                // TMD panel background with fade
+                GUI.color = new Color(1, 1, 1, alpha);
+                TMDTheme.DrawPanel(notifRect);
+
+                // Type-specific accent border on left edge
+                Color accentColor = GetTypeAccentColor(n.type, p);
+                GUI.color = new Color(accentColor.r, accentColor.g, accentColor.b, 0.9f * alpha);
+                GUI.DrawTexture(new Rect(x, y, 3, NOTIFICATION_HEIGHT), Texture2D.whiteTexture);
+
+                // Type-specific top border glow
+                GUI.color = new Color(accentColor.r, accentColor.g, accentColor.b, 0.3f * alpha);
+                GUI.DrawTexture(new Rect(x, y, NOTIFICATION_WIDTH, 1), Texture2D.whiteTexture);
 
                 // Icon prefix
                 string prefix = n.type switch
@@ -154,22 +137,52 @@ namespace Orlo.UI
                     _ => ""
                 };
 
-                titleStyle.normal.textColor = titleColor * alpha;
+                // Title — race-colored for achievements, type-colored for others
+                Color titleColor = GetTypeTitleColor(n.type, p);
+                var titleStyle = TMDTheme.Instance != null ? new GUIStyle(TMDTheme.LabelStyle) : new GUIStyle(GUI.skin.label);
+                titleStyle.fontStyle = FontStyle.Bold;
+                titleStyle.fontSize = 13;
+                titleStyle.normal.textColor = new Color(titleColor.r, titleColor.g, titleColor.b, alpha);
                 GUI.Label(new Rect(x + 12, y + 6, NOTIFICATION_WIDTH - 24, 20),
                     prefix + n.title, titleStyle);
 
-                messageStyle.normal.textColor = new Color(0.85f, 0.85f, 0.85f, alpha);
+                // Message — race text color
+                var messageStyle = TMDTheme.Instance != null ? new GUIStyle(TMDTheme.LabelStyle) : new GUIStyle(GUI.skin.label);
+                messageStyle.fontSize = 11;
+                messageStyle.wordWrap = true;
+                messageStyle.normal.textColor = new Color(p.Text.r, p.Text.g, p.Text.b, alpha * 0.85f);
                 GUI.Label(new Rect(x + 12, y + 26, NOTIFICATION_WIDTH - 24, 30),
                     n.message, messageStyle);
+
+                // Scanlines on each notification
+                TMDTheme.DrawScanlines(notifRect);
             }
+
+            GUI.color = Color.white;
         }
 
-        private Texture2D MakeTex(int w, int h, Color col)
+        private static Color GetTypeAccentColor(int type, RacePalette p)
         {
-            var tex = new Texture2D(w, h);
-            for (int i = 0; i < w * h; i++) tex.SetPixel(i % w, i / w, col);
-            tex.Apply();
-            return tex;
+            return type switch
+            {
+                1 => Color.Lerp(p.Primary, new Color(1f, 0.85f, 0.3f), 0.5f), // Warning — race-tinted yellow
+                2 => p.Danger,                                                    // Error
+                3 => p.Primary,                                                   // Achievement — full race primary
+                4 => p.Secondary,                                                 // Discovery — race secondary
+                _ => p.Border,                                                    // Info — subtle border
+            };
+        }
+
+        private static Color GetTypeTitleColor(int type, RacePalette p)
+        {
+            return type switch
+            {
+                1 => Color.Lerp(p.Primary, new Color(1f, 0.85f, 0.3f), 0.5f), // Warning
+                2 => p.Danger,                                                    // Error
+                3 => p.Primary,                                                   // Achievement — race gold/green/ember/purple
+                4 => p.Secondary,                                                 // Discovery
+                _ => p.Text,                                                      // Info
+            };
         }
     }
 }

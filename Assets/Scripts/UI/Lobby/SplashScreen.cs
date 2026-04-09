@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI.Lobby
 {
@@ -41,6 +42,12 @@ namespace Orlo.UI.Lobby
         private const float IntroDuration = 5f;
         private const float IntroTitleReveal = 3.5f; // seconds into intro when ORLO starts appearing
         private const float IntroFlashTime = 4.2f;
+
+        // Spring animators for smooth transitions
+        private SpringValue _logoFadeSpring;
+        private SpringValue _titleFadeSpring;
+        private SpringValue _promptFadeSpring;
+        private bool _springsInitialized;
 
         // Cached styles and textures
         private GUIStyle _logoStyle;
@@ -85,6 +92,12 @@ namespace Orlo.UI.Lobby
                 _phaseTimer = 0f;
             }
             _titlePulseTimer = 0f;
+
+            // Initialize spring animators for fade transitions
+            _logoFadeSpring = SpringPresets.PanelOpen(0f, 1f);
+            _titleFadeSpring = new SpringValue(0f, 250f, 0.8f) { Target = 0f };
+            _promptFadeSpring = new SpringValue(0f, 200f, 0.9f) { Target = 0f };
+            _springsInitialized = true;
         }
 
         public void Hide()
@@ -113,6 +126,15 @@ namespace Orlo.UI.Lobby
             _phaseTimer += Time.deltaTime;
             _titlePulseTimer += Time.deltaTime;
 
+            // Tick spring animators
+            if (_springsInitialized)
+            {
+                float dt = Time.deltaTime;
+                _logoFadeSpring.Update(dt);
+                _titleFadeSpring.Update(dt);
+                _promptFadeSpring.Update(dt);
+            }
+
             switch (_phase)
             {
                 case Phase.Logo:
@@ -121,6 +143,9 @@ namespace Orlo.UI.Lobby
                         Complete();
                         return;
                     }
+                    // Fade out logo spring near end of phase
+                    if (_phaseTimer >= LogoDuration - LogoFadeOut)
+                        _logoFadeSpring.Target = 0f;
                     if (_phaseTimer >= LogoDuration)
                     {
                         _phase = Phase.Intro;
@@ -136,6 +161,9 @@ namespace Orlo.UI.Lobby
                         return;
                     }
                     UpdateWormhole();
+                    // Spring-animate the title reveal near end of intro
+                    if (_phaseTimer > IntroTitleReveal && _titleFadeSpring.Target < 0.5f)
+                        _titleFadeSpring.Target = 1f;
                     if (_phaseTimer >= IntroDuration)
                     {
                         SkipToTitle();
@@ -143,6 +171,11 @@ namespace Orlo.UI.Lobby
                     break;
 
                 case Phase.Title:
+                    // Spring-animate title and prompt in
+                    if (_titleFadeSpring.Target < 0.5f)
+                        _titleFadeSpring.Target = 1f;
+                    if (_phaseTimer > 0.5f && _promptFadeSpring.Target < 0.5f)
+                        _promptFadeSpring.Target = 1f;
                     if (Input.anyKeyDown || Input.GetMouseButtonDown(0))
                     {
                         Complete();
@@ -246,16 +279,27 @@ namespace Orlo.UI.Lobby
 
         private void DrawLogo(float sw, float sh)
         {
-            float alpha;
-            if (_phaseTimer < LogoFadeIn)
-                alpha = _phaseTimer / LogoFadeIn;
-            else if (_phaseTimer > LogoDuration - LogoFadeOut)
-                alpha = (LogoDuration - _phaseTimer) / LogoFadeOut;
-            else
-                alpha = 1f;
+            // Use spring-animated fade for smoother transitions
+            float alpha = _springsInitialized ? _logoFadeSpring.Value : 0f;
+            // Fallback to timer-based if spring hasn't settled yet at start
+            if (!_springsInitialized)
+            {
+                if (_phaseTimer < LogoFadeIn)
+                    alpha = _phaseTimer / LogoFadeIn;
+                else if (_phaseTimer > LogoDuration - LogoFadeOut)
+                    alpha = (LogoDuration - _phaseTimer) / LogoFadeOut;
+                else
+                    alpha = 1f;
+            }
 
             alpha = Mathf.Clamp01(alpha);
-            GUI.color = new Color(1f, 1f, 1f, alpha);
+
+            // Tint logo text subtly with race glow (Solari gold default)
+            Color glowTint = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.Glow
+                : new Color(1f, 0.9f, 0.4f);
+            Color logoColor = Color.Lerp(Color.white, glowTint, 0.1f);
+            GUI.color = new Color(logoColor.r, logoColor.g, logoColor.b, alpha);
             GUI.Label(new Rect(0, sh * 0.45f, sw, 60f), "ORLOGAMES", _logoStyle);
             GUI.color = Color.white;
         }
@@ -326,24 +370,31 @@ namespace Orlo.UI.Lobby
 
         private void DrawTitle(float sw, float sh)
         {
-            // Subtle glow pulse on title
+            // Spring-animated title fade with subtle glow pulse
+            float titleAlpha = _springsInitialized ? _titleFadeSpring.Value : 1f;
             float pulse = 0.85f + Mathf.Sin(_titlePulseTimer * 1.5f) * 0.15f;
-            DrawGlowText("ORLO", new Rect(0, sh * 0.35f, sw, 120f), _titleStyle, pulse);
+            DrawGlowText("ORLO", new Rect(0, sh * 0.35f, sw, 120f), _titleStyle, pulse * titleAlpha);
 
-            // "Press Any Key" fading in and out
-            float promptAlpha = (Mathf.Sin(_titlePulseTimer * 2.5f) + 1f) * 0.5f;
-            promptAlpha = Mathf.Lerp(0.2f, 0.9f, promptAlpha);
-            // Delay appearance slightly
-            if (_phaseTimer > 0.5f)
+            // "Press Any Key" — spring-animated fade in with breathing pulse
+            float promptBase = _springsInitialized ? _promptFadeSpring.Value : 1f;
+            float promptPulse = (Mathf.Sin(_titlePulseTimer * 2.5f) + 1f) * 0.5f;
+            float promptAlpha = Mathf.Lerp(0.2f, 0.9f, promptPulse) * promptBase;
+            if (promptAlpha > 0.01f)
             {
-                float fadeIn = Mathf.Clamp01((_phaseTimer - 0.5f) / 0.5f);
-                GUI.color = new Color(0.7f, 0.75f, 0.8f, promptAlpha * fadeIn);
+                // Tint prompt text with race palette
+                Color promptColor = TMDTheme.Instance != null
+                    ? TMDTheme.Instance.Palette.TextDim
+                    : new Color(0.7f, 0.75f, 0.8f);
+                GUI.color = new Color(promptColor.r, promptColor.g, promptColor.b, promptAlpha);
                 GUI.Label(new Rect(0, sh * 0.58f, sw, 30f), "Press Any Key to Continue", _promptStyle);
             }
 
-            // Version number bottom-left
+            // Version number bottom-left — dimmed race text
             string version = Application.version;
-            GUI.color = new Color(0.4f, 0.4f, 0.45f, 0.8f);
+            Color versionColor = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.TextDim
+                : new Color(0.4f, 0.4f, 0.45f);
+            GUI.color = new Color(versionColor.r, versionColor.g, versionColor.b, 0.8f);
             GUI.Label(new Rect(12f, sh - 30f, 200f, 24f), $"v{version}", _versionStyle);
 
             GUI.color = Color.white;
@@ -351,12 +402,21 @@ namespace Orlo.UI.Lobby
 
         /// <summary>
         /// Draws text with a soft glow by rendering it multiple times at slight offsets
-        /// with reduced alpha, then the main text on top.
+        /// with reduced alpha, then the main text on top. Uses TMD race palette for glow
+        /// color (Solari gold by default since race isn't known at splash time).
         /// </summary>
         private void DrawGlowText(string text, Rect rect, GUIStyle style, float alpha)
         {
-            // Outer glow layers
-            Color glowColor = new Color(0.6f, 0.7f, 1f, alpha * 0.08f);
+            // Get glow color from race palette (Solari gold by default)
+            Color raceGlow = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.Glow
+                : new Color(1f, 0.9f, 0.4f); // Solari gold fallback
+            Color racePrimary = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.Primary
+                : new Color(1f, 0.84f, 0f); // Gold fallback
+
+            // Outer glow layers — race-colored
+            Color glowColor = new Color(raceGlow.r, raceGlow.g, raceGlow.b, alpha * 0.1f);
             for (int i = 0; i < 3; i++)
             {
                 float offset = (i + 1) * 3f;
@@ -364,15 +424,16 @@ namespace Orlo.UI.Lobby
                 GUI.Label(new Rect(rect.x - offset, rect.y - offset, rect.width + offset * 2, rect.height + offset * 2), text, style);
             }
 
-            // Inner glow
-            GUI.color = new Color(0.7f, 0.8f, 1f, alpha * 0.2f);
+            // Inner glow — race primary with more opacity
+            GUI.color = new Color(racePrimary.r, racePrimary.g, racePrimary.b, alpha * 0.25f);
             GUI.Label(new Rect(rect.x - 1, rect.y - 1, rect.width + 2, rect.height + 2), text, style);
             GUI.Label(new Rect(rect.x + 1, rect.y - 1, rect.width + 2, rect.height + 2), text, style);
             GUI.Label(new Rect(rect.x - 1, rect.y + 1, rect.width + 2, rect.height + 2), text, style);
             GUI.Label(new Rect(rect.x + 1, rect.y + 1, rect.width + 2, rect.height + 2), text, style);
 
-            // Main text
-            GUI.color = new Color(1f, 1f, 1f, alpha);
+            // Main text — bright white tinted slightly toward race color
+            Color mainColor = Color.Lerp(Color.white, racePrimary, 0.15f);
+            GUI.color = new Color(mainColor.r, mainColor.g, mainColor.b, alpha);
             GUI.Label(rect, text, style);
         }
     }

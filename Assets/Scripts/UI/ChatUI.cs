@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI
 {
@@ -510,21 +511,26 @@ namespace Orlo.UI
             float timeSinceActivity = Time.time - _lastActivityTime;
             float alpha = (_hovered || _inputFocused || timeSinceActivity < FadeDelay) ? 1f : FadedAlpha;
 
-            // Background
-            GUI.color = new Color(0, 0, 0, 0.7f * alpha);
-            GUI.DrawTexture(fullRect, Texture2D.whiteTexture);
+            var p = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
+
+            // TMD panel background with fade
             GUI.color = new Color(1, 1, 1, alpha);
+            TMDTheme.DrawPanel(fullRect);
 
             // Title bar
             Rect titleBar = new Rect(x, y, WindowW, 20);
-            GUI.color = new Color(0.12f, 0.12f, 0.18f, 0.95f * alpha);
+            GUI.color = new Color(p.PanelBackground.r, p.PanelBackground.g, p.PanelBackground.b, 0.95f * alpha);
             GUI.DrawTexture(titleBar, Texture2D.whiteTexture);
             GUI.color = new Color(1, 1, 1, alpha);
-            GUI.Label(titleBar, "  Chat", BoldLabel());
+            var chatTitleStyle = TMDTheme.Instance != null ? new GUIStyle(TMDTheme.LabelStyle) : BoldLabel();
+            chatTitleStyle.fontSize = 12;
+            chatTitleStyle.fontStyle = FontStyle.Bold;
+            chatTitleStyle.normal.textColor = new Color(p.Primary.r, p.Primary.g, p.Primary.b, alpha);
+            GUI.Label(titleBar, "  CHAT", chatTitleStyle);
 
             float contentY = y + 22;
 
-            // Channel tabs (two rows if needed)
+            // Channel tabs (two rows if needed) — race-colored active underline
             float tabW = 42f;
             float tabX = x + 2;
             float tabY = contentY;
@@ -534,10 +540,19 @@ namespace Orlo.UI
                 bool selected = _activeChannelName == tab;
                 Color tabColor = ChannelColors.ContainsKey(tab) ? ChannelColors[tab] : Color.white;
 
+                // Tab background
                 GUI.color = selected
-                    ? new Color(tabColor.r, tabColor.g, tabColor.b, 0.7f * alpha)
-                    : new Color(0.15f, 0.15f, 0.15f, 0.8f * alpha);
+                    ? new Color(p.Primary.r * 0.15f, p.Primary.g * 0.15f, p.Primary.b * 0.15f, 0.8f * alpha)
+                    : new Color(0.1f, 0.1f, 0.12f, 0.6f * alpha);
                 GUI.DrawTexture(new Rect(tabX, tabY, tabW, 16), Texture2D.whiteTexture);
+
+                // Race-colored active underline
+                if (selected)
+                {
+                    GUI.color = new Color(p.Primary.r, p.Primary.g, p.Primary.b, 0.9f * alpha);
+                    GUI.DrawTexture(new Rect(tabX, tabY + 14, tabW, 2), Texture2D.whiteTexture);
+                }
+
                 GUI.color = new Color(1, 1, 1, alpha);
 
                 if (GUI.Button(new Rect(tabX, tabY, tabW, 16), tab, TabLabel()))
@@ -595,13 +610,22 @@ namespace Orlo.UI
             float sendBtnW = 50f;
             float inputW = WindowW - sendBtnW - 10;
 
-            // Channel indicator
+            // Channel indicator — race primary accent
             Color chColor = ChannelColors.ContainsKey(_activeChannelName) ? ChannelColors[_activeChannelName] : Color.white;
-            GUI.color = new Color(chColor.r, chColor.g, chColor.b, 0.6f * alpha);
+            GUI.color = new Color(p.Primary.r, p.Primary.g, p.Primary.b, 0.7f * alpha);
             GUI.DrawTexture(new Rect(x + 2, inputY, 3, inputH), Texture2D.whiteTexture);
 
-            GUI.color = new Color(0.1f, 0.1f, 0.1f, 0.9f * alpha);
-            GUI.DrawTexture(new Rect(x + 5, inputY, inputW - 3, inputH), Texture2D.whiteTexture);
+            // Input field background with race-colored border
+            Rect inputBgRect = new Rect(x + 5, inputY, inputW - 3, inputH);
+            GUI.color = new Color(p.Background.r, p.Background.g, p.Background.b, 0.9f * alpha);
+            GUI.DrawTexture(inputBgRect, Texture2D.whiteTexture);
+            // Race-colored border on input
+            Color inputBorderColor = _inputFocused ? p.Primary : p.Border;
+            GUI.color = new Color(inputBorderColor.r, inputBorderColor.g, inputBorderColor.b, 0.6f * alpha);
+            GUI.DrawTexture(new Rect(inputBgRect.x, inputBgRect.y, inputBgRect.width, 1), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(inputBgRect.x, inputBgRect.yMax - 1, inputBgRect.width, 1), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(inputBgRect.x, inputBgRect.y, 1, inputBgRect.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(inputBgRect.xMax - 1, inputBgRect.y, 1, inputBgRect.height), Texture2D.whiteTexture);
             GUI.color = new Color(1, 1, 1, alpha);
 
             GUI.SetNextControlName(_inputControlName);
@@ -615,8 +639,7 @@ namespace Orlo.UI
             }
 
             var sendRect = new Rect(x + inputW + 4, inputY, sendBtnW, inputH);
-            GUI.color = new Color(0.2f, 0.7f, 0.3f, 0.95f * alpha);
-            if (GUI.Button(sendRect, "Send"))
+            if (TMDTheme.DrawButton(sendRect, "Send"))
             {
                 _pendingSend = true;
             }
@@ -641,6 +664,10 @@ namespace Orlo.UI
                     _inputText = "";
                 }
             }
+
+            // TMD scanlines
+            GUI.color = new Color(1, 1, 1, alpha);
+            TMDTheme.DrawScanlines(fullRect);
 
             GUI.color = Color.white;
         }

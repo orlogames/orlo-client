@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI.Panels
 {
@@ -55,14 +56,10 @@ namespace Orlo.UI.Panels
         // --- Layout ---
         private const float WinW = 700f, WinH = 500f, SideW = 140f, TabH = 32f;
 
-        // --- Colors ---
-        private static readonly Color BgColor = new Color(0.06f, 0.06f, 0.1f, 0.92f);
-        private static readonly Color BorderColor = new Color(0.2f, 0.25f, 0.4f);
-        private static readonly Color Cyan = new Color(0.35f, 0.6f, 0.95f);
-        private static readonly Color Gold = new Color(1f, 0.85f, 0.2f);
-        private static readonly Color DimText = new Color(0.5f, 0.5f, 0.6f);
-        private static readonly Color HoverBg = new Color(0.12f, 0.12f, 0.18f);
-        private static readonly Color RowAlt = new Color(0.08f, 0.08f, 0.13f);
+        // --- Palette accessor ---
+        private RacePalette P => TMDTheme.Instance?.Palette ?? RacePalette.Solari;
+
+        // Kept for specific use
         private static readonly Color DimRed = new Color(0.7f, 0.2f, 0.2f);
 
         private static readonly string[] CodexCategories = { "World", "Creatures", "Technology", "Factions", "Characters", "Resources", "Lore", "History" };
@@ -109,17 +106,14 @@ namespace Orlo.UI.Panels
             var winY = (Screen.height - WinH) / 2f;
             var winR = new Rect(winX, winY, WinW, WinH);
 
-            // Background
-            DrawRect(winR, BgColor);
-            DrawBorder(winR, BorderColor);
+            // TMD glassmorphic background
+            TMDTheme.DrawPanel(winR);
 
-            // Title bar
-            var titleR = new Rect(winX, winY, WinW, 26);
-            DrawRect(titleR, new Color(0.04f, 0.04f, 0.08f));
-            GUI.color = Cyan;
-            GUI.Label(new Rect(winX + 10, winY + 4, 200, 20), "QUEST JOURNAL");
+            // Title via TMD
+            TMDTheme.DrawTitle(winR, "QUEST JOURNAL");
+
             // Close button
-            GUI.color = DimText;
+            GUI.color = P.TextDim;
             if (GUI.Button(new Rect(winX + WinW - 24, winY + 3, 20, 20), "X", GUIStyle.none)) _visible = false;
             GUI.color = Color.white;
 
@@ -141,6 +135,9 @@ namespace Orlo.UI.Panels
                 case Tab.Codex: DrawCodexTab(contentR); break;
                 case Tab.Missions: DrawMissionsTab(contentR); break;
             }
+
+            // Scanline overlay
+            TMDTheme.DrawScanlines(winR);
         }
 
         // ===================== SIDEBAR =====================
@@ -149,7 +146,7 @@ namespace Orlo.UI.Panels
         {
             var sideR = new Rect(x, y, SideW, h);
             DrawRect(sideR, new Color(0.04f, 0.04f, 0.07f));
-            DrawRect(new Rect(x + SideW - 1, y, 1, h), BorderColor);
+            DrawRect(new Rect(x + SideW - 1, y, 1, h), P.Border);
 
             var tabs = new[] {
                 ("Active", $"{_activeQuests.Length}/5"),
@@ -167,14 +164,14 @@ namespace Orlo.UI.Panels
                 bool active = _activeTab == tabEnum;
                 bool hover = tabR.Contains(Event.current.mousePosition);
 
-                DrawRect(tabR, active ? new Color(0.1f, 0.12f, 0.2f) : hover ? HoverBg : Color.clear);
+                DrawRect(tabR, active ? new Color(0.1f, 0.12f, 0.2f) : hover ? new Color(P.Primary.r, P.Primary.g, P.Primary.b, 0.12f) : Color.clear);
 
-                // Cyan left stripe for active tab
-                if (active) DrawRect(new Rect(x + 4, ty, 3, TabH), Cyan);
+                // P.Primary left stripe for active tab
+                if (active) DrawRect(new Rect(x + 4, ty, 3, TabH), P.Primary);
 
-                GUI.color = active ? Color.white : hover ? new Color(0.7f, 0.7f, 0.8f) : DimText;
+                GUI.color = active ? Color.white : hover ? new Color(0.7f, 0.7f, 0.8f) : P.TextDim;
                 GUI.Label(new Rect(x + 14, ty + 7, 80, 20), tabs[i].Item1);
-                GUI.color = active ? Cyan : DimText;
+                GUI.color = active ? P.Primary : P.TextDim;
                 var countStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleRight, fontSize = 10 };
                 GUI.Label(new Rect(x + 4, ty + 7, SideW - 18, 20), tabs[i].Item2, countStyle);
 
@@ -206,8 +203,8 @@ namespace Orlo.UI.Panels
                 if (group.Length == 0) continue;
 
                 // Type divider
-                var divColor = typeLabel == "STORY ARC" ? Gold : typeLabel == "FACTION" ? new Color(0.6f, 0.3f, 0.8f)
-                    : typeLabel == "EXPLORATION" ? Cyan : DimText;
+                var divColor = typeLabel == "STORY ARC" ? P.Accent : typeLabel == "FACTION" ? new Color(0.6f, 0.3f, 0.8f)
+                    : typeLabel == "EXPLORATION" ? P.Primary : P.TextDim;
                 DrawRect(new Rect(4, cy, listW - 24, 1), divColor);
                 GUI.color = divColor;
                 GUI.Label(new Rect(8, cy + 2, 200, 16), typeLabel, SmallBold());
@@ -221,11 +218,11 @@ namespace Orlo.UI.Panels
                     var rowR = new Rect(4, cy, listW - 24, 48);
                     bool hover = rowR.Contains(Event.current.mousePosition - listR.position + _scrollLeft);
 
-                    DrawRect(rowR, selected ? new Color(0.12f, 0.14f, 0.22f) : hover ? HoverBg : (gi % 2 == 0 ? RowAlt : Color.clear));
+                    DrawRect(rowR, selected ? new Color(0.12f, 0.14f, 0.22f) : hover ? new Color(P.Primary.r, P.Primary.g, P.Primary.b, 0.12f) : (gi % 2 == 0 ? new Color(P.Background.r, P.Background.g, P.Background.b, 0.4f) : Color.clear));
 
                     // Track star
                     var starR = new Rect(8, cy + 4, 16, 16);
-                    GUI.color = q.isTracked ? Gold : DimText;
+                    GUI.color = q.isTracked ? P.Accent : P.TextDim;
                     GUI.Label(starR, q.isTracked ? "[*]" : "[ ]");
 
                     // Quest name
@@ -242,9 +239,9 @@ namespace Orlo.UI.Panels
                     int total = q.objectives?.Length ?? 0;
                     string brief = total > 0 ? q.objectives[0].description : "";
                     if (brief.Length > 40) brief = brief.Substring(0, 37) + "...";
-                    GUI.color = DimText;
+                    GUI.color = P.TextDim;
                     GUI.Label(new Rect(28, cy + 22, listW - 100, 16), brief, SmallStyle());
-                    GUI.color = Cyan;
+                    GUI.color = P.Primary;
                     var fracStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleRight, fontSize = 10 };
                     GUI.Label(new Rect(4, cy + 22, listW - 30, 16), $"{done}/{total} obj", fracStyle);
 
@@ -273,7 +270,7 @@ namespace Orlo.UI.Panels
             if (_selectedQuestIdx >= 0 && _selectedQuestIdx < _activeQuests.Length)
             {
                 var detailR = new Rect(area.x + listW, area.y, area.width - listW, area.height);
-                DrawRect(new Rect(detailR.x, detailR.y, 1, detailR.height), BorderColor);
+                DrawRect(new Rect(detailR.x, detailR.y, 1, detailR.height), P.Border);
                 DrawQuestDetail(detailR, _activeQuests[_selectedQuestIdx], true);
             }
         }
@@ -291,15 +288,14 @@ namespace Orlo.UI.Panels
             ly += 26;
 
             // Subtitle
-            GUI.color = DimText;
+            GUI.color = P.TextDim;
             string sub = q.type;
             if (q.totalChapters > 0) sub += $"  -  Chapter {q.chapter}/{q.totalChapters}";
             GUI.Label(new Rect(10, ly, pw, 16), sub, SmallStyle());
             ly += 20;
 
-            // Track button
-            GUI.color = q.isTracked ? Gold : Cyan;
-            if (GUI.Button(new Rect(10, ly, 80, 20), q.isTracked ? "TRACKING" : "TRACK"))
+            // Track button via TMD
+            if (TMDTheme.DrawButton(new Rect(10, ly, 80, 20), q.isTracked ? "TRACKING" : "TRACK"))
             {
                 OnTrackQuest?.Invoke(q.id);
                 TrackQuest(q.id);
@@ -307,7 +303,7 @@ namespace Orlo.UI.Panels
             ly += 28;
 
             // Objectives
-            DrawRect(new Rect(10, ly, pw, 1), BorderColor);
+            DrawRect(new Rect(10, ly, pw, 1), P.Border);
             ly += 6;
             GUI.color = new Color(0.7f, 0.7f, 0.8f);
             GUI.Label(new Rect(10, ly, pw, 16), "OBJECTIVES", SmallBold());
@@ -317,7 +313,7 @@ namespace Orlo.UI.Panels
             {
                 foreach (var obj in q.objectives)
                 {
-                    GUI.color = obj.completed ? Cyan : DimText;
+                    GUI.color = obj.completed ? P.Primary : P.TextDim;
                     string mark = obj.completed ? "\u2713" : "\u25CB";
                     string count = obj.target > 1 ? $" ({obj.current}/{obj.target})" : "";
                     GUI.Label(new Rect(14, ly, pw - 10, 18), $"{mark}  {obj.description}{count}");
@@ -327,7 +323,7 @@ namespace Orlo.UI.Panels
             ly += 8;
 
             // Rewards
-            DrawRect(new Rect(10, ly, pw, 1), BorderColor);
+            DrawRect(new Rect(10, ly, pw, 1), P.Border);
             ly += 6;
             GUI.color = new Color(0.7f, 0.7f, 0.8f);
             GUI.Label(new Rect(10, ly, pw, 16), "REWARDS", SmallBold());
@@ -337,7 +333,7 @@ namespace Orlo.UI.Panels
             {
                 foreach (var r in q.rewards)
                 {
-                    GUI.color = r.type == "xp" ? Cyan : r.type == "credits" ? Gold
+                    GUI.color = r.type == "xp" ? P.Primary : r.type == "credits" ? P.Accent
                         : r.type == "standing" ? new Color(0.6f, 0.3f, 0.8f)
                         : RarityColor(r.rarity);
                     GUI.Label(new Rect(14, ly, pw - 10, 18), $"{r.label}: {r.value}");
@@ -349,7 +345,7 @@ namespace Orlo.UI.Panels
             // Lore
             if (!string.IsNullOrEmpty(q.loreText))
             {
-                DrawRect(new Rect(10, ly, pw, 1), BorderColor);
+                DrawRect(new Rect(10, ly, pw, 1), P.Border);
                 ly += 6;
                 GUI.color = new Color(0.4f, 0.45f, 0.6f);
                 var loreS = new GUIStyle(GUI.skin.label) { fontStyle = FontStyle.Italic, wordWrap = true };
@@ -379,7 +375,7 @@ namespace Orlo.UI.Panels
                         AbandonQuest(q.id);
                         _confirmAbandon = false;
                     }
-                    GUI.color = DimText;
+                    GUI.color = P.TextDim;
                     if (GUI.Button(new Rect(80, ly, 60, 20), "No")) _confirmAbandon = false;
                 }
             }
@@ -401,10 +397,10 @@ namespace Orlo.UI.Panels
                 var q = _availableQuests[i];
                 var rowR = new Rect(8, cy, area.width - 32, 40);
                 bool hover = rowR.Contains(Event.current.mousePosition - area.position + _scrollLeft);
-                DrawRect(rowR, hover ? HoverBg : (i % 2 == 0 ? RowAlt : Color.clear));
+                DrawRect(rowR, hover ? new Color(P.Primary.r, P.Primary.g, P.Primary.b, 0.12f) : (i % 2 == 0 ? new Color(P.Background.r, P.Background.g, P.Background.b, 0.4f) : Color.clear));
 
                 // Name
-                GUI.color = q.canAccept && !full ? Color.white : DimText;
+                GUI.color = q.canAccept && !full ? Color.white : P.TextDim;
                 GUI.Label(new Rect(12, cy + 4, 220, 18), q.name);
 
                 // Level requirement
@@ -413,15 +409,14 @@ namespace Orlo.UI.Panels
                 GUI.Label(new Rect(240, cy + 4, 50, 18), $"L{q.levelReq}", SmallStyle());
 
                 // Source + distance
-                GUI.color = DimText;
+                GUI.color = P.TextDim;
                 GUI.Label(new Rect(12, cy + 22, 300, 16), $"{q.sourceName}  ({q.distance:F0}m)", SmallStyle());
 
                 // Accept button
                 float btnX = area.width - 100;
                 if (q.canAccept && !full)
                 {
-                    GUI.color = Cyan;
-                    if (GUI.Button(new Rect(btnX, cy + 8, 64, 22), "ACCEPT"))
+                    if (TMDTheme.DrawButton(new Rect(btnX, cy + 8, 64, 22), "ACCEPT"))
                     {
                         OnAcceptQuest?.Invoke(q.id);
                         AcceptQuest(q.id);
@@ -429,7 +424,7 @@ namespace Orlo.UI.Panels
                 }
                 else
                 {
-                    GUI.color = DimText;
+                    GUI.color = P.TextDim;
                     GUI.Label(new Rect(btnX, cy + 10, 64, 18), full ? "5/5" : "Locked", SmallStyle());
                 }
 
@@ -438,7 +433,7 @@ namespace Orlo.UI.Panels
 
             if (_availableQuests.Length == 0)
             {
-                GUI.color = DimText;
+                GUI.color = P.TextDim;
                 GUI.Label(new Rect(20, 30, 300, 20), "No quests available nearby.");
             }
 
@@ -458,14 +453,14 @@ namespace Orlo.UI.Panels
                 var q = _completedQuests[i];
                 var rowR = new Rect(8, cy, area.width - 32, 24);
                 bool hover = rowR.Contains(Event.current.mousePosition - area.position + _scrollLeft);
-                DrawRect(rowR, hover ? HoverBg : (i % 2 == 0 ? RowAlt : Color.clear));
+                DrawRect(rowR, hover ? new Color(P.Primary.r, P.Primary.g, P.Primary.b, 0.12f) : (i % 2 == 0 ? new Color(P.Background.r, P.Background.g, P.Background.b, 0.4f) : Color.clear));
 
-                GUI.color = Cyan;
+                GUI.color = P.Primary;
                 GUI.Label(new Rect(12, cy + 3, 16, 18), "\u2713");
                 GUI.color = new Color(0.75f, 0.75f, 0.8f);
                 GUI.Label(new Rect(28, cy + 3, 200, 18), q.name);
 
-                GUI.color = DimText;
+                GUI.color = P.TextDim;
                 var rightS = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleRight, fontSize = 10 };
                 GUI.Label(new Rect(8, cy + 3, area.width - 52, 18), $"{q.completedAgo}   +{q.xpGained} XP", rightS);
 
@@ -476,7 +471,7 @@ namespace Orlo.UI.Panels
 
             if (_completedQuests.Length == 0)
             {
-                GUI.color = DimText;
+                GUI.color = P.TextDim;
                 GUI.Label(new Rect(20, 30, 300, 20), "No completed quests yet.");
             }
 
@@ -498,9 +493,9 @@ namespace Orlo.UI.Panels
                 bool active = _activeCodexCategory == cat;
                 var btnR = new Rect(area.x + 8 + i * catW, area.y + 4, catW - 4, catBarH - 4);
                 bool hover = btnR.Contains(Event.current.mousePosition);
-                DrawRect(btnR, active ? new Color(0.12f, 0.14f, 0.22f) : hover ? HoverBg : Color.clear);
+                DrawRect(btnR, active ? new Color(0.12f, 0.14f, 0.22f) : hover ? new Color(P.Primary.r, P.Primary.g, P.Primary.b, 0.12f) : Color.clear);
 
-                GUI.color = active ? Cyan : DimText;
+                GUI.color = active ? P.Primary : P.TextDim;
                 var catS = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 10 };
                 GUI.Label(btnR, cat, catS);
 
@@ -508,7 +503,7 @@ namespace Orlo.UI.Panels
                 bool hasUnread = _codexEntries.Any(e => e.category == cat && e.isNew);
                 if (hasUnread)
                 {
-                    GUI.color = Gold;
+                    GUI.color = P.Accent;
                     GUI.Label(new Rect(btnR.xMax - 10, btnR.y + 2, 8, 8), "\u2022");
                 }
 
@@ -533,14 +528,14 @@ namespace Orlo.UI.Panels
                 bool sel = i == _selectedCodexIdx;
                 var rowR = new Rect(4, cy, area.width - 24, 24);
                 bool hover = rowR.Contains(Event.current.mousePosition - listR.position + _scrollCodexEntries);
-                DrawRect(rowR, sel ? new Color(0.12f, 0.14f, 0.22f) : hover ? HoverBg : Color.clear);
+                DrawRect(rowR, sel ? new Color(0.12f, 0.14f, 0.22f) : hover ? new Color(P.Primary.r, P.Primary.g, P.Primary.b, 0.12f) : Color.clear);
 
                 GUI.color = sel ? Color.white : new Color(0.8f, 0.8f, 0.85f);
                 GUI.Label(new Rect(10, cy + 3, area.width - 80, 18), e.title);
 
                 if (e.isNew)
                 {
-                    GUI.color = Gold;
+                    GUI.color = P.Accent;
                     GUI.Label(new Rect(area.width - 70, cy + 3, 50, 18), "[NEW]", SmallBold());
                 }
 
@@ -567,7 +562,7 @@ namespace Orlo.UI.Panels
 
             // Entry body
             var bodyR = new Rect(area.x, area.y + catBarH + entryListH + 8, area.width, area.height - catBarH - entryListH - 12);
-            DrawRect(new Rect(bodyR.x + 8, bodyR.y, bodyR.width - 16, 1), BorderColor);
+            DrawRect(new Rect(bodyR.x + 8, bodyR.y, bodyR.width - 16, 1), P.Border);
 
             if (_selectedCodexIdx >= 0 && _selectedCodexIdx < filtered.Length)
             {
@@ -578,13 +573,13 @@ namespace Orlo.UI.Panels
 
                 _scrollCodexBody = GUI.BeginScrollView(bodyR, _scrollCodexBody, new Rect(0, 0, bodyR.width - 16, totalH));
 
-                GUI.color = Cyan;
+                GUI.color = P.Primary;
                 GUI.Label(new Rect(12, 6, bodyR.width - 24, 20), entry.title, SmallBold());
                 GUI.color = new Color(0.75f, 0.75f, 0.8f);
                 GUI.Label(new Rect(12, 26, bodyR.width - 24, bodyH), entry.body, bodyStyle);
 
                 float footY = 28 + bodyH;
-                GUI.color = DimText;
+                GUI.color = P.TextDim;
                 if (!string.IsNullOrEmpty(entry.sourceQuest))
                     GUI.Label(new Rect(12, footY, 300, 16), $"Source: {entry.sourceQuest}", SmallStyle());
                 GUI.Label(new Rect(bodyR.width - 160, footY, 140, 16), entry.discoveredDate, SmallStyle());
@@ -600,7 +595,7 @@ namespace Orlo.UI.Panels
         {
             if (string.IsNullOrEmpty(_missionSettlement))
             {
-                GUI.color = DimText;
+                GUI.color = P.TextDim;
                 GUI.Label(new Rect(area.x + 20, area.y + 40, 300, 20), "No mission board in range.");
                 GUI.color = Color.white;
                 return;
@@ -611,13 +606,13 @@ namespace Orlo.UI.Panels
             var headerS = new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold };
             GUI.Label(new Rect(area.x + 12, area.y + 8, 300, 22), _missionSettlement, headerS);
 
-            GUI.color = DimText;
+            GUI.color = P.TextDim;
             int mins = Mathf.Max(0, (int)(_missionRefreshSeconds / 60));
             int secs = Mathf.Max(0, (int)(_missionRefreshSeconds % 60));
             var refreshS = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleRight, fontSize = 11 };
             GUI.Label(new Rect(area.x, area.y + 10, area.width - 14, 18), $"Refreshes in: {mins}:{secs:D2}", refreshS);
 
-            DrawRect(new Rect(area.x + 10, area.y + 32, area.width - 20, 1), BorderColor);
+            DrawRect(new Rect(area.x + 10, area.y + 32, area.width - 20, 1), P.Border);
 
             // Group by type
             var types = new[] { "Kill", "Gather", "Deliver", "Escort", "Defend", "Explore", "Craft", "Investigate" };
@@ -636,7 +631,7 @@ namespace Orlo.UI.Panels
                 var group = _missions.Where(m => m.type == mType).ToArray();
                 if (group.Length == 0) continue;
 
-                GUI.color = DimText;
+                GUI.color = P.TextDim;
                 GUI.Label(new Rect(8, cy, 200, 18), mType.ToUpper(), SmallBold());
                 cy += 22;
 
@@ -644,7 +639,7 @@ namespace Orlo.UI.Panels
                 {
                     var rowR = new Rect(8, cy, area.width - 32, 28);
                     bool hover = rowR.Contains(Event.current.mousePosition - listR.position + _scrollLeft);
-                    DrawRect(rowR, hover ? HoverBg : Color.clear);
+                    DrawRect(rowR, hover ? new Color(P.Primary.r, P.Primary.g, P.Primary.b, 0.12f) : Color.clear);
 
                     // Urgent marker
                     float nx = 12;
@@ -665,7 +660,7 @@ namespace Orlo.UI.Panels
                     {
                         foreach (var r in m.rewards)
                         {
-                            GUI.color = r.type == "xp" ? Cyan : r.type == "credits" ? Gold : DimText;
+                            GUI.color = r.type == "xp" ? P.Primary : r.type == "credits" ? P.Accent : P.TextDim;
                             string rStr = $"{r.value} {r.label}";
                             GUI.Label(new Rect(rx, cy + 4, 80, 18), rStr, SmallStyle());
                             rx += 80;
@@ -673,7 +668,7 @@ namespace Orlo.UI.Panels
                     }
 
                     // Expiry
-                    GUI.color = DimText;
+                    GUI.color = P.TextDim;
                     var expiryS = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleRight, fontSize = 10 };
                     GUI.Label(new Rect(8, cy + 4, area.width - 52, 18), $"{m.expiryHours:F1}h", expiryS);
 
@@ -690,8 +685,7 @@ namespace Orlo.UI.Panels
 
             // Accept button
             var btnR2 = new Rect(area.x + area.width - 150, area.y + area.height - 30, 136, 24);
-            GUI.color = Cyan;
-            if (GUI.Button(btnR2, "ACCEPT SELECTED") && selectedMission >= 0)
+            if (TMDTheme.DrawButton(btnR2, "ACCEPT SELECTED") && selectedMission >= 0)
             {
                 OnAcceptMission?.Invoke(selectedMission);
             }
@@ -717,7 +711,7 @@ namespace Orlo.UI.Panels
                 1 => new Color(0.3f, 0.8f, 0.3f),   // Uncommon
                 2 => new Color(0.3f, 0.5f, 1f),      // Rare
                 3 => new Color(0.7f, 0.3f, 0.9f),    // Epic
-                4 => Gold,                             // Legendary
+                4 => (TMDTheme.Instance?.Palette ?? RacePalette.Solari).Accent, // Legendary
                 _ => new Color(0.75f, 0.75f, 0.75f),  // Common
             };
         }

@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using Orlo.Network;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI
 {
@@ -12,6 +13,8 @@ namespace Orlo.UI
     public class CraftingUI : MonoBehaviour
     {
         public static CraftingUI Instance { get; private set; }
+
+        private RacePalette P => TMDTheme.Instance?.Palette ?? RacePalette.Solari;
 
         private bool _visible;
         private Vector2 _windowPos = new Vector2(100, 60);
@@ -273,36 +276,35 @@ namespace Orlo.UI
             float windowW = 720, windowH = 520;
             Rect windowRect = new Rect(_windowPos.x, _windowPos.y, windowW, windowH);
 
-            // Background
-            GUI.color = new Color(0, 0, 0, 0.9f);
-            GUI.DrawTexture(windowRect, Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            // TMD glassmorphic panel
+            TMDTheme.DrawPanel(windowRect);
 
             // Title bar
             string title = _phase switch
             {
-                CraftPhase.Assembly => "Crafting - Assembly",
-                CraftPhase.Experimenting => "Crafting - Experimentation",
-                CraftPhase.Complete => "Crafting - Complete",
-                _ => "Crafting"
+                CraftPhase.Assembly => "CRAFTING - ASSEMBLY",
+                CraftPhase.Experimenting => "CRAFTING - EXPERIMENTATION",
+                CraftPhase.Complete => "CRAFTING - COMPLETE",
+                _ => "CRAFTING"
             };
-            Rect titleBar = new Rect(_windowPos.x, _windowPos.y, windowW - 24, 26);
-            DrawTitleBar(titleBar, title);
+            TMDTheme.DrawTitle(windowRect, title);
+            Rect titleBar = new Rect(_windowPos.x, _windowPos.y, windowW - 24, 40);
             HandleDrag(titleBar);
 
-            if (GUI.Button(new Rect(_windowPos.x + windowW - 24, _windowPos.y, 24, 26), "X"))
+            // Close via TMD button
+            if (TMDTheme.DrawButton(new Rect(_windowPos.x + windowW - 32, _windowPos.y + 6, 24, 24), "X"))
             {
                 Hide();
                 return;
             }
 
             float cx = _windowPos.x + 8;
-            float cy = _windowPos.y + 32;
+            float cy = _windowPos.y + 46;
 
             // Status message
             if (!string.IsNullOrEmpty(_statusMessage))
             {
-                GUI.color = new Color(1f, 0.8f, 0.2f);
+                GUI.color = P.Accent;
                 GUI.Label(new Rect(cx, cy, windowW - 16, 18), _statusMessage, SmallLabelCentered());
                 GUI.color = Color.white;
                 cy += 20;
@@ -323,21 +325,36 @@ namespace Orlo.UI
                     DrawCompletePhase(cx, cy, windowW - 16, windowH - (cy - _windowPos.y) - 8);
                     break;
             }
+
+            // Scanline overlay
+            TMDTheme.DrawScanlines(windowRect);
         }
 
         // ─── Phase 0: Recipe Selection ───────────────────────────────────
 
         private void DrawRecipeSelectPhase(float x, float y, float w, float h)
         {
-            // Station filter tabs
-            GUI.Label(new Rect(x, y, 50, 20), "Station:", SmallLabel());
+            // Station filter tabs — race-colored active
+            GUI.Label(new Rect(x, y, 50, 20), "Station:", TMDTheme.LabelStyle);
             for (int i = 0; i < StationNames.Length; i++)
             {
                 bool selected = i == _selectedStation;
-                GUI.color = selected ? new Color(0.3f, 0.5f, 0.8f) : new Color(0.2f, 0.2f, 0.2f);
-                GUI.DrawTexture(new Rect(x + 54 + i * 76, y, 72, 20), Texture2D.whiteTexture);
-                GUI.color = selected ? Color.white : new Color(0.7f, 0.7f, 0.7f);
-                if (GUI.Button(new Rect(x + 54 + i * 76, y, 72, 20), StationNames[i], SmallLabelCentered()))
+                Rect tabR = new Rect(x + 54 + i * 76, y, 72, 20);
+                if (selected)
+                {
+                    GUI.color = new Color(P.Primary.r, P.Primary.g, P.Primary.b, 0.25f);
+                    GUI.DrawTexture(tabR, Texture2D.whiteTexture);
+                    // Race-colored underline
+                    GUI.color = P.Primary;
+                    GUI.DrawTexture(new Rect(tabR.x, tabR.yMax - 2, tabR.width, 2), Texture2D.whiteTexture);
+                }
+                else
+                {
+                    GUI.color = P.PanelBackground;
+                    GUI.DrawTexture(tabR, Texture2D.whiteTexture);
+                }
+                GUI.color = selected ? P.Text : P.TextDim;
+                if (GUI.Button(tabR, StationNames[i], SmallLabelCentered()))
                 {
                     _selectedStation = i;
                     _selectedRecipe = -1;
@@ -349,7 +366,7 @@ namespace Orlo.UI
             // Left panel: recipe list
             float listW = 180, listH = h - 32;
             Rect listArea = new Rect(x, y, listW, listH);
-            GUI.color = new Color(0.06f, 0.06f, 0.08f, 0.95f);
+            GUI.color = P.PanelBackground;
             GUI.DrawTexture(listArea, Texture2D.whiteTexture);
             GUI.color = Color.white;
 
@@ -367,7 +384,7 @@ namespace Orlo.UI
 
                 Rect btn = new Rect(2, visIdx * 28, listW - 24, 26);
                 bool isSel = i == _selectedRecipe;
-                GUI.color = isSel ? new Color(0.2f, 0.4f, 0.7f, 0.9f) : new Color(0.12f, 0.12f, 0.14f, 0.9f);
+                GUI.color = isSel ? new Color(P.Primary.r, P.Primary.g, P.Primary.b, 0.3f) : P.PanelBackground;
                 GUI.DrawTexture(btn, Texture2D.whiteTexture);
                 GUI.color = Color.white;
                 if (GUI.Button(btn, _recipes[i].Name, SmallLabel()))
@@ -444,8 +461,8 @@ namespace Orlo.UI
                     detailY += 24;
                 }
 
-                // Assemble button
-                if (GUI.Button(new Rect(detailX, detailY, 160, 32), "Begin Assembly"))
+                // Assemble button via TMD
+                if (TMDTheme.DrawButton(new Rect(detailX, detailY, 160, 32), "Begin Assembly"))
                 {
                     BeginAssembly(_selectedRecipe);
                 }
@@ -493,9 +510,16 @@ namespace Orlo.UI
                     // Slot background
                     Rect slotRect = new Rect(x, slotY, leftW - 8, 58);
                     bool isActive = _activeSlotPicking == i;
-                    GUI.color = isActive ? new Color(0.15f, 0.25f, 0.4f, 0.9f)
-                        : new Color(0.08f, 0.08f, 0.1f, 0.9f);
+                    // Race-colored border for active slot
+                    GUI.color = isActive ? new Color(P.Primary.r, P.Primary.g, P.Primary.b, 0.25f)
+                        : P.PanelBackground;
                     GUI.DrawTexture(slotRect, Texture2D.whiteTexture);
+                    // Draw race-colored border around slot
+                    GUI.color = isActive ? P.Primary : P.Border;
+                    GUI.DrawTexture(new Rect(slotRect.x, slotRect.y, slotRect.width, 1), Texture2D.whiteTexture);
+                    GUI.DrawTexture(new Rect(slotRect.x, slotRect.yMax - 1, slotRect.width, 1), Texture2D.whiteTexture);
+                    GUI.DrawTexture(new Rect(slotRect.x, slotRect.y, 1, slotRect.height), Texture2D.whiteTexture);
+                    GUI.DrawTexture(new Rect(slotRect.xMax - 1, slotRect.y, 1, slotRect.height), Texture2D.whiteTexture);
                     GUI.color = Color.white;
 
                     // Slot name + required class
@@ -658,28 +682,25 @@ namespace Orlo.UI
 
                     // Category background
                     Rect catRect = new Rect(x, catY, leftW - 8, 46);
-                    GUI.color = new Color(0.08f, 0.08f, 0.1f, 0.9f);
+                    GUI.color = P.PanelBackground;
                     GUI.DrawTexture(catRect, Texture2D.whiteTexture);
                     GUI.color = Color.white;
 
                     // Name + current value
-                    GUI.Label(new Rect(x + 4, catY + 2, leftW * 0.5f, 18), cat.Name, SmallLabel());
-                    GUI.color = new Color(0.6f, 0.9f, 0.6f);
+                    GUI.Label(new Rect(x + 4, catY + 2, leftW * 0.5f, 18), cat.Name, TMDTheme.LabelStyle);
+                    GUI.color = P.Success;
                     GUI.Label(new Rect(x + leftW * 0.5f, catY + 2, leftW * 0.3f, 18),
                         $"{cat.CurrentValue:F1}/{cat.MaxValue:F1}", SmallLabel());
                     GUI.color = Color.white;
 
-                    // Value bar
+                    // Value bar via TMD — race-tinted progress
                     float barX = x + 4;
                     float barY = catY + 20;
                     float barW = leftW - 100;
                     float barH = 10;
-                    GUI.color = new Color(0.15f, 0.15f, 0.15f);
-                    GUI.DrawTexture(new Rect(barX, barY, barW, barH), Texture2D.whiteTexture);
                     float fill = cat.MaxValue > 0 ? cat.CurrentValue / cat.MaxValue : 0;
-                    GUI.color = Color.Lerp(new Color(0.3f, 0.5f, 0.8f), new Color(0.2f, 0.9f, 0.3f), fill);
-                    GUI.DrawTexture(new Rect(barX, barY, barW * fill, barH), Texture2D.whiteTexture);
-                    GUI.color = Color.white;
+                    Color barCol = Color.Lerp(P.Primary, P.Success, fill);
+                    TMDTheme.DrawProgressBar(new Rect(barX, barY, barW, barH), fill, barCol);
 
                     // Point allocation buttons: -, value, +
                     int alloc = i < _pointAllocation.Length ? _pointAllocation[i] : 0;
@@ -724,16 +745,16 @@ namespace Orlo.UI
             bool canExperiment = totalAllocated > 0 && _experimentPointsRemaining > 0
                 && _experimentRound < _experimentMaxRounds && !_experimentWaiting;
             GUI.enabled = canExperiment;
-            if (GUI.Button(new Rect(x, y, 140, 30), _experimentWaiting ? "Experimenting..." : "Experiment"))
+            if (TMDTheme.DrawButton(new Rect(x, y, 140, 30), _experimentWaiting ? "Experimenting..." : "Experiment"))
             {
-                SendExperimentRequest();
+                if (canExperiment) SendExperimentRequest();
             }
             GUI.enabled = true;
 
             GUI.enabled = !_experimentWaiting;
-            if (GUI.Button(new Rect(x + 150, y, 140, 30), "Finalize Item"))
+            if (TMDTheme.DrawButton(new Rect(x + 150, y, 140, 30), "Finalize Item"))
             {
-                SendFinalizeRequest();
+                if (!_experimentWaiting) SendFinalizeRequest();
             }
             GUI.enabled = true;
 
@@ -822,13 +843,13 @@ namespace Orlo.UI
 
             y += 20;
 
-            if (GUI.Button(new Rect(centerX, y, 160, 30), "Craft Another"))
+            if (TMDTheme.DrawButton(new Rect(centerX, y, 160, 30), "Craft Another"))
             {
                 _phase = CraftPhase.RecipeSelect;
                 _selectedRecipe = -1;
             }
 
-            if (GUI.Button(new Rect(centerX + 170, y, 120, 30), "Close"))
+            if (TMDTheme.DrawButton(new Rect(centerX + 170, y, 120, 30), "Close"))
             {
                 Hide();
             }

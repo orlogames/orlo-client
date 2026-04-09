@@ -1,4 +1,5 @@
 using UnityEngine;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI.Lobby
 {
@@ -258,22 +259,31 @@ namespace Orlo.UI.Lobby
 
         private void DrawStars(float sw, float sh, float t)
         {
+            // Subtle race-tinted star color for the brightest stars
+            Color raceGlow = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.Glow
+                : new Color(0.9f, 0.92f, 1f);
+
             for (int i = 0; i < StarCount; i++)
             {
                 ref var s = ref _stars[i];
                 float twinkle = (Mathf.Sin(t * s.twinkleSpeed + s.twinklePhase) + 1f) * 0.5f;
                 float a = s.brightness * Mathf.Lerp(0.4f, 1f, twinkle);
 
-                GUI.color = new Color(0.9f, 0.92f, 1f, a);
+                // Bright stars get a subtle race tint; dimmer stars stay neutral
+                Color starColor = s.brightness > 0.7f
+                    ? Color.Lerp(new Color(0.9f, 0.92f, 1f), raceGlow, 0.15f)
+                    : new Color(0.9f, 0.92f, 1f);
+                GUI.color = new Color(starColor.r, starColor.g, starColor.b, a);
                 float sz = s.size;
                 float x = s.pos.x * sw;
                 float y = s.pos.y * sh;
                 GUI.DrawTexture(new Rect(x - sz * 0.5f, y - sz * 0.5f, sz, sz), _pixelTex);
 
-                // Brighter stars get a small cross
+                // Brighter stars get a small cross — race-tinted
                 if (s.brightness > 0.8f)
                 {
-                    GUI.color = new Color(0.85f, 0.88f, 1f, a * 0.35f);
+                    GUI.color = new Color(starColor.r * 0.95f, starColor.g * 0.95f, starColor.b, a * 0.35f);
                     float armLen = sz * 2f;
                     GUI.DrawTexture(new Rect(x - armLen * 0.5f, y - 0.5f, armLen, 1f), _pixelTex);
                     GUI.DrawTexture(new Rect(x - 0.5f, y - armLen * 0.5f, 1f, armLen), _pixelTex);
@@ -283,6 +293,11 @@ namespace Orlo.UI.Lobby
 
         private void DrawNebulae(float sw, float sh, float t)
         {
+            // Subtly tint nebula colors toward the active race palette
+            Color raceTint = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.Primary
+                : new Color(0.4f, 0.5f, 0.8f);
+
             for (int i = 0; i < NebulaCount; i++)
             {
                 ref var n = ref _nebulae[i];
@@ -301,9 +316,16 @@ namespace Orlo.UI.Lobby
                     float scale = 1f + j * 0.15f;
                     float drawR = r * scale;
 
-                    Color c = n.color;
-                    c.a *= pulse * (1f - j * 0.25f);
-                    GUI.color = c;
+                    // Blend nebula color subtly toward race palette (20% blend)
+                    Color baseColor = n.color;
+                    Color tinted = new Color(
+                        Mathf.Lerp(baseColor.r, raceTint.r * 0.2f, 0.2f),
+                        Mathf.Lerp(baseColor.g, raceTint.g * 0.2f, 0.2f),
+                        Mathf.Lerp(baseColor.b, raceTint.b * 0.2f, 0.2f),
+                        baseColor.a
+                    );
+                    tinted.a *= pulse * (1f - j * 0.25f);
+                    GUI.color = tinted;
                     GUI.DrawTexture(new Rect(cx - drawR + ox, cy - drawR + oy, drawR * 2f, drawR * 2f), _softCircleTex);
                 }
             }
@@ -315,15 +337,28 @@ namespace Orlo.UI.Lobby
             float cy = _planetCenter.y * sh;
             float r = _planetRadius * sh;
 
-            // Atmosphere glow rings (outermost first)
+            // Get race-colored atmosphere tint
+            Color raceGlow = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.Glow
+                : new Color(0.3f, 0.8f, 1f);
+            Color racePrimary = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.Primary
+                : new Color(0.15f, 0.4f, 0.5f);
+
+            // Atmosphere glow rings (outermost first) — race-colored
             for (int i = AtmosphereRings; i >= 1; i--)
             {
                 float ringScale = 1f + i * 0.06f;
                 float ringR = r * ringScale;
                 float a = 0.03f / (i * 0.5f);
 
-                // Blue-green atmosphere tint
-                GUI.color = new Color(0.15f, 0.4f, 0.5f, a);
+                // Blend atmosphere toward race glow color
+                Color atmoColor = Color.Lerp(
+                    new Color(0.15f, 0.4f, 0.5f),
+                    new Color(raceGlow.r * 0.3f, raceGlow.g * 0.3f, raceGlow.b * 0.3f),
+                    0.4f
+                );
+                GUI.color = new Color(atmoColor.r, atmoColor.g, atmoColor.b, a);
                 GUI.DrawTexture(new Rect(cx - ringR, cy - ringR, ringR * 2f, ringR * 2f), _softCircleTex);
             }
 
@@ -342,10 +377,10 @@ namespace Orlo.UI.Lobby
             GUI.color = new Color(0f, 0f, 0f, 0.6f);
             GUI.DrawTexture(new Rect(cx - shadowR + shadowShift, cy - shadowR, shadowR * 2f, shadowR * 2f), _softCircleTex);
 
-            // Lit rim on left edge (atmosphere catch light)
+            // Lit rim on left edge — race-colored atmosphere catch light
             float rimWidth = r * 0.08f;
             float rimHeight = r * 1.4f;
-            GUI.color = new Color(0.2f, 0.5f, 0.6f, 0.2f);
+            GUI.color = new Color(racePrimary.r * 0.6f, racePrimary.g * 0.6f, racePrimary.b * 0.6f, 0.25f);
             GUI.DrawTexture(new Rect(cx - r - rimWidth * 0.5f, cy - rimHeight * 0.5f, rimWidth * 3f, rimHeight), _softCircleTex);
 
             // Subtle surface markings (two faint bands)
@@ -356,22 +391,28 @@ namespace Orlo.UI.Lobby
             GUI.color = new Color(0.05f, 0.07f, 0.09f, 0.1f);
             GUI.DrawTexture(new Rect(cx - r * 0.6f, bandY2, r * 1.0f, r * 0.05f), _softCircleTex);
 
-            // Bright atmosphere edge highlight (top-left crescent)
+            // Bright atmosphere edge highlight (top-left crescent) — race-colored
             float highlightR = r * 1.02f;
-            GUI.color = new Color(0.3f, 0.6f, 0.7f, 0.08f);
+            GUI.color = new Color(raceGlow.r * 0.4f, raceGlow.g * 0.4f, raceGlow.b * 0.4f, 0.1f);
             GUI.DrawTexture(new Rect(cx - highlightR - r * 0.05f, cy - highlightR - r * 0.05f,
                 highlightR * 2f, highlightR * 2f), _softCircleTex);
         }
 
         private void DrawDust(float sw, float sh)
         {
+            // Dust motes subtly tinted toward race palette
+            Color raceGlow = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.GlowHalf
+                : new Color(0.6f, 0.65f, 0.8f, 0.5f);
+            Color dustBase = Color.Lerp(new Color(0.6f, 0.65f, 0.8f), new Color(raceGlow.r, raceGlow.g, raceGlow.b), 0.25f);
+
             for (int i = 0; i < DustCount; i++)
             {
                 ref var d = ref _dust[i];
                 float x = d.pos.x * sw;
                 float y = d.pos.y * sh;
 
-                GUI.color = new Color(0.6f, 0.65f, 0.8f, d.alpha);
+                GUI.color = new Color(dustBase.r, dustBase.g, dustBase.b, d.alpha);
                 float sz = d.size;
                 GUI.DrawTexture(new Rect(x - sz * 0.5f, y - sz * 0.5f, sz, sz), _softCircleTex);
             }

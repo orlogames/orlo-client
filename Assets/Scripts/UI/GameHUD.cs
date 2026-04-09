@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Orlo.Network;
 using Orlo.UI.Settings;
+using Orlo.UI.TMD;
 using ProtoAuth = Orlo.Proto.Auth;
 
 namespace Orlo.UI
@@ -191,12 +192,15 @@ namespace Orlo.UI
             // ── Mail notification icon ──────────────────────────────
             if (MailUI.UnreadCount > 0)
             {
+                var mp = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
                 float mailX = Screen.width - 160;
                 float mailY = 10;
-                GUI.color = new Color(1f, 0.7f, 0.2f, 0.9f);
+                GUI.color = new Color(mp.Accent.r, mp.Accent.g, mp.Accent.b, 0.9f);
                 GUI.DrawTexture(new Rect(mailX, mailY, 18, 18), Texture2D.whiteTexture);
                 GUI.color = Color.white;
-                var mailStyle = new GUIStyle(GUI.skin.label) { fontSize = 10, alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.white } };
+                var mailStyle = TMDTheme.Instance != null ? new GUIStyle(TMDTheme.LabelStyle) : new GUIStyle(GUI.skin.label);
+                mailStyle.fontSize = 10;
+                mailStyle.alignment = TextAnchor.MiddleCenter;
                 GUI.Label(new Rect(mailX, mailY, 18, 18), MailUI.UnreadCount.ToString(), mailStyle);
             }
 
@@ -209,15 +213,16 @@ namespace Orlo.UI
             // ── Content reveal notification ─────────────────────────
             if (_notificationTimer > 0 && !string.IsNullOrEmpty(_lastNotification))
             {
-                var notifStyle = new GUIStyle(GUI.skin.box)
-                {
-                    fontSize = 18,
-                    alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = Color.yellow }
-                };
+                var np = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
                 float alpha = Mathf.Min(1f, _notificationTimer);
+                Rect notifRect = new Rect(Screen.width / 2 - 200, 50, 400, 50);
                 GUI.color = new Color(1, 1, 1, alpha);
-                GUI.Box(new Rect(Screen.width / 2 - 200, 50, 400, 50), _lastNotification, notifStyle);
+                TMDTheme.DrawPanel(notifRect);
+                var notifStyle = TMDTheme.Instance != null ? new GUIStyle(TMDTheme.TitleStyle) : new GUIStyle(GUI.skin.label);
+                notifStyle.fontSize = 18;
+                notifStyle.alignment = TextAnchor.MiddleCenter;
+                notifStyle.normal.textColor = new Color(np.Primary.r, np.Primary.g, np.Primary.b, alpha);
+                GUI.Label(notifRect, _lastNotification, notifStyle);
                 GUI.color = Color.white;
             }
         }
@@ -231,13 +236,13 @@ namespace Orlo.UI
             float cx = (Screen.width - compassW) / 2f;
             float cy = 8f;
 
-            // Background
-            GUI.color = new Color(0.05f, 0.05f, 0.08f, 0.7f);
-            GUI.DrawTexture(new Rect(cx, cy, compassW, compassH), Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            var p = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
 
-            // Center indicator
-            GUI.color = new Color(1f, 0.85f, 0.2f, 0.9f);
+            // Background — TMD panel
+            TMDTheme.DrawPanel(new Rect(cx, cy, compassW, compassH));
+
+            // Center indicator — race primary
+            GUI.color = new Color(p.Primary.r, p.Primary.g, p.Primary.b, 0.9f);
             GUI.DrawTexture(new Rect(cx + compassW / 2f - 1, cy, 2, compassH), Texture2D.whiteTexture);
             GUI.color = Color.white;
 
@@ -274,12 +279,12 @@ namespace Orlo.UI
                 }
             }
 
-            // Degree readout below
+            // Degree readout below — race text
             var degStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 10,
                 alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(0.7f, 0.7f, 0.7f) }
+                normal = { textColor = p.TextDim }
             };
             GUI.Label(new Rect(cx, cy + compassH, compassW, 14), $"{_compassHeading:F0}", degStyle);
         }
@@ -293,14 +298,15 @@ namespace Orlo.UI
             float fx = Screen.width / 2f + 60f;
             float fy = 50f;
 
-            // Background
-            GUI.color = new Color(0.05f, 0.05f, 0.08f, 0.85f);
-            GUI.DrawTexture(new Rect(fx, fy, frameW, frameH), Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            var tp = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
 
-            // Border color based on hostility (colorblind-safe)
+            // TMD panel background
+            Rect frameRect = new Rect(fx, fy, frameW, frameH);
+            TMDTheme.DrawPanel(frameRect);
+
+            // Border color based on hostility (colorblind-safe), overlaid on TMD border
             var am = AccessibilityManager.Instance;
-            Color borderColor = _targetHostile ? new Color(0.8f, 0.2f, 0.2f) : new Color(0.3f, 0.6f, 0.3f);
+            Color borderColor = _targetHostile ? tp.Danger : tp.Success;
             if (am != null) borderColor = am.RemapColor(borderColor);
             GUI.color = borderColor;
             GUI.DrawTexture(new Rect(fx, fy, frameW, 2), Texture2D.whiteTexture);
@@ -326,29 +332,26 @@ namespace Orlo.UI
             };
             GUI.Label(new Rect(fx + frameW - 50, fy + 3, 44, 18), $"Lv.{_targetLevel}", lvlStyle);
 
-            // Health bar
+            // Health bar — TMD styled
             float barX = fx + 6;
             float barY = fy + 24;
             float barW = frameW - 12;
             float barH = 14f;
             float fill = Mathf.Clamp01(_targetHealth / _targetMaxHealth);
 
-            GUI.color = new Color(0.12f, 0.12f, 0.12f);
-            GUI.DrawTexture(new Rect(barX, barY, barW, barH), Texture2D.whiteTexture);
-
-            Color hpColor = fill > 0.5f ? new Color(0.2f, 0.8f, 0.2f) :
+            Color hpColor = fill > 0.5f ? tp.Success :
                             fill > 0.25f ? new Color(0.9f, 0.7f, 0.1f) :
-                            new Color(0.9f, 0.2f, 0.2f);
-            GUI.color = hpColor;
-            GUI.DrawTexture(new Rect(barX, barY, barW * fill, barH), Texture2D.whiteTexture);
+                            tp.Danger;
+            TMDTheme.DrawProgressBar(new Rect(barX, barY, barW, barH), fill, hpColor);
             GUI.color = Color.white;
 
-            var hpStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 10, alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = Color.white }
-            };
+            var hpStyle = TMDTheme.Instance != null ? new GUIStyle(TMDTheme.LabelStyle) : new GUIStyle(GUI.skin.label);
+            hpStyle.fontSize = 10;
+            hpStyle.alignment = TextAnchor.MiddleCenter;
             GUI.Label(new Rect(barX, barY, barW, barH), $"{_targetHealth:F0} / {_targetMaxHealth:F0}", hpStyle);
+
+            // Scanlines on target frame
+            TMDTheme.DrawScanlines(frameRect);
         }
 
         // ── Currency ────────────────────────────────────────────────────
@@ -360,15 +363,14 @@ namespace Orlo.UI
             float cx = Screen.width - cw - 10;
             float cy = 10;
 
-            GUI.color = new Color(0.05f, 0.05f, 0.08f, 0.7f);
-            GUI.DrawTexture(new Rect(cx, cy, cw, ch), Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            var cp = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
 
-            var credStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 12, alignment = TextAnchor.MiddleRight,
-                normal = { textColor = new Color(1f, 0.85f, 0.2f) }
-            };
+            TMDTheme.DrawPanel(new Rect(cx, cy, cw, ch));
+
+            var credStyle = TMDTheme.Instance != null ? new GUIStyle(TMDTheme.LabelStyle) : new GUIStyle(GUI.skin.label);
+            credStyle.fontSize = 12;
+            credStyle.alignment = TextAnchor.MiddleRight;
+            credStyle.normal.textColor = cp.Primary;
             GUI.Label(new Rect(cx + 4, cy, cw - 8, ch), $"{_credits:N0} cr", credStyle);
         }
 
@@ -377,6 +379,8 @@ namespace Orlo.UI
         private void DrawBuffs()
         {
             if (_buffs.Count == 0) return;
+
+            var bp = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
 
             // Draw below the health pools area (bottom-left, above combat bar)
             float startX = 14f;
@@ -390,9 +394,20 @@ namespace Orlo.UI
                 float x = startX + i * (iconSize + spacing);
                 float y = startY;
 
-                // Icon background
-                GUI.color = b.IsDebuff ? new Color(0.4f, 0.1f, 0.1f, 0.85f) : new Color(0.1f, 0.2f, 0.4f, 0.85f);
-                GUI.DrawTexture(new Rect(x, y, iconSize, iconSize), Texture2D.whiteTexture);
+                Rect iconRect = new Rect(x, y, iconSize, iconSize);
+
+                // Icon background — race-tinted
+                GUI.color = b.IsDebuff
+                    ? new Color(bp.Danger.r * 0.4f, bp.Danger.g * 0.1f, bp.Danger.b * 0.1f, 0.85f)
+                    : new Color(bp.Primary.r * 0.1f, bp.Primary.g * 0.2f, bp.Primary.b * 0.4f, 0.85f);
+                GUI.DrawTexture(iconRect, Texture2D.whiteTexture);
+
+                // Race-colored border
+                GUI.color = b.IsDebuff ? bp.Danger : bp.Border;
+                GUI.DrawTexture(new Rect(x, y, iconSize, 1), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(x, y + iconSize - 1, iconSize, 1), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(x, y, 1, iconSize), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(x + iconSize - 1, y, 1, iconSize), Texture2D.whiteTexture);
 
                 // Colored fill
                 GUI.color = new Color(b.IconColor.r, b.IconColor.g, b.IconColor.b, 0.6f);
@@ -420,16 +435,15 @@ namespace Orlo.UI
                 }
 
                 // Tooltip on hover
-                Rect iconRect = new Rect(x, y, iconSize, iconSize);
                 if (iconRect.Contains(Event.current.mousePosition))
                 {
-                    var tipStyle = new GUIStyle(GUI.skin.box)
-                    {
-                        fontSize = 11, alignment = TextAnchor.MiddleCenter,
-                        normal = { textColor = Color.white }
-                    };
                     float tipW = 120f;
-                    GUI.Box(new Rect(x, y - 24, tipW, 20), b.Name, tipStyle);
+                    Rect tipRect = new Rect(x, y - 24, tipW, 20);
+                    TMDTheme.DrawPanel(tipRect);
+                    var tipStyle = TMDTheme.Instance != null ? new GUIStyle(TMDTheme.LabelStyle) : new GUIStyle(GUI.skin.label);
+                    tipStyle.fontSize = 11;
+                    tipStyle.alignment = TextAnchor.MiddleCenter;
+                    GUI.Label(tipRect, b.Name, tipStyle);
                 }
             }
         }
@@ -442,23 +456,17 @@ namespace Orlo.UI
             float barY = Screen.height - barH;
             float barW = Screen.width;
 
-            // Background
-            GUI.color = new Color(0.05f, 0.05f, 0.08f, 0.7f);
-            GUI.DrawTexture(new Rect(0, barY, barW, barH), Texture2D.whiteTexture);
+            var xp = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
 
-            // Fill
+            // XP bar — TMD styled with race glow
             float pct = _xpToNext > 0 ? (float)_currentXp / _xpToNext : 0;
-            GUI.color = new Color(0.3f, 0.5f, 1f, 0.85f);
-            GUI.DrawTexture(new Rect(0, barY, barW * pct, barH), Texture2D.whiteTexture);
+            TMDTheme.DrawProgressBar(new Rect(0, barY, barW, barH), pct, xp.Primary);
             GUI.color = Color.white;
 
             // Label
-            var xpStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 10,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = Color.white }
-            };
+            var xpStyle = TMDTheme.Instance != null ? new GUIStyle(TMDTheme.LabelStyle) : new GUIStyle(GUI.skin.label);
+            xpStyle.fontSize = 10;
+            xpStyle.alignment = TextAnchor.MiddleCenter;
             GUI.Label(new Rect(0, barY, barW, barH),
                 $"Lv.{_playerLevel}  |  XP: {_currentXp:N0} / {_xpToNext:N0}  ({pct * 100:F1}%)", xpStyle);
         }

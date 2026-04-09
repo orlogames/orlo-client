@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Orlo.Network;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI
 {
@@ -12,6 +13,8 @@ namespace Orlo.UI
     public class QuestDialogUI : MonoBehaviour
     {
         public static QuestDialogUI Instance { get; private set; }
+
+        private RacePalette P => TMDTheme.Instance?.Palette ?? RacePalette.Solari;
 
         private bool _visible;
         private string _npcName = "";
@@ -172,190 +175,161 @@ namespace Orlo.UI
             float w = 460, h = 480;
             var rect = new Rect((Screen.width - w) / 2, (Screen.height - h) / 2, w, h);
 
-            // Dark background
-            GUI.color = new Color(0, 0, 0, 0.9f);
-            GUI.DrawTexture(rect, Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            // TMD glassmorphic panel
+            TMDTheme.DrawPanel(rect);
 
-            GUILayout.BeginArea(rect);
-            GUILayout.Space(10);
+            // We use absolute positioning within the panel instead of GUILayout for TMD consistency
+            float cx = rect.x + 16;
+            float cy = rect.y + 12;
+            float pw = w - 32;
 
-            // NPC name header
+            // NPC name in race Primary
             var titleStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 18, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = Color.white }
+                normal = { textColor = P.Primary }
             };
-            GUILayout.Label(_npcName, titleStyle);
+            GUI.Label(new Rect(cx, cy, pw, 24), _npcName, titleStyle);
+            cy += 28;
 
-            // NPC dialogue
-            var dialogueStyle = new GUIStyle(GUI.skin.label)
+            // NPC dialogue in TMD LabelStyle
+            var dialogueStyle = new GUIStyle(TMDTheme.LabelStyle)
             {
                 fontStyle = FontStyle.Italic, alignment = TextAnchor.MiddleCenter,
-                fontSize = 12, wordWrap = true,
-                normal = { textColor = new Color(0.8f, 0.8f, 0.7f) }
+                wordWrap = true
             };
-            GUILayout.Label($"\"{_dialogue}\"", dialogueStyle);
-            GUILayout.Space(8);
+            dialogueStyle.normal.textColor = P.TextDim;
+            float dlgH = dialogueStyle.CalcHeight(new GUIContent($"\"{_dialogue}\""), pw);
+            GUI.Label(new Rect(cx, cy, pw, dlgH), $"\"{_dialogue}\"", dialogueStyle);
+            cy += dlgH + 8;
 
             // Separator
-            DrawSeparator(w - 20);
-            GUILayout.Space(4);
+            GUI.color = new Color(P.Border.r, P.Border.g, P.Border.b, 0.5f);
+            GUI.DrawTexture(new Rect(cx, cy, pw, 1), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+            cy += 6;
 
-            // Quest title
+            // Quest title in race Accent
             var questTitleStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 15, fontStyle = FontStyle.Bold,
-                normal = { textColor = new Color(1f, 0.85f, 0.3f) }
+                normal = { textColor = P.Accent }
             };
-            GUILayout.Label(_currentQuest.Name ?? "Unknown Quest", questTitleStyle);
-            GUILayout.Space(2);
+            GUI.Label(new Rect(cx, cy, pw, 22), _currentQuest.Name ?? "Unknown Quest", questTitleStyle);
+            cy += 24;
 
             // Quest description
-            var descStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 12, wordWrap = true,
-                normal = { textColor = new Color(0.85f, 0.85f, 0.85f) }
-            };
-            GUILayout.Label(_currentQuest.Description ?? "", descStyle, GUILayout.Height(50));
-            GUILayout.Space(6);
+            var descStyle = new GUIStyle(TMDTheme.LabelStyle) { wordWrap = true };
+            float descH = descStyle.CalcHeight(new GUIContent(_currentQuest.Description ?? ""), pw);
+            descH = Mathf.Min(descH, 50);
+            GUI.Label(new Rect(cx, cy, pw, descH), _currentQuest.Description ?? "", descStyle);
+            cy += descH + 6;
 
-            // Objectives
+            // Objectives with TMD checkmarks
             if (_currentQuest.Objectives != null && _currentQuest.Objectives.Count > 0)
             {
-                var objHeaderStyle = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = 13, fontStyle = FontStyle.Bold,
-                    normal = { textColor = Color.white }
-                };
-                GUILayout.Label("Objectives:", objHeaderStyle);
-                GUILayout.Space(2);
+                var objHeaderStyle = new GUIStyle(TMDTheme.TitleStyle) { fontSize = 13 };
+                GUI.Label(new Rect(cx, cy, pw, 18), "OBJECTIVES", objHeaderStyle);
+                cy += 20;
 
                 foreach (var obj in _currentQuest.Objectives)
                 {
                     bool done = obj.Complete || obj.Current >= obj.Required;
-                    string check = done ? "[x]" : "[ ]";
-                    var objStyle = new GUIStyle(GUI.skin.label)
-                    {
-                        fontSize = 12,
-                        normal = { textColor = done ? new Color(0.3f, 0.9f, 0.3f) : Color.white }
-                    };
+                    string check = done ? "\u2713" : "\u25CB"; // TMD checkmark vs circle
+                    Color objCol = done ? P.Success : P.Text;
+                    var objStyle = new GUIStyle(TMDTheme.LabelStyle);
+                    objStyle.normal.textColor = objCol;
 
                     string progressText = obj.Required > 1
-                        ? $"{check} {obj.Description} ({obj.Current}/{obj.Required})"
-                        : $"{check} {obj.Description}";
-                    GUILayout.Label(progressText, objStyle);
+                        ? $"{check}  {obj.Description} ({obj.Current}/{obj.Required})"
+                        : $"{check}  {obj.Description}";
+                    GUI.Label(new Rect(cx, cy, pw, 18), progressText, objStyle);
+                    cy += 20;
 
-                    // Progress bar for multi-count objectives
+                    // Progress bar for multi-count objectives via TMD
                     if (obj.Required > 1 && !done)
                     {
-                        Rect barRect = GUILayoutUtility.GetRect(w - 40, 6);
-                        barRect.x += 20;
-                        barRect.width -= 40;
-                        GUI.color = new Color(0.2f, 0.2f, 0.2f);
-                        GUI.DrawTexture(barRect, Texture2D.whiteTexture);
                         float pct = Mathf.Clamp01((float)obj.Current / obj.Required);
-                        GUI.color = Color.Lerp(new Color(0.8f, 0.3f, 0.1f), new Color(0.3f, 0.9f, 0.3f), pct);
-                        GUI.DrawTexture(new Rect(barRect.x, barRect.y, barRect.width * pct, barRect.height), Texture2D.whiteTexture);
-                        GUI.color = Color.white;
+                        TMDTheme.DrawProgressBar(new Rect(cx + 20, cy, pw - 40, 6), pct, P.Primary);
+                        cy += 10;
                     }
-                    GUILayout.Space(2);
                 }
-                GUILayout.Space(4);
+                cy += 4;
             }
 
-            // Rewards
-            DrawSeparator(w - 20);
-            GUILayout.Space(4);
-            var rewardHeaderStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 13, fontStyle = FontStyle.Bold,
-                normal = { textColor = new Color(1f, 0.85f, 0.2f) }
-            };
-            GUILayout.Label("Rewards:", rewardHeaderStyle);
-            GUILayout.Space(2);
+            // Rewards separator
+            GUI.color = new Color(P.Border.r, P.Border.g, P.Border.b, 0.5f);
+            GUI.DrawTexture(new Rect(cx, cy, pw, 1), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+            cy += 6;
 
-            var rewardStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 12,
-                normal = { textColor = new Color(0.9f, 0.9f, 0.7f) }
-            };
+            // Rewards header in race Accent
+            var rewardHeaderStyle = new GUIStyle(TMDTheme.TitleStyle) { fontSize = 13 };
+            rewardHeaderStyle.normal.textColor = P.Accent;
+            GUI.Label(new Rect(cx, cy, pw, 18), "REWARDS", rewardHeaderStyle);
+            cy += 20;
+
+            var rewardStyle = new GUIStyle(TMDTheme.LabelStyle);
+            rewardStyle.normal.textColor = P.Accent;
 
             if (_currentQuest.Rewards.XP > 0)
-                GUILayout.Label($"  + {_currentQuest.Rewards.XP} XP", rewardStyle);
+            { GUI.Label(new Rect(cx + 8, cy, pw - 8, 18), $"+ {_currentQuest.Rewards.XP} XP", rewardStyle); cy += 18; }
             if (_currentQuest.Rewards.Credits > 0)
-                GUILayout.Label($"  + {_currentQuest.Rewards.Credits:N0} Credits", rewardStyle);
+            { GUI.Label(new Rect(cx + 8, cy, pw - 8, 18), $"+ {_currentQuest.Rewards.Credits:N0} Credits", rewardStyle); cy += 18; }
             if (_currentQuest.Rewards.SkillPoints > 0)
-                GUILayout.Label($"  + {_currentQuest.Rewards.SkillPoints} Skill Points", rewardStyle);
+            { GUI.Label(new Rect(cx + 8, cy, pw - 8, 18), $"+ {_currentQuest.Rewards.SkillPoints} Skill Points", rewardStyle); cy += 18; }
             if (_currentQuest.Rewards.ItemNames != null)
             {
                 foreach (var itemName in _currentQuest.Rewards.ItemNames)
-                    GUILayout.Label($"  + {itemName}", rewardStyle);
+                { GUI.Label(new Rect(cx + 8, cy, pw - 8, 18), $"+ {itemName}", rewardStyle); cy += 18; }
             }
-
-            GUILayout.FlexibleSpace();
 
             // Status message
             if (!string.IsNullOrEmpty(_statusMessage))
             {
-                var statusStyle = new GUIStyle(GUI.skin.label)
+                cy = Mathf.Max(cy + 8, rect.yMax - 90);
+                var statusStyle = new GUIStyle(TMDTheme.LabelStyle)
                 {
-                    alignment = TextAnchor.MiddleCenter, fontSize = 12,
-                    normal = { textColor = Color.green }
+                    alignment = TextAnchor.MiddleCenter
                 };
-                GUILayout.Label(_statusMessage, statusStyle);
-                GUILayout.Space(4);
+                statusStyle.normal.textColor = P.Success;
+                GUI.Label(new Rect(cx, cy, pw, 18), _statusMessage, statusStyle);
+                cy += 22;
             }
 
-            // Action buttons based on state
-            GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
+            // Action buttons via TMDTheme.DrawButton — positioned at bottom
+            float btnY = rect.yMax - 68;
+            float btnCenterX = rect.x + w / 2f;
 
             switch (_currentQuest.State)
             {
                 case QuestDialogState.Offer:
-                    if (GUILayout.Button("Accept", GUILayout.Width(100), GUILayout.Height(32)))
-                    {
+                    if (TMDTheme.DrawButton(new Rect(btnCenterX - 110, btnY, 100, 32), "Accept"))
                         AcceptQuest();
-                    }
-                    GUILayout.Space(10);
-                    if (GUILayout.Button("Decline", GUILayout.Width(100), GUILayout.Height(32)))
-                    {
+                    if (TMDTheme.DrawButton(new Rect(btnCenterX + 10, btnY, 100, 32), "Decline"))
                         Hide();
-                    }
                     break;
 
                 case QuestDialogState.InProgress:
                     GUI.enabled = false;
-                    GUILayout.Button("In Progress...", GUILayout.Width(120), GUILayout.Height(32));
+                    TMDTheme.DrawButton(new Rect(btnCenterX - 130, btnY, 120, 32), "In Progress...");
                     GUI.enabled = true;
-                    GUILayout.Space(10);
-                    if (GUILayout.Button("Abandon", GUILayout.Width(100), GUILayout.Height(32)))
-                    {
+                    if (TMDTheme.DrawButton(new Rect(btnCenterX + 10, btnY, 100, 32), "Abandon"))
                         AbandonQuest();
-                    }
                     break;
 
                 case QuestDialogState.ReadyToTurnIn:
-                    // Highlight the turn-in button
-                    GUI.backgroundColor = new Color(0.3f, 0.8f, 0.3f);
-                    if (GUILayout.Button("Turn In", GUILayout.Width(120), GUILayout.Height(32)))
-                    {
+                    if (TMDTheme.DrawButton(new Rect(btnCenterX - 60, btnY, 120, 32), "Turn In"))
                         TurnInQuest();
-                    }
-                    GUI.backgroundColor = Color.white;
                     break;
             }
 
-            GUILayout.FlexibleSpace();
-            GUILayout.EndHorizontal();
-            GUILayout.Space(6);
-
             // Close button
-            if (GUILayout.Button("Close (Esc)", GUILayout.Height(24)))
+            if (TMDTheme.DrawButton(new Rect(cx, rect.yMax - 32, pw, 24), "Close (Esc)"))
                 Hide();
 
-            GUILayout.EndArea();
+            // Scanline overlay
+            TMDTheme.DrawScanlines(rect);
         }
 
         // ─── Actions ────────────────────────────────────────────────────────

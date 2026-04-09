@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI.Panels
 {
@@ -27,17 +28,12 @@ namespace Orlo.UI.Panels
 
         private Texture2D _pixel;
 
-        // ---- Colors ----
-        private static readonly Color ColBg = new Color(0.05f, 0.05f, 0.1f, 0.93f);
-        private static readonly Color ColBorder = new Color(0.28f, 0.38f, 0.58f, 0.6f);
-        private static readonly Color ColHeader = new Color(0.07f, 0.07f, 0.13f, 0.95f);
-        private static readonly Color ColAccent = new Color(0.35f, 0.6f, 0.95f, 1f);
-        private static readonly Color ColGold = new Color(1f, 0.85f, 0.2f, 1f);
-        private static readonly Color ColTextPrimary = new Color(0.85f, 0.88f, 0.95f, 1f);
-        private static readonly Color ColTextSecondary = new Color(0.5f, 0.55f, 0.65f, 1f);
-        private static readonly Color ColTabBg = new Color(0.08f, 0.08f, 0.14f, 0.9f);
-        private static readonly Color ColTabHover = new Color(0.12f, 0.12f, 0.2f, 0.9f);
-        private static readonly Color ColBarBg = new Color(0.1f, 0.1f, 0.15f, 1f);
+        // ---- TMD Spring for tab underline ----
+        private SpringValue _tabUnderlineX;
+        private float _tabUnderlineW;
+        private int _lastTabIndex;
+
+        // ---- Colors (palette-derived at runtime) ----
         private static readonly Color ColVitality = new Color(0.85f, 0.2f, 0.2f, 1f);
         private static readonly Color ColStamina = new Color(0.9f, 0.7f, 0.15f, 1f);
         private static readonly Color ColFocus = new Color(0.2f, 0.45f, 0.9f, 1f);
@@ -139,6 +135,14 @@ namespace Orlo.UI.Panels
             float savedX = PlayerPrefs.GetFloat("CharPanel_X", Screen.width / 2f - WinW / 2f);
             float savedY = PlayerPrefs.GetFloat("CharPanel_Y", Screen.height / 2f - WinH / 2f);
             _windowPos = new Vector2(savedX, savedY);
+
+            _tabUnderlineX = new SpringValue(0f, 350f, 0.7f);
+            _tabUnderlineW = WinW / TabNames.Length;
+        }
+
+        private void Update()
+        {
+            _tabUnderlineX.Update(Time.deltaTime);
         }
 
         private void OnDestroy()
@@ -223,6 +227,9 @@ namespace Orlo.UI.Panels
         // OnGUI
         // ================================================================
 
+        // ---- Palette helpers ----
+        private RacePalette P => TMDTheme.Instance?.Palette ?? RacePalette.Solari;
+
         private void OnGUI()
         {
             if (!_visible) return;
@@ -237,29 +244,21 @@ namespace Orlo.UI.Panels
 
             Rect winRect = new Rect(_windowPos.x, _windowPos.y, WinW, WinH);
 
-            // Background
-            DrawRect(winRect, ColBg);
-            // Border
-            DrawBorder(winRect, ColBorder, 1f);
+            // TMD glassmorphic background + border
+            TMDTheme.DrawPanel(winRect);
 
             // Header bar (draggable)
             Rect headerRect = new Rect(winRect.x, winRect.y, WinW, HeaderH);
-            DrawRect(headerRect, ColHeader);
             HandleDrag(headerRect);
 
-            // Header title
-            GUIStyle headerStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 13, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft,
-                normal = { textColor = ColTextPrimary }
-            };
-            GUI.Label(new Rect(headerRect.x + 12, headerRect.y, 200, HeaderH), "CHARACTER", headerStyle);
+            // Title via TMD
+            TMDTheme.DrawTitle(winRect, "CHARACTER");
 
             // Close X
             GUIStyle closeStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 16, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = ColTextSecondary }
+                normal = { textColor = P.TextDim }
             };
             Rect closeRect = new Rect(winRect.xMax - 32, winRect.y + 2, 28, HeaderH - 4);
             if (GUI.Button(closeRect, "", GUIStyle.none))
@@ -270,14 +269,14 @@ namespace Orlo.UI.Panels
             GUI.Label(closeRect, "X", closeStyle);
 
             // Tab bar
-            float tabY = winRect.y + HeaderH;
+            float tabY = winRect.y + HeaderH + 8;
             Rect tabBarRect = new Rect(winRect.x, tabY, WinW, TabBarH);
-            DrawRect(tabBarRect, ColTabBg);
+            DrawRect(tabBarRect, P.PanelBackground);
             DrawTabs(tabBarRect);
 
             // Content area
             float contentY = tabY + TabBarH + 4;
-            float contentH = WinH - HeaderH - TabBarH - 8;
+            float contentH = WinH - HeaderH - TabBarH - 16;
             Rect contentRect = new Rect(winRect.x, contentY, WinW, contentH);
 
             // Scrollable content
@@ -299,6 +298,9 @@ namespace Orlo.UI.Panels
 
             GUI.EndScrollView();
 
+            // Scanline overlay
+            TMDTheme.DrawScanlines(winRect);
+
             // Save position on drag
             if (_dragging && Event.current.type == EventType.MouseUp)
             {
@@ -314,28 +316,38 @@ namespace Orlo.UI.Panels
         private void DrawTabs(Rect bar)
         {
             float tabW = bar.width / TabNames.Length;
+            int activeIdx = (int)_activeTab;
+
+            // Update spring target for underline animation
+            if (activeIdx != _lastTabIndex)
+            {
+                _tabUnderlineX.Target = bar.x + activeIdx * tabW + 4;
+                _tabUnderlineW = tabW - 8;
+                _lastTabIndex = activeIdx;
+            }
+            // Snap on first frame
+            if (_tabUnderlineX.Target == 0f && _tabUnderlineX.Value == 0f)
+            {
+                _tabUnderlineX = SpringPresets.TabSlide(bar.x + activeIdx * tabW + 4, bar.x + activeIdx * tabW + 4);
+                _tabUnderlineW = tabW - 8;
+            }
+
             for (int i = 0; i < TabNames.Length; i++)
             {
                 Rect tabRect = new Rect(bar.x + i * tabW, bar.y, tabW, bar.height);
-                bool isActive = (int)_activeTab == i;
+                bool isActive = i == activeIdx;
                 bool hover = tabRect.Contains(Event.current.mousePosition);
 
                 if (!isActive && hover)
-                    DrawRect(tabRect, ColTabHover);
+                    DrawRect(tabRect, new Color(P.Primary.r, P.Primary.g, P.Primary.b, 0.1f));
 
                 GUIStyle tabStyle = new GUIStyle(GUI.skin.label)
                 {
                     fontSize = 10, fontStyle = isActive ? FontStyle.Bold : FontStyle.Normal,
                     alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = isActive ? ColAccent : ColTextSecondary }
+                    normal = { textColor = isActive ? P.Primary : P.TextDim }
                 };
                 GUI.Label(tabRect, TabNames[i], tabStyle);
-
-                if (isActive)
-                {
-                    Rect underline = new Rect(tabRect.x + 4, tabRect.yMax - 2, tabRect.width - 8, 2);
-                    DrawRect(underline, ColAccent);
-                }
 
                 if (GUI.Button(tabRect, "", GUIStyle.none))
                 {
@@ -343,6 +355,9 @@ namespace Orlo.UI.Panels
                     _scrollPos = Vector2.zero;
                 }
             }
+
+            // Animated underline via spring
+            DrawRect(new Rect(_tabUnderlineX.Value, bar.yMax - 2, _tabUnderlineW, 2), P.Primary);
         }
 
         // ================================================================
@@ -357,7 +372,7 @@ namespace Orlo.UI.Panels
             GUIStyle nameStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 16, fontStyle = FontStyle.Bold,
-                normal = { textColor = Color.white }
+                normal = { textColor = P.Text }
             };
             GUI.Label(new Rect(x, y, w, 22), _name, nameStyle);
 
@@ -366,7 +381,7 @@ namespace Orlo.UI.Panels
                 float nameW = nameStyle.CalcSize(new GUIContent(_name)).x;
                 GUIStyle tagStyle = new GUIStyle(GUI.skin.label)
                 {
-                    fontSize = 14, normal = { textColor = ColAccent }
+                    fontSize = 14, normal = { textColor = P.Primary }
                 };
                 GUI.Label(new Rect(x + nameW + 6, y + 2, 120, 20), "<" + _guildTag + ">", tagStyle);
             }
@@ -374,19 +389,24 @@ namespace Orlo.UI.Panels
 
             if (!string.IsNullOrEmpty(_title))
             {
-                SmallLabel(x, y, _title, ColGold);
+                SmallLabel(x, y, _title, P.Accent);
                 y += 16;
             }
 
             // Race / Level / Class
             string infoLine = _race + " \u00B7 Level " + _level;
             if (!string.IsNullOrEmpty(_className)) infoLine += " \u00B7 " + _className;
-            SmallLabel(x, y, infoLine, ColTextSecondary);
+            SmallLabel(x, y, infoLine, P.TextDim);
             y += 18;
 
-            // XP bar
-            DrawLabeledBar(x, y, 200, 6, (float)_xpCurrent / _xpMax,
-                new Color(0.25f, 0.45f, 0.85f), _xpCurrent + " / " + _xpMax + " XP", ColTextSecondary);
+            // XP bar via TMD
+            TMDTheme.DrawProgressBar(new Rect(x, y, 200, 6), (float)_xpCurrent / _xpMax, P.Secondary);
+            GUIStyle xpTextStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 9, alignment = TextAnchor.MiddleLeft,
+                normal = { textColor = P.TextDim }
+            };
+            GUI.Label(new Rect(x, y + 7, 200, 12), _xpCurrent + " / " + _xpMax + " XP", xpTextStyle);
             y += 18;
 
             // Criminal rating
@@ -428,7 +448,7 @@ namespace Orlo.UI.Panels
                 float ax = x + col * cellW;
                 float ay = y + row * 38;
 
-                SmallLabel(ax, ay, attrLabels[i], ColTextSecondary, 10);
+                SmallLabel(ax, ay, attrLabels[i], P.TextDim, 10);
 
                 GUIStyle valStyle = new GUIStyle(GUI.skin.label)
                 {
@@ -469,15 +489,13 @@ namespace Orlo.UI.Panels
 
             float barX = x + 34;
             float barW = w - 34 - 80;
-            DrawRect(new Rect(barX, y + 3, barW, 10), ColBarBg);
             float fill = max > 0 ? Mathf.Clamp01(val / max) : 0f;
-            if (fill > 0)
-                DrawRect(new Rect(barX, y + 3, barW * fill, 10), col);
+            TMDTheme.DrawProgressBar(new Rect(barX, y + 3, barW, 10), fill, col);
 
             GUIStyle numStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 10, alignment = TextAnchor.MiddleRight,
-                normal = { textColor = ColTextPrimary }
+                normal = { textColor = P.Text }
             };
             GUI.Label(new Rect(barX + barW + 4, y, 76, 16), Mathf.RoundToInt(val) + " / " + Mathf.RoundToInt(max), numStyle);
         }
@@ -501,7 +519,7 @@ namespace Orlo.UI.Panels
                 GUIStyle slotStyle = new GUIStyle(GUI.skin.label)
                 {
                     fontSize = 8, alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = slot.Quality == 0 ? ColTextSecondary : Color.white },
+                    normal = { textColor = slot.Quality == 0 ? P.TextDim : Color.white },
                     wordWrap = true
                 };
                 GUI.Label(slotRect, text, slotStyle);
@@ -513,23 +531,23 @@ namespace Orlo.UI.Panels
             float colW = w / 2f;
 
             // Row 1
-            DrawStatPair(x, y, "Playtime", FormatPlaytime(_playtimeHours), ColTextPrimary);
-            DrawStatPair(x + colW, y, "Credits", _credits.ToString("N0"), ColGold);
+            DrawStatPair(x, y, "Playtime", FormatPlaytime(_playtimeHours), P.Text);
+            DrawStatPair(x + colW, y, "Credits", _credits.ToString("N0"), P.Accent);
             y += 16;
 
             // Row 2
-            DrawStatPair(x, y, "Kills", _kills.ToString(), ColTextPrimary);
-            DrawStatPair(x + colW, y, "Deaths", _deaths.ToString(), ColTextPrimary);
+            DrawStatPair(x, y, "Kills", _kills.ToString(), P.Text);
+            DrawStatPair(x + colW, y, "Deaths", _deaths.ToString(), P.Text);
             y += 16;
 
             // Row 3
-            DrawStatPair(x, y, "Zone", _zone, ColAccent);
+            DrawStatPair(x, y, "Zone", _zone, P.Primary);
             y += 16;
         }
 
         private void DrawStatPair(float x, float y, string label, string value, Color valueColor)
         {
-            SmallLabel(x, y, label + ":", ColTextSecondary, 10);
+            SmallLabel(x, y, label + ":", P.TextDim, 10);
             GUIStyle valStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 10, fontStyle = FontStyle.Bold,
@@ -548,7 +566,7 @@ namespace Orlo.UI.Panels
 
             if (_skills.Length == 0)
             {
-                SmallLabel(x, y + 20, "No skills learned yet.", ColTextSecondary);
+                SmallLabel(x, y + 20, "No skills learned yet.", P.TextDim);
                 y += 50;
                 return;
             }
@@ -563,7 +581,7 @@ namespace Orlo.UI.Panels
                 GUIStyle nameStyle = new GUIStyle(GUI.skin.label)
                 {
                     fontSize = 12, fontStyle = FontStyle.Bold,
-                    normal = { textColor = mastered ? ColGold : ColTextPrimary }
+                    normal = { textColor = mastered ? P.Accent : P.Text }
                 };
                 GUI.Label(new Rect(x, y, w * 0.5f, 18), sk.Name, nameStyle);
 
@@ -572,7 +590,7 @@ namespace Orlo.UI.Panels
                 int fullStars = sk.Rank / 20;
                 for (int s = 0; s < 5; s++)
                 {
-                    Color starCol = s < fullStars ? ColGold : new Color(0.25f, 0.25f, 0.3f);
+                    Color starCol = s < fullStars ? P.Accent : new Color(0.25f, 0.25f, 0.3f);
                     GUIStyle starStyle = new GUIStyle(GUI.skin.label)
                     {
                         fontSize = 12, normal = { textColor = starCol }
@@ -584,22 +602,20 @@ namespace Orlo.UI.Panels
                 GUIStyle rankStyle = new GUIStyle(GUI.skin.label)
                 {
                     fontSize = 10, alignment = TextAnchor.MiddleRight,
-                    normal = { textColor = ColTextSecondary }
+                    normal = { textColor = P.TextDim }
                 };
                 GUI.Label(new Rect(x + w - 80, y, 80, 18),
                     mastered ? "MASTERED" : "Rank " + sk.Rank + "/100", rankStyle);
                 y += 20;
 
-                // XP bar
+                // XP bar via TMD
                 float barW = w;
                 float barH = 4f;
-                Color barCol = mastered ? ColGold : ColAccent;
+                Color barCol = mastered ? P.Accent : P.Primary;
                 float fill = sk.XpMax > 0 ? Mathf.Clamp01((float)sk.XpCurrent / sk.XpMax) : 0f;
                 if (mastered) fill = 1f;
 
-                DrawRect(new Rect(x, y, barW, barH), ColBarBg);
-                if (fill > 0)
-                    DrawRect(new Rect(x, y, barW * fill, barH), barCol);
+                TMDTheme.DrawProgressBar(new Rect(x, y, barW, barH), fill, barCol);
                 y += 12;
 
                 DrawSeparator(x, y, w, 0.3f);
@@ -617,7 +633,7 @@ namespace Orlo.UI.Panels
 
             if (_factions.Length == 0)
             {
-                SmallLabel(x, y + 20, "No faction standings yet.", ColTextSecondary);
+                SmallLabel(x, y + 20, "No faction standings yet.", P.TextDim);
                 y += 50;
                 return;
             }
@@ -635,14 +651,12 @@ namespace Orlo.UI.Panels
                 GUI.Label(new Rect(x, y, w, 20), fac.Name, nameStyle);
                 y += 20;
 
-                // Standing bar
+                // Standing bar via TMD
                 float barW = w;
                 float barH = 8f;
                 float fill = fac.NextTier > 0 ? Mathf.Clamp01((float)fac.Standing / fac.NextTier) : 1f;
 
-                DrawRect(new Rect(x, y, barW, barH), ColBarBg);
-                if (fill > 0)
-                    DrawRect(new Rect(x, y, barW * fill, barH), fac.FactionColor);
+                TMDTheme.DrawProgressBar(new Rect(x, y, barW, barH), fill, fac.FactionColor);
                 y += 14;
 
                 // Tier label + numbers
@@ -656,7 +670,7 @@ namespace Orlo.UI.Panels
                 GUIStyle numStyle = new GUIStyle(GUI.skin.label)
                 {
                     fontSize = 10, alignment = TextAnchor.MiddleRight,
-                    normal = { textColor = ColTextSecondary }
+                    normal = { textColor = P.TextDim }
                 };
                 GUI.Label(new Rect(x + w - 120, y, 120, 14),
                     fac.Standing + " / " + fac.NextTier, numStyle);
@@ -684,7 +698,7 @@ namespace Orlo.UI.Panels
             GUIStyle headerStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 11, fontStyle = FontStyle.Bold,
-                normal = { textColor = ColTextPrimary }
+                normal = { textColor = P.Text }
             };
             GUI.Label(new Rect(x, y, w - 80, 18),
                 "BADGES  " + earned + " / " + _totalBadges + "  (" + pct.ToString("F0") + "%)", headerStyle);
@@ -695,7 +709,7 @@ namespace Orlo.UI.Panels
             GUIStyle filterStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 9, alignment = TextAnchor.MiddleRight,
-                normal = { textColor = ColAccent }
+                normal = { textColor = P.Primary }
             };
             string filterLabel = _badgeFilterRarity < 0 ? "All" : filterNames[_badgeFilterRarity + 1];
             if (GUI.Button(filterRect, "", GUIStyle.none))
@@ -734,7 +748,7 @@ namespace Orlo.UI.Panels
                 {
                     GUIStyle starStyle = new GUIStyle(GUI.skin.label)
                     {
-                        fontSize = 10, normal = { textColor = ColGold },
+                        fontSize = 10, normal = { textColor = P.Accent },
                         alignment = TextAnchor.UpperRight
                     };
                     GUI.Label(new Rect(tx, ty, tileW - 2, 14), "\u2605", starStyle);
@@ -753,7 +767,7 @@ namespace Orlo.UI.Panels
                 {
                     fontSize = 9, alignment = TextAnchor.UpperCenter,
                     wordWrap = true,
-                    normal = { textColor = ColTextPrimary }
+                    normal = { textColor = P.Text }
                 };
                 GUI.Label(new Rect(tx + 4, ty + 48, tileW - 8, 28), badge.Name, badgeNameStyle);
 
@@ -768,7 +782,7 @@ namespace Orlo.UI.Panels
 
             if (y == startY)
             {
-                SmallLabel(x, y + 8, "No badges match this filter.", ColTextSecondary);
+                SmallLabel(x, y + 8, "No badges match this filter.", P.TextDim);
                 y += 30;
             }
         }
@@ -783,7 +797,7 @@ namespace Orlo.UI.Panels
 
             if (_history.Count == 0)
             {
-                SmallLabel(x, y + 20, "No recent events.", ColTextSecondary);
+                SmallLabel(x, y + 20, "No recent events.", P.TextDim);
                 y += 50;
                 return;
             }
@@ -800,7 +814,7 @@ namespace Orlo.UI.Panels
                     GUIStyle dateStyle = new GUIStyle(GUI.skin.label)
                     {
                         fontSize = 11, fontStyle = FontStyle.Bold,
-                        normal = { textColor = ColTextSecondary }
+                        normal = { textColor = P.TextDim }
                     };
                     GUI.Label(new Rect(x, y, w, 16), dateHeader, dateStyle);
                     y += 18;
@@ -811,7 +825,7 @@ namespace Orlo.UI.Panels
                 string evIcon = GetEventIcon(ev.Type);
 
                 // Timestamp
-                SmallLabel(x, y, ev.Timestamp, ColTextSecondary, 9);
+                SmallLabel(x, y, ev.Timestamp, P.TextDim, 9);
 
                 // Icon
                 GUIStyle iconStyle = new GUIStyle(GUI.skin.label)
@@ -824,7 +838,7 @@ namespace Orlo.UI.Panels
                 GUIStyle descStyle = new GUIStyle(GUI.skin.label)
                 {
                     fontSize = 10, wordWrap = true,
-                    normal = { textColor = ColTextPrimary }
+                    normal = { textColor = P.Text }
                 };
                 float descW = w - 72;
                 float descH = descStyle.CalcHeight(new GUIContent(ev.Description), descW);
@@ -855,13 +869,13 @@ namespace Orlo.UI.Panels
 
         private void DrawSeparator(float x, float y, float w, float alpha = 0.5f)
         {
-            DrawRect(new Rect(x, y, w, 1), new Color(ColBorder.r, ColBorder.g, ColBorder.b, alpha));
+            DrawRect(new Rect(x, y, w, 1), new Color(P.Border.r, P.Border.g, P.Border.b, alpha));
         }
 
         private void DrawLabeledBar(float x, float y, float w, float h, float fill,
             Color barColor, string text, Color textColor)
         {
-            DrawRect(new Rect(x, y, w, h), ColBarBg);
+            DrawRect(new Rect(x, y, w, h), new Color(0.1f, 0.1f, 0.15f, 1f));
             if (fill > 0)
                 DrawRect(new Rect(x, y, w * Mathf.Clamp01(fill), h), barColor);
 
@@ -937,7 +951,7 @@ namespace Orlo.UI.Panels
                 case 1: return new Color(0.5f, 0.5f, 0.5f);     // Standard — grey
                 case 2: return new Color(0.3f, 0.8f, 0.3f);     // Enhanced — green
                 case 3: return new Color(0.3f, 0.5f, 1f);       // Exceptional — blue
-                case 4: return ColGold;                          // Legendary — gold
+                case 4: return P.Accent;                          // Legendary — gold
                 default: return new Color(0.2f, 0.2f, 0.25f);   // Empty
             }
         }
@@ -957,16 +971,16 @@ namespace Orlo.UI.Panels
 
         private static Color GetTierColor(string tier)
         {
-            if (tier == null) return ColTextSecondary;
+            if (tier == null) return P.TextDim;
             switch (tier)
             {
                 case "Hostile": return new Color(0.9f, 0.2f, 0.2f);
                 case "Unfriendly": return new Color(0.9f, 0.5f, 0.2f);
-                case "Neutral": return ColTextSecondary;
+                case "Neutral": return P.TextDim;
                 case "Respected": return new Color(0.3f, 0.8f, 0.3f);
                 case "Allied": return new Color(0.3f, 0.5f, 1f);
                 case "Exalted": return new Color(0.65f, 0.3f, 0.9f);
-                default: return ColTextSecondary;
+                default: return P.TextDim;
             }
         }
 
@@ -976,10 +990,10 @@ namespace Orlo.UI.Panels
             {
                 case 0: return new Color(0.9f, 0.3f, 0.3f);     // Combat — red
                 case 1: return new Color(0.9f, 0.6f, 0.2f);     // Crafting — orange
-                case 2: return ColGold;                          // Progression — gold
+                case 2: return P.Accent;                          // Progression — gold
                 case 3: return new Color(0.3f, 0.8f, 0.3f);     // Social — green
-                case 4: return ColAccent;                        // Exploration — cyan
-                default: return ColTextSecondary;
+                case 4: return P.Primary;                        // Exploration — cyan
+                default: return P.TextDim;
             }
         }
 

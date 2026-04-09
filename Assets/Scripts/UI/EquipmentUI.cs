@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using Orlo.Network;
 using ProtoInventory = Orlo.Proto.Inventory;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI
 {
@@ -315,25 +316,26 @@ namespace Orlo.UI
             float windowH = paperDollH + 36; // title bar
             Rect windowRect = new Rect(_windowPos.x, _windowPos.y, windowW, windowH);
 
-            // Dark background
-            GUI.color = new Color(0, 0, 0, 0.85f);
-            GUI.DrawTexture(windowRect, Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            // TMD panel background
+            TMDTheme.DrawPanel(windowRect);
 
-            // Title bar
-            Rect titleBar = new Rect(_windowPos.x, _windowPos.y, windowW - 24, 24);
-            DrawTitleBar(titleBar, "Equipment");
+            // TMD title bar
+            TMDTheme.DrawTitle(windowRect, "Equipment");
+            Rect titleBar = new Rect(_windowPos.x, _windowPos.y, windowW - 28, 40);
             HandleDrag(titleBar);
 
             // Close button
-            if (GUI.Button(new Rect(_windowPos.x + windowW - 24, _windowPos.y, 24, 24), "X"))
+            if (TMDTheme.DrawButton(new Rect(_windowPos.x + windowW - 28, _windowPos.y + 8, 20, 20), "X"))
             {
                 _visible = false;
                 return;
             }
 
+            // Race palette
+            var p = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
+
             float contentX = _windowPos.x + 8;
-            float contentY = _windowPos.y + 28;
+            float contentY = _windowPos.y + 44;
 
             // ─── Paper doll silhouette (subtle body outline) ────────────
             DrawSilhouette(contentX, contentY, paperDollW, paperDollH);
@@ -368,6 +370,9 @@ namespace Orlo.UI
             {
                 DrawContextMenu();
             }
+
+            // TMD scanline overlay
+            TMDTheme.DrawScanlines(windowRect);
         }
 
         private void DrawEquipSlot(Rect rect, SlotId slotId)
@@ -376,22 +381,25 @@ namespace Orlo.UI
             bool selected = _selectedSlot == slotId;
             bool isPending = _pendingSlots.Contains(slotId);
 
+            var ep = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
+
             // Slot background
             if (selected && !occupied)
-                GUI.color = new Color(0.3f, 0.5f, 0.3f, 0.9f); // highlight selected empty slot
+                GUI.color = new Color(ep.Success.r, ep.Success.g, ep.Success.b, 0.3f); // highlight selected empty slot
             else
-                GUI.color = new Color(0.12f, 0.12f, 0.16f, 0.9f);
+                GUI.color = ep.PanelBackground;
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
 
-            // Border — pulse yellow if pending
+            // Border — race-colored, pulse yellow if pending, brighter on hover
+            bool isHover = rect.Contains(Event.current.mousePosition);
             if (isPending)
             {
                 float pulse = 0.4f + 0.3f * Mathf.Sin(_pendingPulseTimer * 4f);
-                GUI.color = new Color(0.8f, 0.7f, 0.2f, pulse);
+                GUI.color = new Color(ep.Glow.r, ep.Glow.g, ep.Glow.b, pulse);
             }
             else
             {
-                GUI.color = occupied ? new Color(0.4f, 0.4f, 0.5f) : new Color(0.25f, 0.25f, 0.3f);
+                GUI.color = isHover ? ep.Primary : (occupied ? ep.Border : new Color(ep.Border.r, ep.Border.g, ep.Border.b, 0.5f));
             }
             DrawBorder(rect, 1);
 
@@ -399,6 +407,10 @@ namespace Orlo.UI
             {
                 // Dim the slot if a pending unequip/equip is in-flight
                 float alpha = isPending ? 0.3f + 0.15f * Mathf.Sin(_pendingPulseTimer * 4f) : 1f;
+
+                // Race-colored equipped glow behind rarity box
+                GUI.color = new Color(ep.Primary.r, ep.Primary.g, ep.Primary.b, 0.12f * alpha);
+                GUI.DrawTexture(rect, Texture2D.whiteTexture);
 
                 // Rarity-colored inner box
                 Rect inner = new Rect(rect.x + 2, rect.y + 2, rect.width - 4, rect.height - 16);
@@ -419,7 +431,7 @@ namespace Orlo.UI
                     Rect condBar = new Rect(rect.x + 2, rect.y + rect.height - 14, rect.width - 4, 3);
                     GUI.color = new Color(0.1f, 0.1f, 0.1f);
                     GUI.DrawTexture(condBar, Texture2D.whiteTexture);
-                    GUI.color = condPct > 0.5f ? Color.green : (condPct > 0.2f ? Color.yellow : Color.red);
+                    GUI.color = condPct > 0.5f ? ep.Success : (condPct > 0.2f ? Color.yellow : ep.Danger);
                     GUI.DrawTexture(new Rect(condBar.x, condBar.y, condBar.width * condPct, condBar.height), Texture2D.whiteTexture);
                 }
 
@@ -464,8 +476,9 @@ namespace Orlo.UI
 
         private void DrawSilhouette(float x, float y, float w, float h)
         {
-            // Draw subtle body-shaped outline behind the slots
-            GUI.color = new Color(0.15f, 0.15f, 0.2f, 0.4f);
+            // Draw subtle body-shaped outline behind the slots (race-tinted)
+            var sp = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
+            GUI.color = new Color(sp.Primary.r * 0.15f, sp.Primary.g * 0.15f, sp.Primary.b * 0.15f, 0.4f);
 
             float cx = x + w / 2f;
 
@@ -494,49 +507,50 @@ namespace Orlo.UI
 
         private void DrawStatsPanel(float x, float y, float w, float h)
         {
+            var sp = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
+            var labelStyle = TMDTheme.Instance != null ? TMDTheme.LabelStyle : SmallLabel();
+
             // Stats panel background
-            GUI.color = new Color(0.08f, 0.08f, 0.12f, 0.8f);
             Rect bg = new Rect(x, y, w, h);
-            GUI.DrawTexture(bg, Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            TMDTheme.DrawPanel(bg);
 
             float ly = y + 4;
             float lx = x + 6;
             float lw = w - 12;
 
             // Section: Defense
-            GUI.color = new Color(0.9f, 0.8f, 0.4f);
+            GUI.color = sp.Primary;
             GUI.Label(new Rect(lx, ly, lw, 16), "DEFENSE", SmallLabelBold());
             ly += 18;
 
-            DrawStatRow(lx, ly, lw, "Total Armor", _totalArmor.ToString("F0")); ly += 16;
-            DrawStatRow(lx, ly, lw, "Kinetic Resist", $"{_kineticResist:F0}"); ly += 16;
-            DrawStatRow(lx, ly, lw, "Energy Resist", $"{_energyResist:F0}"); ly += 16;
-            DrawStatRow(lx, ly, lw, "Thermal Resist", $"{_thermalResist:F0}"); ly += 16;
+            DrawStatRow(lx, ly, lw, "Total Armor", _totalArmor.ToString("F0"), sp); ly += 16;
+            DrawStatRow(lx, ly, lw, "Kinetic Resist", $"{_kineticResist:F0}", sp); ly += 16;
+            DrawStatRow(lx, ly, lw, "Energy Resist", $"{_energyResist:F0}", sp); ly += 16;
+            DrawStatRow(lx, ly, lw, "Thermal Resist", $"{_thermalResist:F0}", sp); ly += 16;
 
             ly += 8;
 
             // Section: Offense
-            GUI.color = new Color(0.9f, 0.4f, 0.4f);
+            GUI.color = sp.Danger;
             GUI.Label(new Rect(lx, ly, lw, 16), "OFFENSE", SmallLabelBold());
             ly += 18;
 
-            DrawStatRow(lx, ly, lw, "Weapon DPS", _weaponDamage > 0 ? $"{_weaponDamage:F1}" : "--"); ly += 16;
+            DrawStatRow(lx, ly, lw, "Weapon DPS", _weaponDamage > 0 ? $"{_weaponDamage:F1}" : "--", sp); ly += 16;
 
             ly += 8;
 
             // Section: Encumbrance
-            GUI.color = new Color(0.5f, 0.8f, 1f);
+            GUI.color = sp.Secondary;
             GUI.Label(new Rect(lx, ly, lw, 16), "ENCUMBRANCE", SmallLabelBold());
             ly += 18;
 
-            DrawStatRow(lx, ly, lw, "Equip Weight", $"{_totalWeight:F1}"); ly += 16;
-            DrawStatRow(lx, ly, lw, "Slots Used", $"{_equipped.Count} / 15"); ly += 16;
+            DrawStatRow(lx, ly, lw, "Equip Weight", $"{_totalWeight:F1}", sp); ly += 16;
+            DrawStatRow(lx, ly, lw, "Slots Used", $"{_equipped.Count} / 15", sp); ly += 16;
 
             ly += 12;
 
             // Equipped items list
-            GUI.color = new Color(0.7f, 0.7f, 0.7f);
+            GUI.color = sp.TextDim;
             GUI.Label(new Rect(lx, ly, lw, 16), "EQUIPPED", SmallLabelBold());
             ly += 18;
 
@@ -557,11 +571,12 @@ namespace Orlo.UI
             GUI.color = Color.white;
         }
 
-        private void DrawStatRow(float x, float y, float w, string label, string value)
+        private void DrawStatRow(float x, float y, float w, string label, string value, RacePalette palette = null)
         {
-            GUI.color = new Color(0.7f, 0.7f, 0.7f);
+            var pal = palette ?? (TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari);
+            GUI.color = pal.TextDim;
             GUI.Label(new Rect(x, y, w * 0.65f, 14), label, TinyLabel());
-            GUI.color = Color.white;
+            GUI.color = pal.Text;
             GUI.Label(new Rect(x + w * 0.65f, y, w * 0.35f, 14), value, TinyLabelRight());
         }
 
@@ -580,8 +595,8 @@ namespace Orlo.UI
             if (bg.xMax > Screen.width) bg.x = mp.x - tw - 8;
             if (bg.yMax > Screen.height) bg.y = Screen.height - th;
 
-            GUI.color = new Color(0, 0, 0, 0.92f);
-            GUI.DrawTexture(bg, Texture2D.whiteTexture);
+            TMDTheme.DrawPanel(bg);
+            var tp = TMDTheme.Instance != null ? TMDTheme.Instance.Palette : RacePalette.Solari;
 
             float y = bg.y + 2;
 
@@ -589,11 +604,11 @@ namespace Orlo.UI
             GUI.Label(new Rect(bg.x + 4, y, tw - 8, 18), item.Name, SmallLabel());
             y += 18;
 
-            GUI.color = new Color(0.8f, 0.8f, 0.8f);
+            GUI.color = tp.Text;
             GUI.Label(new Rect(bg.x + 4, y, tw - 8, 18), item.Description, SmallLabel());
             y += 18;
 
-            GUI.color = new Color(0.6f, 0.6f, 0.6f);
+            GUI.color = tp.TextDim;
             GUI.Label(new Rect(bg.x + 4, y, tw - 8, 18), $"Weight: {item.Weight:F1}", SmallLabel());
             y += 18;
 
@@ -627,15 +642,13 @@ namespace Orlo.UI
 
         private void DrawContextMenu()
         {
-            float cmW = 120, cmH = 28;
+            float cmW = 120, cmH = 30;
             Rect bg = new Rect(_contextMenuPos.x, _contextMenuPos.y, cmW, cmH);
 
-            GUI.color = new Color(0.05f, 0.05f, 0.05f, 0.95f);
-            GUI.DrawTexture(bg, Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            TMDTheme.DrawPanel(bg);
 
-            Rect btn = new Rect(_contextMenuPos.x + 2, _contextMenuPos.y + 2, cmW - 4, 22);
-            if (GUI.Button(btn, "Unequip"))
+            Rect btn = new Rect(_contextMenuPos.x + 2, _contextMenuPos.y + 3, cmW - 4, 24);
+            if (TMDTheme.DrawButton(btn, "Unequip"))
             {
                 HandleUnequip(_contextMenuSlot);
                 _contextMenuOpen = false;
@@ -697,13 +710,7 @@ namespace Orlo.UI
             GUI.DrawTexture(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), Texture2D.whiteTexture);
         }
 
-        private void DrawTitleBar(Rect rect, string title)
-        {
-            GUI.color = new Color(0.12f, 0.12f, 0.18f, 0.95f);
-            GUI.DrawTexture(rect, Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            GUI.Label(rect, "  " + title, BoldLabel());
-        }
+        // DrawTitleBar replaced by TMDTheme.DrawTitle
 
         private void HandleDrag(Rect titleBar)
         {

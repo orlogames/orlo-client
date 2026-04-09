@@ -1,11 +1,13 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI
 {
     /// <summary>
     /// Spawns floating damage / feedback text above entities in world space.
-    /// Uses OnGUI with WorldToScreenPoint so numbers appear over the hit target.
+    /// Prefers diegetic world-space DiegeticDamageNumber when TMDTheme is active,
+    /// falls back to OnGUI screen-space rendering otherwise.
     /// </summary>
     public class CombatFeedback : MonoBehaviour
     {
@@ -23,6 +25,12 @@ namespace Orlo.UI
         private readonly List<FloatText> _pops = new();
         private const float Lifetime = 1.5f;
 
+        /// <summary>
+        /// When true, uses world-space DiegeticDamageNumber instead of OnGUI.
+        /// Automatically enabled when TMDTheme is present.
+        /// </summary>
+        public bool UseDiegeticNumbers { get; set; } = true;
+
         private void Awake()
         {
             if (Instance != null) { Destroy(gameObject); return; }
@@ -32,6 +40,21 @@ namespace Orlo.UI
         /// <summary>Show a floating text pop at the given world position.</summary>
         public void ShowFloatingText(Vector3 worldPos, string text, Color color)
         {
+            bool isCrit = text.StartsWith("CRIT");
+
+            // Use diegetic world-space numbers if TMDTheme is available
+            if (UseDiegeticNumbers && TMDTheme.Instance != null)
+            {
+                // Remap color for accessibility
+                var c = AccessibilityManager.Instance != null
+                    ? AccessibilityManager.Instance.RemapColor(color)
+                    : color;
+
+                DiegeticDamageNumber.Spawn(worldPos, text, c, isCrit);
+                return;
+            }
+
+            // Fallback: queue for OnGUI rendering
             _pops.Add(new FloatText
             {
                 WorldPos      = worldPos + Vector3.up * 1.8f,
@@ -58,6 +81,8 @@ namespace Orlo.UI
 
         private void OnGUI()
         {
+            // Skip OnGUI rendering when diegetic numbers are active
+            if (_pops.Count == 0) return;
             if (Camera.main == null) return;
 
             var critStyle = new GUIStyle(GUI.skin.label)

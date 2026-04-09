@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Orlo.Network;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI
 {
@@ -11,6 +12,8 @@ namespace Orlo.UI
     public class ShopUI : MonoBehaviour
     {
         public static ShopUI Instance { get; private set; }
+
+        private RacePalette P => TMDTheme.Instance?.Palette ?? RacePalette.Solari;
 
         private bool _visible;
         private string _shopName = "";
@@ -71,96 +74,131 @@ namespace Orlo.UI
 
             float w = 500, h = 550;
             var rect = new Rect((Screen.width - w) / 2, (Screen.height - h) / 2, w, h);
-            GUI.Box(rect, "");
-            GUILayout.BeginArea(rect);
-            GUILayout.Space(10);
 
-            // Header
+            // TMD glassmorphic panel
+            TMDTheme.DrawPanel(rect);
+
+            float cx = rect.x + 16;
+            float cy = rect.y + 12;
+            float pw = w - 32;
+
+            // Shop name in race Primary
             var titleStyle = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 20, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter
+                fontSize = 20, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = P.Primary }
             };
-            GUILayout.Label(_shopName, titleStyle);
+            GUI.Label(new Rect(cx, cy, pw, 26), _shopName, titleStyle);
+            cy += 28;
 
-            var dialogueStyle = new GUIStyle(GUI.skin.label)
+            // Dialogue
+            var dialogueStyle = new GUIStyle(TMDTheme.LabelStyle)
             {
                 fontStyle = FontStyle.Italic, alignment = TextAnchor.MiddleCenter
             };
-            GUILayout.Label($"\"{_dialogue}\"", dialogueStyle);
-            GUILayout.Space(5);
+            dialogueStyle.normal.textColor = P.TextDim;
+            GUI.Label(new Rect(cx, cy, pw, 20), $"\"{_dialogue}\"", dialogueStyle);
+            cy += 24;
 
-            // Wallet
+            // Wallet in race Accent
             var walletStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 14, alignment = TextAnchor.MiddleRight,
-                normal = { textColor = new Color(1f, 0.85f, 0.2f) }
+                normal = { textColor = P.Accent }
             };
-            GUILayout.Label($"Balance: {_walletBalance:N0} creds", walletStyle);
-            GUILayout.Space(5);
+            GUI.Label(new Rect(cx, cy, pw, 20), $"Balance: {_walletBalance:N0} creds", walletStyle);
+            cy += 24;
+
+            // Separator
+            GUI.color = new Color(P.Border.r, P.Border.g, P.Border.b, 0.5f);
+            GUI.DrawTexture(new Rect(cx, cy, pw, 1), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+            cy += 4;
 
             // Items list
-            _scrollPos = GUILayout.BeginScrollView(_scrollPos, GUILayout.Height(380));
+            float listH = h - (cy - rect.y) - 70;
+            Rect listRect = new Rect(cx, cy, pw, listH);
+            float totalItemH = _items.Count * 54;
 
-            foreach (var item in _items)
+            _scrollPos = GUI.BeginScrollView(listRect, _scrollPos, new Rect(0, 0, pw - 16, totalItemH));
+            float iy = 0;
+            int selectedIdx = -1;
+
+            for (int i = 0; i < _items.Count; i++)
             {
-                GUILayout.BeginHorizontal("box");
+                var item = _items[i];
+                Rect itemRect = new Rect(0, iy, pw - 16, 50);
+                bool hover = itemRect.Contains(Event.current.mousePosition);
 
-                // Item info
-                GUILayout.BeginVertical(GUILayout.Width(280));
-                var nameStyle = new GUIStyle(GUI.skin.label) { fontStyle = FontStyle.Bold };
+                // Row background with race-colored selection
+                if (hover)
+                    GUI.color = new Color(P.Primary.r, P.Primary.g, P.Primary.b, 0.12f);
+                else
+                    GUI.color = i % 2 == 0 ? new Color(P.Background.r, P.Background.g, P.Background.b, 0.3f) : Color.clear;
+                if (GUI.color.a > 0)
+                    GUI.DrawTexture(itemRect, Texture2D.whiteTexture);
+                GUI.color = Color.white;
+
+                // Item name with rarity color
+                var nameStyle = new GUIStyle(TMDTheme.LabelStyle)
+                {
+                    fontStyle = FontStyle.Bold
+                };
                 nameStyle.normal.textColor = GetRarityColor(item.Rarity);
-                GUILayout.Label(item.Name, nameStyle);
+                GUI.Label(new Rect(4, iy + 4, 240, 18), item.Name, nameStyle);
 
+                // Description
                 var descStyle = new GUIStyle(GUI.skin.label) { fontSize = 10 };
-                GUILayout.Label(item.Description, descStyle);
-                GUILayout.EndVertical();
+                descStyle.normal.textColor = P.TextDim;
+                GUI.Label(new Rect(4, iy + 22, 240, 16), item.Description, descStyle);
 
                 // Stock
-                string stockText = item.Stock < 0 ? "" : $"x{item.Stock}";
-                GUILayout.Label(stockText, GUILayout.Width(30));
+                if (item.Stock >= 0)
+                {
+                    GUI.color = P.TextDim;
+                    GUI.Label(new Rect(250, iy + 12, 30, 18), $"x{item.Stock}");
+                    GUI.color = Color.white;
+                }
 
-                // Buy button
-                GUILayout.BeginVertical(GUILayout.Width(80));
+                // Buy button via TMD
                 bool canBuy = _walletBalance >= item.BuyPrice && item.Stock != 0;
                 GUI.enabled = canBuy;
-                if (GUILayout.Button($"Buy\n{item.BuyPrice}c", GUILayout.Height(40)))
+                if (TMDTheme.DrawButton(new Rect(290, iy + 6, 80, 38), $"Buy\n{item.BuyPrice}c"))
                 {
-                    BuyItem(item.ItemId);
+                    if (canBuy) BuyItem(item.ItemId);
                 }
                 GUI.enabled = true;
-                GUILayout.EndVertical();
 
-                // Sell button
-                GUILayout.BeginVertical(GUILayout.Width(60));
-                if (GUILayout.Button($"Sell\n{item.SellPrice}c", GUILayout.Height(40)))
+                // Sell button via TMD
+                if (TMDTheme.DrawButton(new Rect(376, iy + 6, 70, 38), $"Sell\n{item.SellPrice}c"))
                 {
                     SellItem(item.ItemId);
                 }
-                GUILayout.EndVertical();
 
-                GUILayout.EndHorizontal();
-                GUILayout.Space(2);
+                iy += 54;
             }
+            GUI.EndScrollView();
 
-            GUILayout.EndScrollView();
+            cy += listH + 4;
 
             // Status
             if (!string.IsNullOrEmpty(_statusMessage))
             {
-                var statusStyle = new GUIStyle(GUI.skin.label)
+                var statusStyle = new GUIStyle(TMDTheme.LabelStyle)
                 {
-                    alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = Color.green }
+                    alignment = TextAnchor.MiddleCenter
                 };
-                GUILayout.Label(_statusMessage, statusStyle);
+                statusStyle.normal.textColor = P.Success;
+                GUI.Label(new Rect(cx, cy, pw, 18), _statusMessage, statusStyle);
+                cy += 20;
             }
 
-            // Close button
-            GUILayout.Space(5);
-            if (GUILayout.Button("Close (Esc)", GUILayout.Height(30)))
+            // Close button via TMD
+            if (TMDTheme.DrawButton(new Rect(cx, rect.yMax - 38, pw, 30), "Close (Esc)"))
                 Hide();
 
-            GUILayout.EndArea();
+            // Scanline overlay
+            TMDTheme.DrawScanlines(rect);
         }
 
         private void BuyItem(string itemId)

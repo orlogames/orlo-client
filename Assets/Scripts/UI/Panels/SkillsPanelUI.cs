@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI.Panels
 {
@@ -53,20 +54,13 @@ namespace Orlo.UI.Panels
         private const int TheoreticalMax = SkillCount * MaxRank;
         private const float RecentXpWindow = 600f; // 10 min in seconds
 
-        // Colors
-        private static readonly Color BgColor = new Color(0.06f, 0.06f, 0.1f, 0.92f);
-        private static readonly Color BorderColor = new Color(0.15f, 0.2f, 0.35f, 1f);
-        private static readonly Color HeaderBg = new Color(0.08f, 0.08f, 0.14f, 1f);
-        private static readonly Color CyanAccent = new Color(0.35f, 0.6f, 0.95f, 1f);
-        private static readonly Color Gold = new Color(1f, 0.85f, 0.2f, 1f);
-        private static readonly Color DimText = new Color(0.4f, 0.4f, 0.5f, 1f);
-        private static readonly Color White = Color.white;
-        private static readonly Color RowHover = new Color(0.1f, 0.12f, 0.2f, 0.6f);
-        private static readonly Color RowAlt = new Color(0.07f, 0.07f, 0.12f, 0.4f);
-        private static readonly Color ExpandedBg = new Color(0.05f, 0.05f, 0.09f, 0.8f);
-        private static readonly Color DimCyan = new Color(0.2f, 0.35f, 0.55f, 0.5f);
-        private static readonly Color GoldBar = new Color(1f, 0.85f, 0.2f, 0.8f);
-        private static readonly Color CategoryHeaderColor = new Color(0.25f, 0.3f, 0.45f, 1f);
+        // Palette accessor
+        private RacePalette P => TMDTheme.Instance?.Palette ?? RacePalette.Solari;
+
+        // Spring for filter tab underline
+        private SpringValue _filterUnderlineX;
+        private float _filterUnderlineW;
+        private int _lastFilterIdx = -1;
 
         // Categories
         private static readonly string[] Categories = { "ALL", "COMBAT", "CRAFTING", "SURVIVAL", "SOCIAL", "PILOT" };
@@ -112,6 +106,7 @@ namespace Orlo.UI.Panels
             _windowPos = new Vector2(Screen.width / 2f - WinW / 2f, Screen.height / 2f - WinH / 2f);
             _sessionStartTime = Time.time;
             _pixel = Texture2D.whiteTexture;
+            _filterUnderlineX = new SpringValue(0f, 350f, 0.7f);
         }
 
         private void Update()
@@ -120,6 +115,7 @@ namespace Orlo.UI.Panels
                 Toggle();
             if (_visible && Input.GetKeyDown(KeyCode.Escape))
                 _visible = false;
+            _filterUnderlineX.Update(Time.deltaTime);
         }
 
         // ---- Public API ----
@@ -140,26 +136,21 @@ namespace Orlo.UI.Panels
 
             Rect win = new Rect(_windowPos.x, _windowPos.y, WinW, WinH);
 
-            // Background
-            DrawRect(win, BgColor);
-            // Border (1px)
-            DrawBorder(win, BorderColor, 1f);
+            // TMD glassmorphic background
+            TMDTheme.DrawPanel(win);
 
-            // Header bar
+            // Title via TMD
+            TMDTheme.DrawTitle(win, "SKILLS");
+
             Rect header = new Rect(win.x, win.y, WinW, HeaderBarH);
-            DrawRect(header, HeaderBg);
-
-            // Title
-            GUI.color = White;
-            GUI.Label(new Rect(win.x + 12, win.y + 6, 120, 24), "SKILLS", _titleStyle);
 
             // Mastered count
             int totalRanks = 0;
             foreach (var s in _skills) totalRanks += s.Rank;
             string masteredText = $"{totalRanks} / {TheoreticalMax} MASTERED";
-            GUI.color = Gold;
+            GUI.color = P.Accent;
             GUI.Label(new Rect(win.x + WinW - 220, win.y + 8, 190, 20), masteredText, _boldSmall);
-            GUI.color = White;
+            GUI.color = Color.white;
 
             // Close button
             if (GUI.Button(new Rect(win.x + WinW - 28, win.y + 6, 22, 22), "X"))
@@ -261,21 +252,27 @@ namespace Orlo.UI.Panels
             }
 
             GUI.EndScrollView();
+
+            // Scanline overlay
+            TMDTheme.DrawScanlines(win);
         }
 
         // ---- Filter Bar ----
 
         private void DrawFilterBar(float x, float y, float w)
         {
-            DrawRect(new Rect(x, y, w, FilterBarH), new Color(0.07f, 0.07f, 0.12f, 0.8f));
+            DrawRect(new Rect(x, y, w, FilterBarH), P.PanelBackground);
 
             float tabX = x + 8;
+            // Track tab positions for spring underline
+            float activeTabX = tabX, activeTabW = 0;
+
             for (int i = 0; i < Categories.Length; i++)
             {
                 float tabW = _smallStyle.CalcSize(new GUIContent(Categories[i])).x + 16;
                 bool active = _activeCategory == i;
 
-                GUI.color = active ? White : DimText;
+                GUI.color = active ? P.Text : P.TextDim;
                 if (GUI.Button(new Rect(tabX, y + 2, tabW, FilterBarH - 4), Categories[i], _centeredSmall))
                 {
                     _activeCategory = i;
@@ -283,26 +280,39 @@ namespace Orlo.UI.Panels
                     _scrollPos = Vector2.zero;
                 }
 
-                // Active underline
                 if (active)
                 {
-                    GUI.color = CyanAccent;
-                    DrawRect(new Rect(tabX + 2, y + FilterBarH - 3, tabW - 4, 2f), CyanAccent);
+                    activeTabX = tabX + 2;
+                    activeTabW = tabW - 4;
                 }
 
                 tabX += tabW + 2;
             }
 
+            // Spring-animated underline
+            if (_activeCategory != _lastFilterIdx)
+            {
+                _filterUnderlineX.Target = activeTabX;
+                _filterUnderlineW = activeTabW;
+                _lastFilterIdx = _activeCategory;
+            }
+            if (_filterUnderlineX.Value == 0f && _filterUnderlineX.Target == 0f)
+            {
+                _filterUnderlineX = SpringPresets.TabSlide(activeTabX, activeTabX);
+                _filterUnderlineW = activeTabW;
+            }
+            DrawRect(new Rect(_filterUnderlineX.Value, y + FilterBarH - 3, _filterUnderlineW, 2f), P.Primary);
+
             // Sort button (right side)
             string sortLabel = $"SORT: {SortModes[_activeSortMode]}";
             float sortW = _smallStyle.CalcSize(new GUIContent(sortLabel)).x + 12;
-            GUI.color = DimText;
+            GUI.color = P.TextDim;
             if (GUI.Button(new Rect(x + w - sortW - 12, y + 4, sortW, FilterBarH - 8), sortLabel, _smallStyle))
             {
                 _activeSortMode = (_activeSortMode + 1) % SortModes.Length;
                 _expandedIndex = -1;
             }
-            GUI.color = White;
+            GUI.color = Color.white;
         }
 
         // ---- Category Header (ALL mode) ----
@@ -311,9 +321,9 @@ namespace Orlo.UI.Panels
         {
             string dashes = new string('\u2500', 6);
             string label = $"{dashes} {category} {dashes}";
-            GUI.color = CategoryHeaderColor;
+            GUI.color = P.PrimaryDim;
             GUI.Label(new Rect(12, y + 3, w, 20), label, _centeredSmall);
-            GUI.color = White;
+            GUI.color = Color.white;
         }
 
         // ---- Skill Row ----
@@ -326,18 +336,19 @@ namespace Orlo.UI.Panels
             bool hovered = rowRect.Contains(Event.current.mousePosition);
 
             // Row background
-            Color rowBg = hovered ? RowHover : (index % 2 == 0 ? RowAlt : Color.clear);
+            Color rowBg = hovered ? new Color(P.Primary.r, P.Primary.g, P.Primary.b, 0.1f)
+                : (index % 2 == 0 ? new Color(P.Background.r, P.Background.g, P.Background.b, 0.4f) : Color.clear);
             if (rowBg.a > 0) DrawRect(rowRect, rowBg);
 
-            // Left edge stripe (3px)
+            // Left edge stripe (3px) — race primary for recent XP
             float timeSinceXp = Time.time - skill.LastXpTime;
             if (timeSinceXp < RecentXpWindow && skill.LastXpTime > 0)
             {
-                DrawRect(new Rect(0, y, 3, RowH), CyanAccent);
+                DrawRect(new Rect(0, y, 3, RowH), P.Primary);
             }
             else if (skill.LastXpTime >= _sessionStartTime && skill.LastXpTime > 0)
             {
-                DrawRect(new Rect(0, y, 3, RowH), DimCyan);
+                DrawRect(new Rect(0, y, 3, RowH), P.PrimaryDim);
             }
 
             // Icon area (colored square with letter)
@@ -350,26 +361,26 @@ namespace Orlo.UI.Panels
 
             if (mastered)
             {
-                // Gold border for mastered
-                GUI.color = Gold;
-                DrawBorder(new Rect(iconX, iconY, IconSize, IconSize), Gold, 2f);
+                // Race-colored border for mastered
+                GUI.color = P.Accent;
+                DrawBorder(new Rect(iconX, iconY, IconSize, IconSize), P.Accent, 2f);
             }
 
             GUI.color = new Color(1f, 1f, 1f, iconAlpha);
             string letter = skill.Name.Length > 0 ? skill.Name.Substring(0, 1) : "?";
             var letterStyle = new GUIStyle(_titleStyle) { alignment = TextAnchor.MiddleCenter, fontSize = 18 };
             GUI.Label(new Rect(iconX, iconY, IconSize, IconSize), letter, letterStyle);
-            GUI.color = White;
+            GUI.color = Color.white;
 
             // Skill name + description
             float textX = iconX + IconSize + 10;
             float textW = w - textX - 210;
 
-            Color nameColor = dormant ? DimText : White;
+            Color nameColor = dormant ? P.TextDim : P.Text;
             GUI.color = nameColor;
             GUI.Label(new Rect(textX, y + 8, textW, 20), skill.Name, _boldSmall);
 
-            GUI.color = DimText;
+            GUI.color = P.TextDim;
             string desc = skill.Description ?? "";
             if (desc.Length > 60) desc = desc.Substring(0, 57) + "...";
             GUI.Label(new Rect(textX, y + 26, textW, 18), desc, _tinyStyle);
@@ -379,7 +390,7 @@ namespace Orlo.UI.Panels
 
             // Rank text
             string rankText = mastered ? "MASTERED" : $"Rank {skill.Rank}";
-            Color rankColor = mastered ? Gold : (skill.Rank > 0 ? Gold : DimText);
+            Color rankColor = mastered ? P.Accent : (skill.Rank > 0 ? P.Accent : P.TextDim);
             GUI.color = rankColor;
             GUI.Label(new Rect(rightX, y + 8, 70, 20), rankText, _smallStyle);
 
@@ -389,28 +400,23 @@ namespace Orlo.UI.Panels
 
             if (dormant)
             {
-                GUI.color = DimText;
+                GUI.color = P.TextDim;
                 GUI.Label(new Rect(barX, y + 8, BarW, 20), "\u2014", _smallStyle);
             }
             else
             {
-                // Bar background
-                GUI.color = new Color(0.15f, 0.15f, 0.25f, 0.8f);
-                DrawRect(new Rect(barX, barY, BarW, BarH), GUI.color);
-
-                // Bar fill
+                // TMD progress bar
                 float pct = skill.XpToNext > 0 ? Mathf.Clamp01((float)skill.XpCurrent / skill.XpToNext) : 1f;
-                Color barColor = mastered ? GoldBar : CyanAccent;
-                GUI.color = barColor;
-                DrawRect(new Rect(barX, barY, BarW * pct, BarH), GUI.color);
+                Color barColor = mastered ? P.Accent : P.Primary;
+                TMDTheme.DrawProgressBar(new Rect(barX, barY, BarW, BarH), pct, barColor);
 
                 // Percentage
                 string pctText = mastered ? "100%" : $"{Mathf.RoundToInt(pct * 100)}%";
-                GUI.color = new Color(0.7f, 0.7f, 0.8f, 1f);
+                GUI.color = P.TextDim;
                 GUI.Label(new Rect(barX + BarW + 6, y + 8, 42, 20), pctText, _tinyStyle);
             }
 
-            GUI.color = White;
+            GUI.color = Color.white;
 
             // Click to expand/collapse
             if (Event.current.type == EventType.MouseDown && rowRect.Contains(Event.current.mousePosition))
@@ -425,8 +431,8 @@ namespace Orlo.UI.Panels
         private void DrawExpandedDetail(int index, SkillData skill, float y, float w)
         {
             Rect area = new Rect(4, y, w - 8, ExpandedH);
-            DrawRect(area, ExpandedBg);
-            DrawBorder(area, new Color(CyanAccent.r, CyanAccent.g, CyanAccent.b, 0.3f), 1f);
+            DrawRect(area, P.PanelBackground);
+            DrawBorder(area, new Color(P.Primary.r, P.Primary.g, P.Primary.b, 0.3f), 1f);
 
             float pad = 10f;
             float innerX = area.x + pad;
@@ -437,21 +443,21 @@ namespace Orlo.UI.Panels
             string xpLeft = skill.Rank >= MaxRank
                 ? "XP: MAX"
                 : $"XP: {skill.XpCurrent:N0} / {skill.XpToNext:N0} to Rank {skill.Rank + 1}";
-            GUI.color = White;
+            GUI.color = Color.white;
             GUI.Label(new Rect(innerX, innerY, halfW, 16), xpLeft, _smallStyle);
 
-            GUI.color = DimText;
+            GUI.color = P.TextDim;
             string xpRight = $"Total XP: {skill.TotalXp:N0}";
             var rightStyle = new GUIStyle(_smallStyle) { alignment = TextAnchor.MiddleRight };
             GUI.Label(new Rect(innerX + halfW + pad, innerY, halfW, 16), xpRight, rightStyle);
-            GUI.color = White;
+            GUI.color = Color.white;
 
             float colY = innerY + 22;
 
             // Left column: Milestones
-            GUI.color = CyanAccent;
+            GUI.color = P.Primary;
             GUI.Label(new Rect(innerX, colY, halfW, 16), "Rank Milestones", _boldSmall);
-            GUI.color = White;
+            GUI.color = Color.white;
             colY += 18;
 
             var milestones = skill.Milestones;
@@ -464,37 +470,37 @@ namespace Orlo.UI.Panels
                 if (ms.Unlocked)
                 {
                     icon = "\u2713"; // checkmark
-                    iconCol = Gold;
+                    iconCol = P.Accent;
                 }
                 else if (!ms.Unlocked && (m == 0 || (m > 0 && milestones[m - 1].Unlocked)))
                 {
                     icon = "\u25B6"; // arrow (next)
-                    iconCol = CyanAccent;
+                    iconCol = P.Primary;
                 }
                 else
                 {
                     icon = "\u25CB"; // circle (future)
-                    iconCol = DimText;
+                    iconCol = P.TextDim;
                 }
 
                 GUI.color = iconCol;
                 GUI.Label(new Rect(innerX, colY, 16, 16), icon, _smallStyle);
-                GUI.color = ms.Unlocked ? White : DimText;
+                GUI.color = ms.Unlocked ? P.Text : P.TextDim;
                 GUI.Label(new Rect(innerX + 18, colY, halfW - 20, 16), $"R{ms.Rank}: {ms.UnlockName}", _tinyStyle);
                 colY += 17;
             }
             if (mCount == 0)
             {
-                GUI.color = DimText;
+                GUI.color = P.TextDim;
                 GUI.Label(new Rect(innerX, colY, halfW, 16), "No milestones", _tinyStyle);
             }
 
             // Right column: Recent gains
             float rColX = innerX + halfW + pad;
             float rColY = innerY + 22;
-            GUI.color = CyanAccent;
+            GUI.color = P.Primary;
             GUI.Label(new Rect(rColX, rColY, halfW, 16), "Recent Gains", _boldSmall);
-            GUI.color = White;
+            GUI.color = Color.white;
             rColY += 18;
 
             var gains = skill.RecentGains;
@@ -509,7 +515,7 @@ namespace Orlo.UI.Panels
             }
             if (gCount == 0)
             {
-                GUI.color = DimText;
+                GUI.color = P.TextDim;
                 GUI.Label(new Rect(rColX, rColY, halfW, 16), "No recent gains", _tinyStyle);
             }
 
@@ -517,11 +523,11 @@ namespace Orlo.UI.Panels
             float bottomY = area.y + ExpandedH - 22;
             int sessionXp = EstimateSessionXp(skill);
             string timeEst = EstimateTimeToRank(skill);
-            GUI.color = DimText;
+            GUI.color = P.TextDim;
             string bottomText = $"Session: +{sessionXp:N0} XP";
             if (timeEst != null) bottomText += $" \u00B7 {timeEst}";
             GUI.Label(new Rect(innerX, bottomY, area.width - pad * 2, 16), bottomText, _tinyStyle);
-            GUI.color = White;
+            GUI.color = Color.white;
         }
 
         // ---- Helpers ----
@@ -558,7 +564,7 @@ namespace Orlo.UI.Panels
         {
             if (category != null && CategoryColors.TryGetValue(category.ToUpperInvariant(), out var c))
                 return c;
-            return DimText;
+            return P.TextDim;
         }
 
         private int EstimateSessionXp(SkillData skill)
@@ -662,7 +668,7 @@ namespace Orlo.UI.Panels
             {
                 fontSize = 16,
                 fontStyle = FontStyle.Bold,
-                normal = { textColor = White },
+                normal = { textColor = Color.white },
                 alignment = TextAnchor.MiddleLeft
             };
 
@@ -670,28 +676,28 @@ namespace Orlo.UI.Panels
             {
                 fontSize = 14,
                 fontStyle = FontStyle.Bold,
-                normal = { textColor = White },
+                normal = { textColor = Color.white },
                 alignment = TextAnchor.MiddleLeft
             };
 
             _smallStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 12,
-                normal = { textColor = White },
+                normal = { textColor = Color.white },
                 alignment = TextAnchor.MiddleLeft
             };
 
             _tinyStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 11,
-                normal = { textColor = DimText },
+                normal = { textColor = P.TextDim },
                 alignment = TextAnchor.MiddleLeft
             };
 
             _centeredSmall = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 12,
-                normal = { textColor = White },
+                normal = { textColor = Color.white },
                 alignment = TextAnchor.MiddleCenter
             };
         }

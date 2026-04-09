@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI.Lobby
 {
@@ -27,6 +28,10 @@ namespace Orlo.UI.Lobby
         private float _flashTimer;
         private bool _isHovered;
 
+        // Spring-animated glow pulse
+        private SpringValue _glowPulseSpring;
+        private bool _springInitialized;
+
         private GUIStyle _buttonStyle;
         private Texture2D _bgTex;
         private Texture2D _bgHoverTex;
@@ -41,6 +46,23 @@ namespace Orlo.UI.Lobby
                 return;
             }
             Instance = this;
+
+            // Initialize spring for glow intensity oscillation
+            _glowPulseSpring = new SpringValue(0f, 120f, 0.4f) { Target = 1f };
+            _springInitialized = true;
+        }
+
+        private void Update()
+        {
+            if (!_visible || !_springInitialized) return;
+
+            _glowPulseSpring.Update(Time.deltaTime);
+
+            // Bounce the spring target back and forth for continuous pulse
+            if (_glowPulseSpring.IsSettled)
+            {
+                _glowPulseSpring.Target = _glowPulseSpring.Target > 0.5f ? 0f : 1f;
+            }
         }
 
         private void OnDestroy()
@@ -96,15 +118,20 @@ namespace Orlo.UI.Lobby
 
             _isHovered = Enabled && btnRect.Contains(Event.current.mousePosition);
 
-            // --- Glow border ---
+            // --- Glow border --- Race-colored with spring-animated pulse
             if (Enabled)
             {
-                float sine = (Mathf.Sin(Time.time * Mathf.PI * 2f / GLOW_PERIOD) + 1f) * 0.5f;
-                Color glowColor = Color.Lerp(
-                    new Color(0.3f, 0.5f, 1f),
-                    new Color(0.3f, 0.9f, 1f),
-                    sine
-                );
+                // Get race palette colors for glow
+                Color racePrimary = TMDTheme.Instance != null
+                    ? TMDTheme.Instance.Palette.Primary
+                    : new Color(0.3f, 0.5f, 1f);
+                Color raceGlow = TMDTheme.Instance != null
+                    ? TMDTheme.Instance.Palette.Glow
+                    : new Color(0.3f, 0.9f, 1f);
+
+                // Spring-animated pulse intensity
+                float springPulse = _springInitialized ? _glowPulseSpring.Value : 0.5f;
+                Color glowColor = Color.Lerp(racePrimary, raceGlow, springPulse);
 
                 for (int layer = 0; layer < 3; layer++)
                 {
@@ -125,7 +152,7 @@ namespace Orlo.UI.Lobby
                 }
             }
 
-            // --- Button background ---
+            // --- Button background --- TMD-styled
             if (!Enabled)
             {
                 GUI.DrawTexture(btnRect, _bgDisabledTex);
@@ -138,10 +165,23 @@ namespace Orlo.UI.Lobby
                 return;
             }
 
-            // Draw button
+            // Draw button with race-tinted background
+            Color btnBgColor = TMDTheme.Instance != null
+                ? TMDTheme.Instance.Palette.PanelBackground
+                : new Color(0.1f, 0.12f, 0.2f, 1f);
+            Color btnHoverColor = TMDTheme.Instance != null
+                ? new Color(TMDTheme.Instance.Palette.Primary.r, TMDTheme.Instance.Palette.Primary.g, TMDTheme.Instance.Palette.Primary.b, 0.25f)
+                : new Color(0.15f, 0.18f, 0.3f, 1f);
+            Color textColor = TMDTheme.Instance != null
+                ? (_isHovered ? TMDTheme.Instance.Palette.Primary : TMDTheme.Instance.Palette.Text)
+                : (_isHovered ? Color.white : new Color(0.7f, 0.8f, 1f));
+
+            GUI.color = _isHovered ? btnHoverColor : btnBgColor;
+            GUI.DrawTexture(btnRect, _whiteTex);
+            GUI.color = Color.white;
+
             var style = new GUIStyle(_buttonStyle);
-            style.normal.background = _isHovered ? _bgHoverTex : _bgTex;
-            style.normal.textColor = _isHovered ? Color.white : new Color(0.7f, 0.8f, 1f);
+            style.normal.textColor = textColor;
             GUI.Label(btnRect, LABEL, style);
 
             // --- Flash overlay ---

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Orlo.UI.CharacterCreation;
 using Orlo.UI.Lobby;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI
 {
@@ -50,18 +51,20 @@ namespace Orlo.UI
         private static readonly string[] RaceNames = { "Solari", "Vael", "Korrath", "Thyren" };
         private static readonly string[] ClassNames = { "Explorer", "Warrior", "Artisan", "Medic", "Ranger", "Pilot" };
 
-        // Colors
-        private static readonly Color ColPanelBg = new(0.07f, 0.07f, 0.11f, 0.8f);
-        private static readonly Color ColSelected = new(0.15f, 0.2f, 0.35f, 0.9f);
-        private static readonly Color ColSlotNormal = new(0.07f, 0.07f, 0.11f, 0.8f);
+        // Colors — now derived from TMD race palette where possible
         private static readonly Color ColDeleteTint = new(0.3f, 0.1f, 0.1f, 0.7f);
-        private static readonly Color ColBorderGlow = new(0.4f, 0.6f, 1f, 0.8f);
-        private static readonly Color ColGold = new(0.95f, 0.85f, 0.4f);
-        private static readonly Color ColBlueWhite = new(0.7f, 0.85f, 1f);
-        private static readonly Color ColDim = new(0.5f, 0.5f, 0.6f);
-        private static readonly Color ColText = new(0.85f, 0.85f, 0.9f);
         private static readonly Color ColRed = new(1f, 0.35f, 0.25f);
         private static readonly Color ColGuildChat = new(0f, 0.8f, 0.6f);
+
+        // Race palette accessors (fall back to defaults if TMDTheme not initialized)
+        private static Color ColPanelBg => TMDTheme.Instance != null ? TMDTheme.Instance.Palette.PanelBackground : new Color(0.07f, 0.07f, 0.11f, 0.8f);
+        private static Color ColSelected => TMDTheme.Instance != null ? new Color(TMDTheme.Instance.Palette.Primary.r, TMDTheme.Instance.Palette.Primary.g, TMDTheme.Instance.Palette.Primary.b, 0.2f) : new Color(0.15f, 0.2f, 0.35f, 0.9f);
+        private static Color ColSlotNormal => TMDTheme.Instance != null ? TMDTheme.Instance.Palette.PanelBackground : new Color(0.07f, 0.07f, 0.11f, 0.8f);
+        private static Color ColBorderGlow => TMDTheme.Instance != null ? new Color(TMDTheme.Instance.Palette.Glow.r, TMDTheme.Instance.Palette.Glow.g, TMDTheme.Instance.Palette.Glow.b, 0.8f) : new Color(0.4f, 0.6f, 1f, 0.8f);
+        private static Color ColGold => TMDTheme.Instance != null ? TMDTheme.Instance.Palette.Primary : new Color(0.95f, 0.85f, 0.4f);
+        private static Color ColBlueWhite => TMDTheme.Instance != null ? TMDTheme.Instance.Palette.Text : new Color(0.7f, 0.85f, 1f);
+        private static Color ColDim => TMDTheme.Instance != null ? TMDTheme.Instance.Palette.TextDim : new Color(0.5f, 0.5f, 0.6f);
+        private static Color ColText => TMDTheme.Instance != null ? TMDTheme.Instance.Palette.Text : new Color(0.85f, 0.85f, 0.9f);
 
         // ---- Structs ----
 
@@ -105,6 +108,14 @@ namespace Orlo.UI
             _selectedIndex = _characters.Count > 0 ? 0 : -1;
             _deleteConfirmActive = false;
             FindReferences();
+
+            // Set TMD palette to match initial selected character's race
+            if (_selectedIndex >= 0 && _selectedIndex < _characters.Count && TMDTheme.Instance != null)
+            {
+                var ch = _characters[_selectedIndex];
+                if (ch.race >= 0 && ch.race < RaceNames.Length)
+                    TMDTheme.Instance.SetRace(RaceNames[ch.race]);
+            }
         }
 
         public void Hide() { _visible = false; }
@@ -204,16 +215,28 @@ namespace Orlo.UI
             if (Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.LeftArrow))
             {
                 _selectedIndex = (_selectedIndex - 1 + _characters.Count) % _characters.Count;
+                UpdateRacePalette();
             }
             // D / Right arrow = next character
             if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.RightArrow))
             {
                 _selectedIndex = (_selectedIndex + 1) % _characters.Count;
+                UpdateRacePalette();
             }
             // Enter = enter world
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
             {
                 TryEnterWorld();
+            }
+        }
+
+        private void UpdateRacePalette()
+        {
+            if (_selectedIndex >= 0 && _selectedIndex < _characters.Count && TMDTheme.Instance != null)
+            {
+                var ch = _characters[_selectedIndex];
+                if (ch.race >= 0 && ch.race < RaceNames.Length)
+                    TMDTheme.Instance.SetRace(RaceNames[ch.race]);
             }
         }
 
@@ -259,38 +282,38 @@ namespace Orlo.UI
 
         private void DrawTopBar(float sw, float h)
         {
-            // Background
-            GUI.color = new Color(0.04f, 0.04f, 0.08f, 0.95f);
-            GUI.DrawTexture(new Rect(0, 0, sw, h), Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            // TMD panel background for top bar
+            var topRect = new Rect(0, 0, sw, h);
+            TMDTheme.DrawPanel(topRect);
 
-            // Bottom border line
-            GUI.color = new Color(0.2f, 0.3f, 0.5f, 0.4f);
-            GUI.DrawTexture(new Rect(0, h - 1, sw, 1), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
-            // ORLO title (left)
-            var titleStyle = MakeStyle(24, FontStyle.Bold, ColBlueWhite, TextAnchor.MiddleLeft);
+            // ORLO title (left) — use TMD title style
+            var titleStyle = TMDTheme.Instance != null ? TMDTheme.TitleStyle : MakeStyle(24, FontStyle.Bold, ColBlueWhite, TextAnchor.MiddleLeft);
+            titleStyle.fontSize = 24;
+            titleStyle.alignment = TextAnchor.MiddleLeft;
             GUI.Label(new Rect(20, 0, 200, h), "ORLO", titleStyle);
 
             // Server status (center-right)
             float statusX = sw - 400;
-            GUI.color = _serverOnline ? Color.green : Color.red;
+            Color statusDotColor = _serverOnline
+                ? (TMDTheme.Instance != null ? TMDTheme.Instance.Palette.Success : Color.green)
+                : (TMDTheme.Instance != null ? TMDTheme.Instance.Palette.Danger : Color.red);
+            GUI.color = statusDotColor;
             GUI.DrawTexture(new Rect(statusX, h / 2f - 4, 8, 8), Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            var statusStyle = MakeStyle(12, FontStyle.Normal, new Color(0.7f, 0.7f, 0.8f));
+            var statusStyle = TMDTheme.Instance != null ? TMDTheme.LabelStyle : MakeStyle(12, FontStyle.Normal, new Color(0.7f, 0.7f, 0.8f));
+            statusStyle.fontSize = 12;
             string statusStr = $"Veridian Prime -- {_serverStatusText} ({_playerCount} players)";
             GUI.Label(new Rect(statusX + 14, 0, 260, h), statusStr, statusStyle);
 
-            // Settings gear (placeholder)
-            if (GUI.Button(new Rect(sw - 110, 10, 40, 30), "Cfg"))
+            // Settings gear — TMD button
+            if (TMDTheme.DrawButton(new Rect(sw - 110, 10, 40, 30), "CFG"))
             {
                 // Settings would open here
             }
 
-            // Exit button
-            if (GUI.Button(new Rect(sw - 65, 10, 50, 30), "Exit"))
+            // Exit button — TMD button
+            if (TMDTheme.DrawButton(new Rect(sw - 65, 10, 50, 30), "EXIT"))
             {
                 Application.Quit();
 #if UNITY_EDITOR
@@ -303,18 +326,14 @@ namespace Orlo.UI
 
         private void DrawLeftPanel(Rect area)
         {
-            GUI.color = ColPanelBg;
-            GUI.DrawTexture(area, Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            // TMD panel background + title
+            TMDTheme.DrawPanel(area);
+            TMDTheme.DrawTitle(area, $"Characters ({_characters.Count}/{_maxCharacters})");
+            TMDTheme.DrawScanlines(area);
 
             float pad = 12f;
-            float y = area.y + pad;
+            float y = area.y + 48; // After TMD title (38px underline + 10px gap)
             float w = area.width - pad * 2;
-
-            // Header
-            var headerStyle = MakeStyle(14, FontStyle.Bold, new Color(0.8f, 0.85f, 0.95f));
-            GUI.Label(new Rect(area.x + pad, y, w, 20), $"Characters ({_characters.Count}/{_maxCharacters})", headerStyle);
-            y += 28;
 
             // Scrollable character list
             float slotH = 80f;
@@ -406,6 +425,11 @@ namespace Orlo.UI
                 _selectedIndex = index;
                 _lastClickIndex = index;
                 _lastClickTime = Time.realtimeSinceStartup;
+
+                // Switch TMD palette to match selected character's race
+                if (TMDTheme.Instance != null && ch.race >= 0 && ch.race < RaceNames.Length)
+                    TMDTheme.Instance.SetRace(RaceNames[ch.race]);
+
                 Event.current.Use();
             }
 
@@ -484,11 +508,17 @@ namespace Orlo.UI
             float arrowY = area.y + area.height / 2f - 20;
             if (_characters.Count > 1)
             {
-                if (GUI.Button(new Rect(area.x + 8, arrowY, 36, 40), "<"))
+                if (TMDTheme.DrawButton(new Rect(area.x + 8, arrowY, 36, 40), "<"))
+                {
                     _selectedIndex = (_selectedIndex - 1 + _characters.Count) % _characters.Count;
+                    UpdateRacePalette();
+                }
 
-                if (GUI.Button(new Rect(area.x + area.width - 44, arrowY, 36, 40), ">"))
+                if (TMDTheme.DrawButton(new Rect(area.x + area.width - 44, arrowY, 36, 40), ">"))
+                {
                     _selectedIndex = (_selectedIndex + 1) % _characters.Count;
+                    UpdateRacePalette();
+                }
             }
 
             // Hint text
@@ -503,33 +533,25 @@ namespace Orlo.UI
         {
             if (_selectedIndex < 0 || _selectedIndex >= _characters.Count)
             {
-                // Empty right panel
-                GUI.color = ColPanelBg;
-                GUI.DrawTexture(area, Texture2D.whiteTexture);
-                GUI.color = Color.white;
+                // Empty right panel — TMD styled
+                TMDTheme.DrawPanel(area);
+                TMDTheme.DrawScanlines(area);
                 return;
             }
 
-            GUI.color = ColPanelBg;
-            GUI.DrawTexture(area, Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            // TMD panel background
+            TMDTheme.DrawPanel(area);
+            TMDTheme.DrawScanlines(area);
 
             var ch = _characters[_selectedIndex];
+
+            // TMD title with character name
+            TMDTheme.DrawTitle(area, $"{ch.firstName} {ch.lastName}");
+
             float pad = 14f;
             float x = area.x + pad;
             float w = area.width - pad * 2;
-            float y = area.y + pad;
-
-            // Character name header
-            var nameStyle = MakeStyle(16, FontStyle.Bold, ColGold);
-            GUI.Label(new Rect(x, y, w, 22), $"{ch.firstName} {ch.lastName}", nameStyle);
-            y += 30;
-
-            // Separator
-            GUI.color = new Color(0.3f, 0.35f, 0.5f, 0.3f);
-            GUI.DrawTexture(new Rect(x, y, w, 1), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            y += 10;
+            float y = area.y + 48; // After TMD title
 
             // Info rows
             string raceName = ch.race >= 0 && ch.race < RaceNames.Length ? RaceNames[ch.race] : "Unknown";
@@ -592,17 +614,15 @@ namespace Orlo.UI
             y += 22;
             GUI.Label(new Rect(x, y, w, 16), "Coming soon", placeholderStyle);
 
-            // Delete button at bottom
+            // Delete button at bottom — TMD styled with danger color
             float delY = area.y + area.height - 40;
-            GUI.backgroundColor = new Color(0.4f, 0.12f, 0.12f);
-            var delBtnStyle = new GUIStyle(GUI.skin.button) { fontSize = 11, normal = { textColor = ColRed } };
-            if (GUI.Button(new Rect(x, delY, w, 26), "Delete Character", delBtnStyle))
+            Color dangerColor = TMDTheme.Instance != null ? TMDTheme.Instance.Palette.Danger : ColRed;
+            if (TMDTheme.DrawButton(new Rect(x, delY, w, 26), "DELETE CHARACTER"))
             {
                 _deleteConfirmActive = true;
                 _deleteTargetIndex = _selectedIndex;
                 _deleteConfirmInput = "";
             }
-            GUI.backgroundColor = Color.white;
         }
 
         // ---- Social Sidebar ----
@@ -621,9 +641,9 @@ namespace Orlo.UI
 
             if (!_socialExpanded) return;
 
-            GUI.color = new Color(0.05f, 0.05f, 0.09f, 0.92f);
-            GUI.DrawTexture(new Rect(sideX, sideY + 30, sideW, sideH - 30), Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            // TMD panel for social sidebar
+            var socialRect = new Rect(sideX, sideY + 30, sideW, sideH - 30);
+            TMDTheme.DrawPanel(socialRect);
 
             float y = sideY + 36;
             float x = sideX + 8;
@@ -729,15 +749,10 @@ namespace Orlo.UI
             float dlgX = (sw - dlgW) / 2f;
             float dlgY = (sh - dlgH) / 2f;
 
-            // Card background
-            GUI.color = new Color(0.08f, 0.07f, 0.12f, 0.98f);
-            GUI.DrawTexture(new Rect(dlgX, dlgY, dlgW, dlgH), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
-            // Red border
-            GUI.color = new Color(0.6f, 0.15f, 0.15f, 0.9f);
-            DrawBorder(new Rect(dlgX, dlgY, dlgW, dlgH), 2);
-            GUI.color = Color.white;
+            // TMD panel for the dialog
+            var dlgRect = new Rect(dlgX, dlgY, dlgW, dlgH);
+            TMDTheme.DrawPanel(dlgRect);
+            TMDTheme.DrawScanlines(dlgRect);
 
             if (_deleteTargetIndex < 0 || _deleteTargetIndex >= _characters.Count)
             {
