@@ -36,6 +36,16 @@ namespace Orlo.UI
             Instance = this;
         }
 
+        // ── Public read-only accessors for UIToolkit views ─────────────
+        public float Vitality    => _vitality;
+        public float MaxVitality => _maxVitality;
+        public float Stamina     => _stamina;
+        public float MaxStamina  => _maxStamina;
+        public float Focus       => _focus;
+        public float MaxFocus    => _maxFocus;
+        public float Strain      => _strain;
+        public float MaxStrain   => 100f;
+
         /// <summary>Refresh all three pools from a HealthUpdate packet.</summary>
         public void UpdatePools(float vit, float maxVit, float stam, float maxStam, float foc, float maxFoc)
         {

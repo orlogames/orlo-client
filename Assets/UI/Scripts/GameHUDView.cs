@@ -1,7 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UIElements;
-using Orlo.Player;
+using Orlo.Network;
 
 namespace Orlo.UI
 {
@@ -50,66 +50,70 @@ namespace Orlo.UI
 
         void Update()
         {
-            var player = PlayerController.Instance;
-            if (player == null) return;
+            var hud = GameHUD.Instance;
+            if (hud == null) return;
 
-            UpdateStatusStrip(player);
-            UpdateCompass(player);
-            UpdateTargetFrame(player);
-            UpdateCurrency(player);
-            UpdateXPBar(player);
+            UpdateStatusStrip(hud);
+            UpdateCompass();
+            UpdateTargetFrame(hud);
+            UpdateCurrency(hud);
+            UpdateXPBar(hud);
         }
 
-        void UpdateStatusStrip(PlayerController player)
+        void UpdateStatusStrip(GameHUD hud)
         {
-            var net       = NetworkManager.Instance;
-            bool connected = net != null && net.IsConnected;
+            bool connected = NetworkManager.Instance != null && NetworkManager.Instance.IsConnected;
             _connectionLabel.EnableInClassList("connected",    connected);
             _connectionLabel.EnableInClassList("disconnected", !connected);
-            _rttLabel.text      = net != null ? $"{net.RTT}ms" : "--";
-            var p               = player.transform.position;
-            _positionLabel.text = $"{p.x:F0}, {p.y:F0}, {p.z:F0}";
+            _rttLabel.text = $"{hud.RTT:F1}ms";
+
+            var player = GameObject.FindWithTag("Player");
+            if (player != null)
+            {
+                var p = player.transform.position;
+                _positionLabel.text = $"{p.x:F0}, {p.y:F0}, {p.z:F0}";
+            }
         }
 
-        void UpdateCompass(PlayerController player)
+        void UpdateCompass()
         {
-            float yaw         = player.transform.eulerAngles.y;
+            if (Camera.main == null) return;
+            float yaw      = Camera.main.transform.eulerAngles.y;
             _headingLabel.text = $"{(int)yaw}°";
             _compassLabel.text = YawToCardinal(yaw);
         }
 
-        void UpdateTargetFrame(PlayerController player)
+        void UpdateTargetFrame(GameHUD hud)
         {
-            var target = player.CurrentTarget;
-            if (target == null)
+            if (!hud.HasTarget)
             {
                 _targetFrame.style.display = DisplayStyle.None;
                 return;
             }
 
             _targetFrame.style.display = DisplayStyle.Flex;
-            _targetName.text  = target.DisplayName;
-            _targetLevel.text = $"Lv {target.Level}";
+            _targetName.text  = hud.TargetName;
+            _targetLevel.text = $"Lv {hud.TargetLevel}";
 
-            float hp = target.MaxHealth > 0 ? (float)target.CurrentHealth / target.MaxHealth : 0f;
+            float hp = hud.TargetMaxHealth > 0f ? hud.TargetHealth / hud.TargetMaxHealth : 0f;
             _targetHealthFill.style.width = Length.Percent(hp * 100f);
             _targetHealthLabel.text       = $"{(int)(hp * 100f)}%";
 
-            _targetFrame.EnableInClassList("hostile",  target.Hostility == HostilityType.Hostile);
-            _targetFrame.EnableInClassList("neutral",  target.Hostility == HostilityType.Neutral);
-            _targetFrame.EnableInClassList("friendly", target.Hostility == HostilityType.Friendly);
+            _targetFrame.EnableInClassList("hostile",  hud.TargetHostile);
+            _targetFrame.EnableInClassList("neutral",  !hud.TargetHostile);
+            _targetFrame.EnableInClassList("friendly", false);
         }
 
-        void UpdateCurrency(PlayerController player)
+        void UpdateCurrency(GameHUD hud)
         {
-            _currencyLabel.text = $"{player.Currency:N0} cr";
+            _currencyLabel.text = $"{hud.Credits:N0} cr";
         }
 
-        void UpdateXPBar(PlayerController player)
+        void UpdateXPBar(GameHUD hud)
         {
-            float pct       = player.MaxXP > 0 ? (float)player.CurrentXP / player.MaxXP : 0f;
+            float pct = hud.XPToNext > 0 ? (float)hud.CurrentXP / hud.XPToNext : 0f;
             _xpFill.style.width = Length.Percent(pct * 100f);
-            _xpLabel.text   = $"{player.CurrentXP:N0} / {player.MaxXP:N0} XP";
+            _xpLabel.text = $"Lv.{hud.PlayerLevel}  |  {hud.CurrentXP:N0} / {hud.XPToNext:N0} XP";
         }
 
         public void ShowNotification(string message, float duration = 3f)

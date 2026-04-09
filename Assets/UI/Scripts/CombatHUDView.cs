@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.UIElements;
-using Orlo.Player;
 
 namespace Orlo.UI
 {
@@ -40,19 +39,19 @@ namespace Orlo.UI
 
         void Update()
         {
-            var player = PlayerController.Instance;
-            if (player == null) return;
+            var hud = CombatHUD.Instance;
+            if (hud == null) return;
 
-            SetBar(_vitalityFill, _vitalityLabel, player.Vitality,  player.MaxVitality);
-            SetBar(_staminaFill,  _staminaLabel,  player.Stamina,   player.MaxStamina);
-            SetBar(_focusFill,    _focusLabel,     player.Focus,     player.MaxFocus);
+            SetBar(_vitalityFill, _vitalityLabel, hud.Vitality,  hud.MaxVitality);
+            SetBar(_staminaFill,  _staminaLabel,  hud.Stamina,   hud.MaxStamina);
+            SetBar(_focusFill,    _focusLabel,     hud.Focus,     hud.MaxFocus);
 
-            bool hasStrain = player.MaxStrain > 0 && player.Strain > 0;
+            bool hasStrain = hud.MaxStrain > 0f && hud.Strain > 0f;
             _strainRow.style.display = hasStrain ? DisplayStyle.Flex : DisplayStyle.None;
             if (hasStrain)
             {
-                SetBar(_strainFill, _strainLabel, player.Strain, player.MaxStrain);
-                float pct = player.Strain / (float)player.MaxStrain;
+                SetBar(_strainFill, _strainLabel, hud.Strain, hud.MaxStrain);
+                float pct = hud.Strain / hud.MaxStrain;
                 _strainFill.EnableInClassList("strain--critical", pct >= 0.7f);
             }
 

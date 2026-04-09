@@ -96,6 +96,19 @@ namespace Orlo.UI
             _rtt = (float)(Time.realtimeSinceStartup * 1000 - pong.ClientTime.Ms);
         }
 
+        // ── Public read-only accessors for UIToolkit views ─────────────
+        public float  RTT            => _rtt;
+        public bool   HasTarget      => _hasTarget;
+        public string TargetName     => _targetName;
+        public int    TargetLevel    => _targetLevel;
+        public float  TargetHealth   => _targetHealth;
+        public float  TargetMaxHealth => _targetMaxHealth;
+        public bool   TargetHostile  => _targetHostile;
+        public long   Credits        => _credits;
+        public ulong  CurrentXP      => _currentXp;
+        public ulong  XPToNext       => _xpToNext;
+        public int    PlayerLevel    => _playerLevel;
+
         // ── Public API ──────────────────────────────────────────────────
 
         public void ShowNotification(string text, float duration = 5f)
