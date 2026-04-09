@@ -10,6 +10,7 @@ using Orlo.VFX;
 using Orlo.UI.CharacterCreation;
 using Orlo.UI.Lobby;
 using Orlo.UI.Panels;
+using Orlo.UI.TMD;
 using Orlo.Proto;
 using ProtoAuth = Orlo.Proto.Auth;
 using Color = UnityEngine.Color;
@@ -136,6 +137,20 @@ namespace Orlo
 
         private void InitializeWorldSystems()
         {
+            // TMD Theme system (must init first — all UI draws colors from here)
+            if (TMDTheme.Instance == null)
+            {
+                var go = new GameObject("TMDTheme");
+                go.AddComponent<TMDTheme>();
+            }
+
+            // TMD Font Manager (SDF text material presets)
+            if (TMDFontManager.Instance == null)
+            {
+                var go = new GameObject("TMDFontManager");
+                go.AddComponent<TMDFontManager>();
+            }
+
             // Asset loading pipeline (must init before EntityManager/Factory)
             if (AssetLoader.Instance == null)
             {

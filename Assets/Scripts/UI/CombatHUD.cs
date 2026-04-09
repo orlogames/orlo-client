@@ -1,12 +1,17 @@
-using System.Collections.Generic;
 using UnityEngine;
+using Orlo.UI.TMD;
 
 namespace Orlo.UI
 {
     /// <summary>
     /// Displays the local player's three health pools (Vitality / Stamina / Focus)
-    /// as colour-coded bars in the bottom-left corner, WoW/SWG style.
-    /// Also handles floating damage number spawning via CombatFeedback.
+    /// as TMD-styled holographic bars. Also handles damage flash and strain display.
+    ///
+    /// TMD Integration:
+    /// - Bars use race-colored borders and glow
+    /// - Background is dark glass panel with TMD border
+    /// - Scanline overlay from TMD tier
+    /// - Pool colors remain fixed (red/green/blue) for readability but get race-tinted borders
     /// </summary>
     public class CombatHUD : MonoBehaviour
     {
@@ -63,13 +68,14 @@ namespace Orlo.UI
             float gap  = 4f * s;
             float padX = 14f * s;
             float padY = 14f * s;
+            float panelPad = 6f * s;
 
-            float totalH = (barH + gap) * 3;
+            float totalH = (barH + gap) * 3 + (_strain > 0 ? barH + gap : 0);
 
             // Register with HUDLayout for draggable positioning
             if (!_hudRegistered && HUDLayout.Instance != null)
             {
-                HUDLayout.Instance.Register(HUD_KEY, "Health", padX, padY, barW, totalH);
+                HUDLayout.Instance.Register(HUD_KEY, "Health", padX, padY, barW + panelPad * 2, totalH + panelPad * 2);
                 _hudRegistered = true;
             }
 
@@ -84,7 +90,7 @@ namespace Orlo.UI
             else
             {
                 x = padX;
-                y = padY; // Top-left default
+                y = padY;
             }
 
             // Red damage flash overlay (respects flash effects setting)
@@ -95,91 +101,87 @@ namespace Orlo.UI
                 if (flashEnabled)
                 {
                     float alpha = _damageFlashTimer / FlashDuration * 0.35f;
-                    GUI.color = new Color(1f, 0f, 0f, alpha);
+                    Color flashColor = TMDTheme.Instance != null
+                        ? new Color(TMDTheme.Instance.Palette.Danger.r, TMDTheme.Instance.Palette.Danger.g, TMDTheme.Instance.Palette.Danger.b, alpha)
+                        : new Color(1f, 0f, 0f, alpha);
+                    GUI.color = flashColor;
                     GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
                     GUI.color = Color.white;
                 }
             }
 
+            // Draw TMD panel background
+            var panelRect = new Rect(x - panelPad, y - panelPad, barW + panelPad * 2, totalH + panelPad * 2);
+            TMDTheme.DrawPanel(panelRect);
+
+            // Pool colors (accessibility-aware)
             var am = AccessibilityManager.Instance;
             Color vitColor = am != null ? am.RemapColor(new Color(0.85f, 0.15f, 0.15f)) : new Color(0.85f, 0.15f, 0.15f);
             Color stamColor = am != null ? am.RemapColor(new Color(0.15f, 0.75f, 0.25f)) : new Color(0.15f, 0.75f, 0.25f);
             Color focColor = am != null ? am.RemapColor(new Color(0.25f, 0.45f, 0.95f)) : new Color(0.25f, 0.45f, 0.95f);
 
-            DrawBar(x, y,           barW, barH, _vitality / _maxVitality, vitColor, $"VIT  {_vitality:F0}/{_maxVitality:F0}");
-            DrawBar(x, y + barH + gap, barW, barH, _stamina  / _maxStamina,  stamColor, $"STAM {_stamina:F0}/{_maxStamina:F0}");
-            DrawBar(x, y + (barH + gap) * 2, barW, barH, _focus / _maxFocus, focColor, $"FOC  {_focus:F0}/{_maxFocus:F0}");
+            DrawPoolBar(x, y,               barW, barH, _vitality / _maxVitality, vitColor, $"VIT  {_vitality:F0}/{_maxVitality:F0}");
+            DrawPoolBar(x, y + barH + gap,  barW, barH, _stamina  / _maxStamina,  stamColor, $"STAM {_stamina:F0}/{_maxStamina:F0}");
+            DrawPoolBar(x, y + (barH + gap) * 2, barW, barH, _focus / _maxFocus,  focColor, $"FOC  {_focus:F0}/{_maxFocus:F0}");
 
             // Strain bar (below health pools)
-            float strainY = y + (barH + gap) * 3 + 2f * s;
-            DrawStrainBar(x, strainY, barW, barH, s);
+            if (_strain > 0)
+            {
+                float strainY = y + (barH + gap) * 3;
+                DrawStrainBar(x, strainY, barW, barH, s);
+            }
+
+            // Scanline overlay on the entire panel
+            TMDTheme.DrawScanlines(panelRect);
         }
 
         private void DrawStrainBar(float x, float y, float w, float h, float s)
         {
-            if (_strain <= 0) return;
-
             float fill = _strain / 100f;
 
             // Pulsing effect when strain > 70%
+            float pulseAlpha = 1f;
             if (_strain > 70f)
             {
                 _strainPulse += Time.deltaTime * 3f;
-                float pulse = Mathf.Sin(_strainPulse) * 0.15f + 0.85f;
-                GUI.color = new Color(0.1f, 0.1f, 0.1f, 0.8f * pulse);
+                pulseAlpha = Mathf.Sin(_strainPulse) * 0.15f + 0.85f;
             }
-            else
-            {
-                GUI.color = new Color(0.1f, 0.1f, 0.1f, 0.8f);
-            }
-            GUI.DrawTexture(new Rect(x, y, w, h), Texture2D.whiteTexture);
 
             // Orange to red gradient based on strain level
             Color strainColor = Color.Lerp(new Color(1f, 0.6f, 0f), new Color(0.9f, 0.15f, 0.1f), fill);
             if (_strain > 70f)
-            {
-                float pulse = Mathf.Sin(_strainPulse) * 0.15f + 0.85f;
-                strainColor *= pulse;
-            }
+                strainColor *= pulseAlpha;
 
-            GUI.color = strainColor;
-            GUI.DrawTexture(new Rect(x, y, w * fill, h), Texture2D.whiteTexture);
+            TMDTheme.DrawProgressBar(new Rect(x, y, w, h), fill, strainColor);
+
+            // Label
             GUI.color = Color.white;
-
-            var style = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = UIScaler.ScaledFontSize(10),
-                alignment = TextAnchor.MiddleLeft
-            };
-            GUI.Label(new Rect(x + 4, y, w, h), $"Strain: {_strain:F0}%", style);
+            var style = TMDTheme.Instance != null ? TMDTheme.LabelStyle : GUI.skin.label;
+            var labelStyle = new GUIStyle(style) { fontSize = UIScaler.ScaledFontSize(10), alignment = TextAnchor.MiddleLeft };
+            GUI.Label(new Rect(x + 4, y, w, h), $"Strain: {_strain:F0}%", labelStyle);
 
             // Tooltip on hover
             Rect barRect = new Rect(x, y, w, h);
             if (barRect.Contains(Event.current.mousePosition))
             {
-                var tipStyle = new GUIStyle(GUI.skin.box)
-                {
-                    fontSize = 10, alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = Color.white }, wordWrap = true
-                };
-                GUI.Box(new Rect(x, y - 24, 200, 22), "Visit a cantina or rest to cure strain", tipStyle);
+                var tipStyle = TMDTheme.Instance != null ? TMDTheme.LabelStyle : GUI.skin.label;
+                var tip = new GUIStyle(tipStyle) { fontSize = 10, alignment = TextAnchor.MiddleCenter, wordWrap = true };
+                var tipRect = new Rect(x, y - 28, 220, 24);
+                TMDTheme.DrawPanel(tipRect);
+                GUI.Label(tipRect, "Visit a cantina or rest to cure strain", tip);
             }
         }
 
-        private static void DrawBar(float x, float y, float w, float h, float fill, Color color, string label)
+        private static void DrawPoolBar(float x, float y, float w, float h, float fill, Color color, string label)
         {
-            // Background
-            GUI.color = new Color(0.1f, 0.1f, 0.1f, 0.8f);
-            GUI.DrawTexture(new Rect(x, y, w, h), Texture2D.whiteTexture);
+            // Use TMD-styled progress bar with pool-specific color
+            TMDTheme.DrawProgressBar(new Rect(x, y, w, h), Mathf.Clamp01(fill), color);
 
-            // Fill
-            GUI.color = color;
-            GUI.DrawTexture(new Rect(x, y, w * Mathf.Clamp01(fill), h), Texture2D.whiteTexture);
-
-            // Label
+            // Label with TMD text styling
             GUI.color = Color.white;
-            var style = new GUIStyle(GUI.skin.label) { fontSize = UIScaler.ScaledFontSize(11), alignment = TextAnchor.MiddleLeft };
-            GUI.Label(new Rect(x + 4, y, w, h), label, style);
+            var style = TMDTheme.Instance != null ? TMDTheme.LabelStyle : GUI.skin.label;
+            var labelStyle = new GUIStyle(style) { fontSize = UIScaler.ScaledFontSize(11), alignment = TextAnchor.MiddleLeft };
+            GUI.Label(new Rect(x + 4, y, w, h), label, labelStyle);
         }
     }
 }

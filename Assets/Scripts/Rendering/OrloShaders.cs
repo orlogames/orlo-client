@@ -194,6 +194,38 @@ namespace Orlo.Rendering
             return mat;
         }
 
+        // TMD UI shaders
+        private static Shader _holographicUIShader;
+        private static Shader _frostedGlassShader;
+
+        /// <summary>
+        /// TMD Holographic UI shader — scanlines, chromatic aberration, noise, dot-grid, fresnel glow.
+        /// Used for all TMD-projected interface elements.
+        /// </summary>
+        public static Shader HolographicUI
+        {
+            get
+            {
+                if (_holographicUIShader == null)
+                    _holographicUIShader = LoadCustom("HolographicUI");
+                return _holographicUIShader;
+            }
+        }
+
+        /// <summary>
+        /// Frosted glass shader — blurred background with tinted overlay.
+        /// Used for panel backgrounds and glassmorphic UI elements.
+        /// </summary>
+        public static Shader FrostedGlass
+        {
+            get
+            {
+                if (_frostedGlassShader == null)
+                    _frostedGlassShader = LoadCustom("FrostedGlass");
+                return _frostedGlassShader;
+            }
+        }
+
         /// <summary>
         /// Invalidate cached shaders (call if render pipeline changes at runtime).
         /// </summary>
@@ -204,6 +236,8 @@ namespace Orlo.Rendering
             _particlesUnlitShader = null;
             _particlesLitShader = null;
             _spritesDefaultShader = null;
+            _holographicUIShader = null;
+            _frostedGlassShader = null;
         }
     }
 }
