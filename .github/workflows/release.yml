@@ -110,42 +110,37 @@ jobs:
 
       - name: Download assets-pak from Dropbox
         id: pak
-        shell: powershell
+        shell: bash
         env:
           DROPBOX_ACCESS_TOKEN: ${{ secrets.DROPBOX_ACCESS_TOKEN }}
         run: |
-          New-Item -ItemType Directory -Force -Path Assets/StreamingAssets | Out-Null
-          Write-Host "Fetching latest assets.pak from Dropbox..."
-          $pakFound = $false
+          mkdir -p Assets/StreamingAssets
+          echo "Fetching latest assets.pak from Dropbox..."
+          PAK_FOUND=false
 
-          try {
-            $headers = @{
-              "Authorization" = "Bearer $env:DROPBOX_ACCESS_TOKEN"
-              "Dropbox-API-Arg" = '{"path": "/ci/orlo-assets/assets-pak.tar.gz"}'
-            }
-            Invoke-WebRequest -Uri "https://content.dropboxapi.com/2/files/download" `
-              -Method POST -Headers $headers -OutFile "assets-pak.tar.gz"
-            if (Test-Path "assets-pak.tar.gz") {
-              New-Item -ItemType Directory -Force -Path pak-download | Out-Null
-              tar xzf assets-pak.tar.gz -C pak-download
-              if (Test-Path "pak-download/assets.pak") {
-                Copy-Item "pak-download/assets.pak" "Assets/StreamingAssets/assets.pak"
-                $pakFound = $true
-              }
-            }
-          } catch {
-            Write-Host "Dropbox download failed: $($_.Exception.Message)"
-          }
+          curl -s -X POST https://content.dropboxapi.com/2/files/download \
+            --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+            --header "Dropbox-API-Arg: {\"path\": \"/ci/orlo-assets/assets-pak.tar.gz\"}" \
+            -o assets-pak.tar.gz
 
-          if ($pakFound) {
-            $size = (Get-Item "Assets/StreamingAssets/assets.pak").Length
-            $sizeMB = [math]::Round($size / 1MB, 1)
-            Write-Host "SUCCESS: assets.pak downloaded ($sizeMB MB)"
-            echo "has_pak=true" >> $env:GITHUB_OUTPUT
-          } else {
-            Write-Host "ERROR: Could not download assets.pak - build will have NO 3D models!"
-            echo "has_pak=false" >> $env:GITHUB_OUTPUT
-          }
+          if [ -f assets-pak.tar.gz ] && [ -s assets-pak.tar.gz ]; then
+            mkdir -p pak-download
+            tar xzf assets-pak.tar.gz -C pak-download
+            if [ -f pak-download/assets.pak ]; then
+              cp pak-download/assets.pak Assets/StreamingAssets/assets.pak
+              PAK_FOUND=true
+            fi
+          fi
+
+          if [ "$PAK_FOUND" = "true" ]; then
+            SIZE=$(stat -c%s Assets/StreamingAssets/assets.pak 2>/dev/null || stat -f%z Assets/StreamingAssets/assets.pak 2>/dev/null)
+            SIZE_MB=$((SIZE / 1048576))
+            echo "SUCCESS: assets.pak downloaded (${SIZE_MB} MB)"
+            echo "has_pak=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ERROR: Could not download assets.pak - build will have NO 3D models!"
+            echo "has_pak=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build with Unity
         shell: powershell
@@ -177,50 +172,47 @@ jobs:
           Compress-Archive -Path build/windows/* -DestinationPath "OrloClient-Windows-${{ needs.version.outputs.version }}.zip"
 
       - name: Upload orlo-client-windows to Dropbox
-        shell: powershell
+        shell: bash
         env:
           DROPBOX_ACCESS_TOKEN: ${{ secrets.DROPBOX_ACCESS_TOKEN }}
         run: |
-          $zipFile = "OrloClient-Windows-${{ needs.version.outputs.version }}.zip"
-          $dropboxPath = "/ci/orlo-client/orlo-client-windows-${{ github.sha }}.tar.gz"
-          tar czf orlo-client-windows.tar.gz $zipFile
-          $headers = @{
-            "Authorization" = "Bearer $env:DROPBOX_ACCESS_TOKEN"
-            "Dropbox-API-Arg" = "{`"path`": `"$dropboxPath`", `"mode`": `"overwrite`"}"
-            "Content-Type" = "application/octet-stream"
-          }
-          Invoke-WebRequest -Uri "https://content.dropboxapi.com/2/files/upload" `
-            -Method POST -Headers $headers -InFile "orlo-client-windows.tar.gz"
+          ZIP_FILE="OrloClient-Windows-${{ needs.version.outputs.version }}.zip"
+          DROPBOX_PATH="/ci/orlo-client/orlo-client-windows-${{ github.sha }}.tar.gz"
+          tar czf orlo-client-windows.tar.gz "$ZIP_FILE"
+          curl -X POST https://content.dropboxapi.com/2/files/upload \
+            --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+            --header "Content-Type: application/octet-stream" \
+            --header "Dropbox-API-Arg: {\"path\": \"$DROPBOX_PATH\", \"mode\": \"overwrite\"}" \
+            --data-binary @orlo-client-windows.tar.gz
+          echo "Uploaded client zip to Dropbox"
 
       - name: Upload orlo-client-files to Dropbox
-        shell: powershell
+        shell: bash
         env:
           DROPBOX_ACCESS_TOKEN: ${{ secrets.DROPBOX_ACCESS_TOKEN }}
         run: |
-          $dropboxPath = "/ci/orlo-client/orlo-client-files-${{ github.sha }}.tar.gz"
+          DROPBOX_PATH="/ci/orlo-client/orlo-client-files-${{ github.sha }}.tar.gz"
           tar czf orlo-client-files.tar.gz -C build/windows .
-          $headers = @{
-            "Authorization" = "Bearer $env:DROPBOX_ACCESS_TOKEN"
-            "Dropbox-API-Arg" = "{`"path`": `"$dropboxPath`", `"mode`": `"overwrite`"}"
-            "Content-Type" = "application/octet-stream"
-          }
-          Invoke-WebRequest -Uri "https://content.dropboxapi.com/2/files/upload" `
-            -Method POST -Headers $headers -InFile "orlo-client-files.tar.gz"
+          curl -X POST https://content.dropboxapi.com/2/files/upload \
+            --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+            --header "Content-Type: application/octet-stream" \
+            --header "Dropbox-API-Arg: {\"path\": \"$DROPBOX_PATH\", \"mode\": \"overwrite\"}" \
+            --data-binary @orlo-client-files.tar.gz
+          echo "Uploaded client files to Dropbox"
 
       - name: Upload orlo-client-manifest to Dropbox
-        shell: powershell
+        shell: bash
         env:
           DROPBOX_ACCESS_TOKEN: ${{ secrets.DROPBOX_ACCESS_TOKEN }}
         run: |
-          $dropboxPath = "/ci/orlo-client/orlo-client-manifest-${{ github.sha }}.tar.gz"
+          DROPBOX_PATH="/ci/orlo-client/orlo-client-manifest-${{ github.sha }}.tar.gz"
           tar czf orlo-client-manifest.tar.gz -C build manifest.json
-          $headers = @{
-            "Authorization" = "Bearer $env:DROPBOX_ACCESS_TOKEN"
-            "Dropbox-API-Arg" = "{`"path`": `"$dropboxPath`", `"mode`": `"overwrite`"}"
-            "Content-Type" = "application/octet-stream"
-          }
-          Invoke-WebRequest -Uri "https://content.dropboxapi.com/2/files/upload" `
-            -Method POST -Headers $headers -InFile "orlo-client-manifest.tar.gz"
+          curl -X POST https://content.dropboxapi.com/2/files/upload \
+            --header "Authorization: Bearer $DROPBOX_ACCESS_TOKEN" \
+            --header "Content-Type: application/octet-stream" \
+            --header "Dropbox-API-Arg: {\"path\": \"$DROPBOX_PATH\", \"mode\": \"overwrite\"}" \
+            --data-binary @orlo-client-manifest.tar.gz
+          echo "Uploaded manifest to Dropbox"
 
   release:
     name: Create GitHub Release
