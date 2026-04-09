@@ -1,0 +1,37 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="game-hud-root" class="hud-root">
+        <ui:VisualElement name="status-strip" class="status-strip">
+            <ui:Label name="connection-label" class="status-dot disconnected" text="●" />
+            <ui:Label name="rtt-label" class="tmd-label status-label" text="0ms" />
+            <ui:Label name="position-label" class="tmd-label status-label" text="0, 0, 0" />
+        </ui:VisualElement>
+        <ui:VisualElement name="compass-container" class="compass-container">
+            <ui:Label name="compass-label" class="tmd-label compass-label" text="N" />
+            <ui:Label name="heading-label" class="tmd-label compass-heading" text="0°" />
+        </ui:VisualElement>
+        <ui:VisualElement name="target-frame" class="tmd-panel target-frame" style="display: none;">
+            <ui:VisualElement class="tmd-panel__header">
+                <ui:Label name="target-name" class="tmd-label target-name" text="Target" />
+                <ui:Label name="target-level" class="tmd-label target-level" text="Lv 1" />
+            </ui:VisualElement>
+            <ui:VisualElement class="tmd-separator" />
+            <ui:VisualElement class="target-health-row">
+                <ui:VisualElement name="target-health-bar" class="tmd-progress-bar target-health-bar">
+                    <ui:VisualElement name="target-health-fill" class="tmd-progress-bar__fill" />
+                </ui:VisualElement>
+                <ui:Label name="target-health-label" class="tmd-label" text="100%" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="player-buff-row" class="buff-row player-buff-row" />
+        <ui:VisualElement name="notification-container" class="notification-container" />
+        <ui:VisualElement name="currency-display" class="tmd-panel currency-display">
+            <ui:Label name="currency-label" class="tmd-label" text="0 cr" />
+        </ui:VisualElement>
+        <ui:VisualElement name="xp-bar-container" class="xp-bar-container">
+            <ui:VisualElement name="xp-bar" class="tmd-progress-bar xp-bar">
+                <ui:VisualElement name="xp-fill" class="tmd-progress-bar__fill xp-fill" />
+            </ui:VisualElement>
+            <ui:Label name="xp-label" class="tmd-label xp-label" text="0 / 0 XP" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
