@@ -868,9 +868,10 @@ namespace Orlo
                 player = new GameObject("PlayerCharacter");
                 player.transform.SetPositionAndRotation(pos, rot);
 
-                // Load the 3D character model
+                // Resolve base model from appearance (gender + race)
                 var modelChar = player.AddComponent<ModelCharacter>();
-                modelChar.LoadModel("human_male_base.glb");
+                string baseModel = ResolveBaseModel(spawn);
+                modelChar.LoadModel(baseModel);
 
                 // Initialize character system — try modular (rigged) first, fall back to procedural
                 bool useModular = false;
@@ -887,8 +888,9 @@ namespace Orlo
                         // Mecanim animation controller (replaces procedural walk cycle)
                         var mecanim = player.AddComponent<Orlo.Character.MecanimCharacterController>();
 
-                        // Apply appearance via modular system (blendshapes + materials)
-                        modular.ApplyAppearance(new Orlo.UI.CharacterCreation.AppearanceData());
+                        // Apply appearance from server spawn data
+                        var appearance = AppearanceFromSpawn(spawn);
+                        modular.ApplyAppearance(appearance);
 
                         useModular = true;
                         Debug.Log("[Orlo] Using ModularCharacterSystem + Mecanim (rigged model detected)");
@@ -906,7 +908,7 @@ namespace Orlo
 
                     var deformer = player.AddComponent<VertexDeformer>();
                     deformer.Initialize();
-                    deformer.ApplyAppearance(new Orlo.UI.CharacterCreation.AppearanceData());
+                    deformer.ApplyAppearance(AppearanceFromSpawn(spawn));
 
                     Debug.LogWarning("[Orlo] Using legacy RuntimeRigBuilder (model not rigged — needs UniRig)");
                 }
@@ -972,6 +974,56 @@ namespace Orlo
                 WelcomeOverlay.Instance.ShowFirstTime();
                 WelcomeOverlay.Instance.OnDismissed = () => { /* welcome dismissed, nothing needed */ };
             }
+        }
+
+        /// <summary>
+        /// Resolve which base GLB to load from server-provided appearance data.
+        /// Falls back through: race+gender → gender → human_male_base.
+        /// </summary>
+        private string ResolveBaseModel(ProtoAuth.CharacterSpawnResponse spawn)
+        {
+            int gender = 0;
+            int race = 0;
+            if (spawn.Appearance != null)
+            {
+                gender = (int)spawn.Appearance.Gender;
+                race = (int)spawn.Appearance.Race;
+            }
+
+            string genderStr = gender == 0 ? "male" : "female";
+            string[] raceNames = { "human", "sylvari", "korathi", "ashborn" };
+            string raceName = race >= 0 && race < raceNames.Length ? raceNames[race] : "human";
+
+            // Try race+gender specific (e.g. korathi_female_base.glb)
+            string raceGender = $"{raceName}_{genderStr}_base.glb";
+            if (AssetLoader.Instance?.GetPakReader()?.Contains($"{raceName}_{genderStr}_base") == true)
+                return raceGender;
+
+            // Fall back to human gender variant
+            string humanGender = $"human_{genderStr}_base.glb";
+            string checkId = $"human_{genderStr}_base";
+            if (AssetLoader.Instance?.GetPakReader()?.Contains(checkId) == true)
+                return humanGender;
+
+            // Check StreamingAssets loose file
+            string path = System.IO.Path.Combine(Application.streamingAssetsPath, "Characters", humanGender);
+            if (System.IO.File.Exists(path))
+                return humanGender;
+
+            return "human_male_base.glb";
+        }
+
+        /// <summary>
+        /// Convert server appearance proto into client AppearanceData for blendshapes + materials.
+        /// </summary>
+        private Orlo.UI.CharacterCreation.AppearanceData AppearanceFromSpawn(ProtoAuth.CharacterSpawnResponse spawn)
+        {
+            var data = new Orlo.UI.CharacterCreation.AppearanceData();
+            if (spawn.Appearance != null)
+            {
+                data.FromProto(spawn.Appearance);
+            }
+            return data;
         }
 
         private void OnPong(ProtoAuth.Pong pong)
