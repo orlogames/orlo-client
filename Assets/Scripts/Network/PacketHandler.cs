@@ -21,6 +21,7 @@ using ProtoTMD = Orlo.Proto.TMD;
 using ProtoProgression = Orlo.Proto.Progression;
 using ProtoLobby = Orlo.Proto.Lobby;
 using ProtoBadges = Orlo.Proto.Badges;
+using Orlo.Interaction;
 
 namespace Orlo.Network
 {
@@ -1707,6 +1708,9 @@ namespace Orlo.Network
         {
             Debug.Log($"[NPC] {data.NpcName}: {data.Dialogue} (role={data.Role}, items={data.ShopItems.Count}, quests={data.QuestIds.Count})");
 
+            // Update the NPCInteractable component with server data (name, type)
+            UpdateNPCInteractable(data);
+
             if (data.ShopItems.Count > 0)
             {
                 // Vendor NPC — open shop UI
@@ -1751,6 +1755,39 @@ namespace Orlo.Network
                 // Generic NPC — just show dialogue
                 NotificationUI.Instance?.Show("NPC", $"{data.NpcName}: \"{data.Dialogue}\"", 0, 4f);
             }
+        }
+
+        /// <summary>
+        /// Update the NPCInteractable component on an NPC entity with server-provided data.
+        /// This enriches the interaction prompt with the correct name and type.
+        /// </summary>
+        private void UpdateNPCInteractable(ProtoEconomy.NPCData data)
+        {
+            var em = EntityManager.Instance;
+            if (em == null) return;
+
+            ulong entityId = data.NpcEntityId?.Id ?? 0;
+            if (entityId == 0) return;
+
+            var npcGo = em.GetEntity(entityId);
+            if (npcGo == null) return;
+
+            var interactable = npcGo.GetComponent<NPCInteractable>();
+            if (interactable == null) return;
+
+            // Determine interaction type from NPC data
+            NPCInteractable.InteractionType type;
+            if (data.ShopItems.Count > 0)
+                type = NPCInteractable.InteractionType.Shop;
+            else if (data.QuestIds.Count > 0)
+                type = NPCInteractable.InteractionType.Quest;
+            else
+                type = NPCInteractable.InteractionType.Dialogue;
+
+            interactable.Setup(entityId, data.NpcName, type);
+
+            // Update EntityManager's name cache
+            em.SetEntityName(entityId, data.NpcName);
         }
 
         private void HandleShopBuyResponse(ProtoEconomy.ShopBuyResponse resp)
