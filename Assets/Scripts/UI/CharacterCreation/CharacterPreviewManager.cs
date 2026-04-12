@@ -299,12 +299,10 @@ namespace Orlo.UI.CharacterCreation
 
         private bool ModelExists(string assetId)
         {
+            // Check all pak archives via the pak chain
             var loader = AssetLoader.Instance;
-            if (loader != null)
-            {
-                var pakReader = loader.GetPakReader();
-                if (pakReader != null && pakReader.Contains(assetId)) return true;
-            }
+            if (loader != null && loader.ContainsInPakChain(assetId))
+                return true;
 
             // Check loose files
             string path = System.IO.Path.Combine(Application.streamingAssetsPath, "Characters", assetId + ".glb");

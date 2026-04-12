@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -36,37 +37,134 @@ namespace Orlo.World
         /// <summary>Set of assetIds known to have no GLB file — avoids repeated File.Exists checks.</summary>
         private readonly HashSet<string> _missingAssets = new();
 
-        /// <summary>Pak archive reader for bundled assets.</summary>
-        private PakReader _pakReader;
+        /// <summary>Pak archive readers loaded from content manifest, searched in priority order.</summary>
+        private readonly List<PakReader> _pakReaders = new();
 
-        /// <summary>Expose pak reader for other systems (e.g., ModelCharacter) that need raw byte access.</summary>
-        public PakReader GetPakReader() => _pakReader;
+        /// <summary>Expose first pak reader for backwards compat.</summary>
+        public PakReader GetPakReader() => _pakReaders.Count > 0 ? _pakReaders[0] : null;
 
         private void Awake()
         {
             if (Instance != null) { Destroy(gameObject); return; }
             Instance = this;
 
-            // Open pak file if present in StreamingAssets
-            string pakPath = Path.Combine(Application.streamingAssetsPath, "assets.pak");
-            if (File.Exists(pakPath))
+            LoadContentManifest();
+        }
+
+        /// <summary>
+        /// Load content paks from a content-manifest.json (SWG .tre-style multi-pak system).
+        /// Falls back to legacy single assets.pak in StreamingAssets.
+        /// </summary>
+        private void LoadContentManifest()
+        {
+            // Content directory: alongside the executable, not in StreamingAssets
+            // In editor: use StreamingAssets. In builds: use parent of dataPath
+            string installDir;
+            #if UNITY_EDITOR
+            installDir = Application.streamingAssetsPath;
+            #else
+            installDir = Path.GetDirectoryName(Application.dataPath);
+            #endif
+
+            string contentDir = Path.Combine(installDir, "content");
+            string manifestPath = Path.Combine(contentDir, "content-manifest.json");
+
+            if (File.Exists(manifestPath))
             {
                 try
                 {
-                    _pakReader = new PakReader(pakPath);
-                    Debug.Log($"[AssetLoader] Opened assets.pak with {_pakReader.EntryCount} entries");
+                    string json = File.ReadAllText(manifestPath);
+                    var manifest = JsonUtility.FromJson<ContentManifest>(json);
+
+                    // Sort by priority descending (highest priority searched first)
+                    var sorted = manifest.paks.OrderByDescending(p => p.priority).ToList();
+
+                    foreach (var entry in sorted)
+                    {
+                        string pakPath = Path.Combine(contentDir, entry.file);
+                        if (File.Exists(pakPath))
+                        {
+                            var reader = new PakReader(pakPath);
+                            _pakReaders.Add(reader);
+                            Debug.Log($"[AssetLoader] Loaded content pak: {entry.file} (priority {entry.priority}, {reader.EntryCount} entries)");
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"[AssetLoader] Content pak missing: {pakPath}");
+                        }
+                    }
+
+                    Debug.Log($"[AssetLoader] Content manifest loaded: {_pakReaders.Count} pak(s), version {manifest.version}");
+                    return;
                 }
-                catch (System.Exception ex)
+                catch (System.Exception e)
                 {
-                    Debug.LogError($"[AssetLoader] Failed to open assets.pak: {ex.Message}");
+                    Debug.LogError($"[AssetLoader] Failed to load content manifest: {e.Message}");
                 }
+            }
+
+            // Legacy fallback: single assets.pak in StreamingAssets
+            string legacyPak = Path.Combine(Application.streamingAssetsPath, "assets.pak");
+            if (File.Exists(legacyPak))
+            {
+                var reader = new PakReader(legacyPak);
+                _pakReaders.Add(reader);
+                Debug.Log($"[AssetLoader] Legacy pak loaded: {legacyPak} ({reader.EntryCount} entries)");
+            }
+            else
+            {
+                Debug.Log("[AssetLoader] No content paks found — will use CDN fallback for all assets");
             }
         }
 
         private void OnDestroy()
         {
-            _pakReader?.Dispose();
-            _pakReader = null;
+            foreach (var reader in _pakReaders)
+                reader?.Dispose();
+            _pakReaders.Clear();
+        }
+
+        /// <summary>
+        /// Search all content paks in priority order. Returns raw bytes or null.
+        /// Higher-priority paks override lower ones (like SWG .tre files).
+        /// </summary>
+        public byte[] ReadFromPakChain(string assetId)
+        {
+            foreach (var reader in _pakReaders)
+            {
+                if (reader.Contains(assetId))
+                    return reader.ReadEntry(assetId);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Check if any pak in the chain contains this asset (without reading bytes).
+        /// </summary>
+        public bool ContainsInPakChain(string assetId)
+        {
+            foreach (var reader in _pakReaders)
+            {
+                if (reader.Contains(assetId))
+                    return true;
+            }
+            return false;
+        }
+
+        [System.Serializable]
+        private class ContentManifest
+        {
+            public string version;
+            public List<ContentPakEntry> paks;
+        }
+
+        [System.Serializable]
+        private class ContentPakEntry
+        {
+            public string file;
+            public string sha256;
+            public long size;
+            public int priority;
         }
 
         /// <summary>
@@ -90,10 +188,10 @@ namespace Orlo.World
             byte[] glbData = null;
             string source = null;
 
-            // 1. Pak archive (bundled with build)
-            if (_pakReader != null && _pakReader.Contains(assetId))
+            // 1. Pak archive chain (bundled with build, searched by priority)
+            glbData = ReadFromPakChain(assetId);
+            if (glbData != null)
             {
-                glbData = _pakReader.ReadEntry(assetId);
                 source = "pak";
             }
 

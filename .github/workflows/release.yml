@@ -6,7 +6,7 @@ on:
     tags:
       - 'v*'
   repository_dispatch:
-    types: [proto-updated, assets-updated]
+    types: [proto-updated]
   workflow_dispatch:
     inputs:
       version:
@@ -108,48 +108,7 @@ jobs:
           Write-Host "Found Unity at: $unity"
           echo "path=$unity" >> $env:GITHUB_OUTPUT
 
-      - name: Install AWS CLI
-        shell: powershell
-        run: |
-          if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
-            pip install awscli --quiet
-          }
-          aws --version
-
-      - name: Download assets-pak from S3
-        id: pak
-        shell: pwsh
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.HETZNER_S3_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.HETZNER_S3_SECRET_KEY }}
-          AWS_DEFAULT_REGION: fsn1
-          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
-        run: |
-          New-Item -ItemType Directory -Force -Path Assets/StreamingAssets | Out-Null
-          Write-Host "Fetching latest assets.pak from S3..."
-          $pakFound = $false
-
-          # Try latest pak from Hetzner S3
-          try {
-            aws s3 cp "s3://orlo-cdn/paks/latest/assets.pak" "Assets/StreamingAssets/assets.pak" --endpoint-url "$env:S3_ENDPOINT" 2>$null
-            if ($LASTEXITCODE -eq 0) { $pakFound = $true }
-          } catch {
-            $pakFound = $false
-          }
-
-          $global:LASTEXITCODE = 0
-
-          if ($pakFound) {
-            $fileInfo = Get-Item "Assets/StreamingAssets/assets.pak"
-            $sizeMB = [math]::Floor($fileInfo.Length / 1048576)
-            Write-Host "SUCCESS: assets.pak downloaded (${sizeMB} MB)"
-            echo "has_pak=true" >> $env:GITHUB_OUTPUT
-          } else {
-            Write-Host "WARNING: Could not download assets.pak - build will have NO 3D models!"
-            echo "has_pak=false" >> $env:GITHUB_OUTPUT
-          }
-
-          exit 0
+      # Assets are delivered independently via content manifest — not bundled in client builds
 
       - name: Build with Unity
         shell: powershell

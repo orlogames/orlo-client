@@ -39,15 +39,14 @@ namespace Orlo.World
 
             byte[] glbData = null;
 
-            // Try pak archive via AssetLoader first
+            // Try pak archive chain via AssetLoader first
             var loader = AssetLoader.Instance;
             if (loader != null)
             {
-                // Check if pak has this asset — use ReadEntry directly for raw bytes
-                var pakReader = loader.GetPakReader();
-                if (pakReader != null && pakReader.Contains(assetId))
+                byte[] pakData = loader.ReadFromPakChain(assetId);
+                if (pakData != null)
                 {
-                    glbData = pakReader.ReadEntry(assetId);
+                    glbData = pakData;
                 }
             }
 
