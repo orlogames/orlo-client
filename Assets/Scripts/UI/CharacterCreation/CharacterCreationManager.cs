@@ -27,8 +27,9 @@ namespace Orlo.UI.CharacterCreation
         // ─── Preview ───────────────────────────────────────────────────────
         private CharacterPreviewManager _preview;
 
-        // ─── Callback ──────────────────────────────────────────────────────
+        // ─── Callbacks ─────────────────────────────────────────────────────
         public Action<AppearanceData> OnCreateConfirmed;
+        public Action OnCancelled;
 
         // ─── Tab definitions ───────────────────────────────────────────────
         private static readonly string[] TabNames =
@@ -242,7 +243,15 @@ namespace Orlo.UI.CharacterCreation
 
             // ── Navigation Buttons ─────────────────────────────────────────
             float navY = leftPanel.yMax - 24;
-            if (_currentTab > 0 && GUI.Button(new Rect(leftPanel.x + 10, navY, 100, 24), "< Back", _buttonStyle))
+            if (_currentTab == 0)
+            {
+                if (GUI.Button(new Rect(leftPanel.x + 10, navY, 100, 24), "Cancel", _buttonStyle))
+                {
+                    Hide();
+                    OnCancelled?.Invoke();
+                }
+            }
+            else if (GUI.Button(new Rect(leftPanel.x + 10, navY, 100, 24), "< Back", _buttonStyle))
             {
                 OnTabChanged(_currentTab - 1);
             }

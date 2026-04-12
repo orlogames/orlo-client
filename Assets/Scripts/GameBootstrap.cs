@@ -734,6 +734,13 @@ namespace Orlo
 
         private void ShowCharacterCreation()
         {
+            // Hide lobby elements before showing character creation
+            _charSelectUI?.Hide();
+            LobbyBackground.Instance?.Hide();
+            CharacterPlatform.Instance?.Hide();
+            EnterWorldButton.Instance?.Hide();
+            NewsTicker.Instance?.Hide();
+
             if (_charCreationManager == null)
             {
                 var go = new GameObject("CharacterCreationManager");
@@ -746,6 +753,18 @@ namespace Orlo
                 _connectionUI?.Show("Creating character");
                 NetworkManager.Instance.Send(PacketBuilder.CharacterCreate(_sessionId, data));
                 _charCreationManager.Hide();
+            };
+
+            _charCreationManager.OnCancelled = () =>
+            {
+                Debug.Log("[Orlo] Character creation cancelled — returning to lobby");
+                // Restore lobby elements
+                LobbyBackground.Instance?.Show();
+                CharacterPlatform.Instance?.Show();
+                EnterWorldButton.Instance?.Show();
+                NewsTicker.Instance?.Show();
+                // Request fresh character list to re-show lobby
+                NetworkManager.Instance.Send(PacketBuilder.CharacterListRequest(_sessionId));
             };
 
             _charCreationManager.Show();
@@ -775,6 +794,23 @@ namespace Orlo
                 _connectionUI?.Hide();
                 NotificationUI.Instance?.ShowError("Creation Failed", error);
                 ShowCharacterCreation();
+            }
+        }
+
+        /// <summary>
+        /// Called by PacketHandler when character deletion response arrives.
+        /// </summary>
+        public void OnCharacterDeleteResponse(bool success, string error)
+        {
+            if (success)
+            {
+                Debug.Log("[Orlo] Character deleted — refreshing character list");
+                NetworkManager.Instance.Send(PacketBuilder.CharacterListRequest(_sessionId));
+            }
+            else
+            {
+                Debug.LogError($"[Orlo] Character deletion failed: {error}");
+                NotificationUI.Instance?.ShowError("Delete Failed", error);
             }
         }
 

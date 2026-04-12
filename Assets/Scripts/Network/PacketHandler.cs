@@ -257,6 +257,9 @@ namespace Orlo.Network
                 case Packet.PayloadOneofCase.CharacterCreateResponse:
                     HandleCharacterCreateResponse(packet.CharacterCreateResponse);
                     break;
+                case Packet.PayloadOneofCase.CharacterDeleteResponse:
+                    HandleCharacterDeleteResponse(packet.CharacterDeleteResponse);
+                    break;
                 case Packet.PayloadOneofCase.CharacterAppearance:
                     HandleCharacterAppearance(packet.CharacterAppearance);
                     break;
@@ -1692,6 +1695,13 @@ namespace Orlo.Network
             bootstrap?.OnCharacterCreateResponse(
                 resp.Success, resp.Error,
                 resp.CharacterId?.Id ?? 0);
+        }
+
+        private void HandleCharacterDeleteResponse(ProtoCharacter.CharacterDeleteResponse resp)
+        {
+            Debug.Log($"[Character] Delete response: success={resp.Success}, error={resp.Error}");
+            var bootstrap = FindFirstObjectByType<GameBootstrap>();
+            bootstrap?.OnCharacterDeleteResponse(resp.Success, resp.Error);
         }
 
         private void HandleCharacterAppearance(ProtoCharacter.CharacterAppearanceUpdate appearance)

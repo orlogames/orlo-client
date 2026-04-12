@@ -1210,10 +1210,9 @@ namespace Orlo.Network
         public static byte[] CharacterDeleteExtended(ulong characterId)
         {
             var pkt = NewPacket();
-            pkt.ChatSend = new ProtoSocial.ChatSend
+            pkt.CharacterDeleteRequest = new ProtoCharacter.CharacterDeleteRequest
             {
-                Channel = ProtoSocial.ChatChannel.System,
-                Content = $"/char_delete {characterId}"
+                CharacterId = new EntityId { Id = characterId }
             };
             return pkt.ToByteArray();
         }
