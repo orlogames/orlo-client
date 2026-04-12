@@ -14,10 +14,11 @@ namespace Orlo.World
         public static ProceduralEntityFactory Instance { get; private set; }
 
         // Entity type constants matching server definitions
-        public const uint TYPE_HUMANOID_NPC = 1;
-        public const uint TYPE_ANIMAL = 2;
-        public const uint TYPE_PROP = 3;
-        public const uint TYPE_PLAYER = 4;
+        // Server: 1=player, 2=creature, 3=NPC, 4=static prop
+        public const uint TYPE_PLAYER = 1;
+        public const uint TYPE_CREATURE = 2;
+        public const uint TYPE_NPC = 3;
+        public const uint TYPE_PROP = 4;
         public const uint TYPE_VEHICLE = 5;
         public const uint TYPE_INTERACTABLE = 6;
 
@@ -73,6 +74,19 @@ namespace Orlo.World
             "settlement_bench",
             "vendor_display_table",
             "settlement_pine",
+            // Screenplay YAML asset IDs (route to BuildAssetFallback for matching)
+            "building_supply_depot",
+            "building_task_office",
+            "building_med_bay",
+            "building_training_ring",
+            "building_command_post",
+            "crafting_workbench",
+            "crafting_cooking_station",
+            "pathway_stone",
+            "bench_metal",
+            "lantern_post",
+            "tree_frontier_pine",
+            "prop_mission_board",
         };
 
         /// <summary>
@@ -146,17 +160,17 @@ namespace Orlo.World
             {
                 switch (entityType)
                 {
-                    case TYPE_HUMANOID_NPC:
-                        go = BuildHumanoidNPC(assetId, position, rotation);
+                    case TYPE_PLAYER:
+                        go = BuildPlayer(assetId, position, rotation);
                         break;
-                    case TYPE_ANIMAL:
+                    case TYPE_CREATURE:
                         go = BuildAnimal(assetId, position, rotation);
+                        break;
+                    case TYPE_NPC:
+                        go = BuildHumanoidNPC(assetId, position, rotation);
                         break;
                     case TYPE_PROP:
                         go = BuildProp(assetId, position, rotation);
-                        break;
-                    case TYPE_PLAYER:
-                        go = BuildPlayer(assetId, position, rotation);
                         break;
                     case TYPE_VEHICLE:
                         go = BuildProp(assetId, position, rotation); // Placeholder
@@ -570,10 +584,10 @@ namespace Orlo.World
 
             switch (entityType)
             {
-                case TYPE_HUMANOID_NPC: return BuildHumanoidNPC(assetId, position, rotation);
-                case TYPE_ANIMAL:       return BuildAnimal(assetId, position, rotation);
-                case TYPE_PROP:         return BuildProp(assetId, position, rotation);
                 case TYPE_PLAYER:       return BuildPlayer(assetId, position, rotation);
+                case TYPE_CREATURE:     return BuildAnimal(assetId, position, rotation);
+                case TYPE_NPC:          return BuildHumanoidNPC(assetId, position, rotation);
+                case TYPE_PROP:         return BuildProp(assetId, position, rotation);
                 case TYPE_VEHICLE:      return BuildProp(assetId, position, rotation);
                 case TYPE_INTERACTABLE: return BuildProp(assetId, position, rotation);
                 default:                return BuildFallback(position, rotation);
@@ -590,15 +604,28 @@ namespace Orlo.World
             switch (assetId)
             {
                 case "nexus_crystal_fountain": return BuildCrystalFountain(position, rotation);
-                case "frontier_cabin":        return BuildFrontierCabin(position, rotation);
-                case "cooking_station":       return BuildCookingStation(position, rotation);
-                case "ground_lantern":        return BuildGroundLantern(position, rotation);
-                case "wall_lantern":          return BuildWallLantern(position, rotation);
-                case "stone_pathway_segment": return BuildStonePathway(position, rotation);
-                case "settlement_bench":      return BuildSettlementBench(position, rotation);
-                case "vendor_display_table":  return BuildVendorDisplayTable(position, rotation);
-                case "settlement_pine":       return BuildSettlementPine(assetId, position, rotation);
-                default:                      return BuildFallback(position, rotation);
+                case "frontier_cabin":         return BuildFrontierCabin(position, rotation);
+                case "cooking_station":        return BuildCookingStation(position, rotation);
+                case "crafting_cooking_station": return BuildCookingStation(position, rotation);
+                case "crafting_workbench":     return BuildCookingStation(position, rotation); // reuse station shape
+                case "ground_lantern":         return BuildGroundLantern(position, rotation);
+                case "wall_lantern":           return BuildWallLantern(position, rotation);
+                case "lantern_post":           return BuildGroundLantern(position, rotation);
+                case "stone_pathway_segment":  return BuildStonePathway(position, rotation);
+                case "pathway_stone":          return BuildStonePathway(position, rotation);
+                case "settlement_bench":       return BuildSettlementBench(position, rotation);
+                case "bench_metal":            return BuildSettlementBench(position, rotation);
+                case "vendor_display_table":   return BuildVendorDisplayTable(position, rotation);
+                case "settlement_pine":        return BuildSettlementPine(assetId, position, rotation);
+                case "tree_frontier_pine":     return BuildSettlementPine(assetId, position, rotation);
+                // Buildings all use frontier cabin shape as fallback
+                case "building_supply_depot":  return BuildFrontierCabin(position, rotation);
+                case "building_task_office":   return BuildFrontierCabin(position, rotation);
+                case "building_med_bay":       return BuildFrontierCabin(position, rotation);
+                case "building_training_ring": return BuildFrontierCabin(position, rotation);
+                case "building_command_post":  return BuildFrontierCabin(position, rotation);
+                case "prop_mission_board":     return BuildAssetFallback(assetId, position, rotation);
+                default:                       return BuildAssetFallback(assetId, position, rotation);
             }
         }
 
@@ -1049,6 +1076,63 @@ namespace Orlo.World
             go.transform.SetPositionAndRotation(position, rotation);
             go.GetComponent<MeshRenderer>().material = MakeMat(new Color(0.4f, 0.4f, 0.45f));
             return go;
+        }
+
+        /// <summary>
+        /// Build an asset-aware procedural fallback for settlement props that don't
+        /// have a dedicated builder. Uses the asset ID to guess a reasonable shape.
+        /// </summary>
+        private GameObject BuildAssetFallback(string assetId, Vector3 position, Quaternion rotation)
+        {
+            var go = new GameObject($"Prop_{assetId}");
+            go.transform.SetPositionAndRotation(position, rotation);
+            string id = assetId.ToLower();
+
+            if (id.Contains("building") || id.Contains("depot") || id.Contains("office") ||
+                id.Contains("bay") || id.Contains("post") || id.Contains("ring"))
+            {
+                // Building fallback: large box with roof-colored top
+                return BuildFrontierCabin(position, rotation);
+            }
+            else if (id.Contains("tree") || id.Contains("pine") || id.Contains("broadleaf"))
+            {
+                // Tree fallback: brown trunk cylinder + green cone canopy
+                return BuildSettlementPine(assetId, position, rotation);
+            }
+            else if (id.Contains("nexus") || id.Contains("crystal"))
+            {
+                return BuildCrystalFountain(position, rotation);
+            }
+            else if (id.Contains("lantern"))
+            {
+                Destroy(go);
+                return BuildGroundLantern(position, rotation);
+            }
+            else if (id.Contains("bench"))
+            {
+                Destroy(go);
+                return BuildSettlementBench(position, rotation);
+            }
+            else if (id.Contains("board"))
+            {
+                // Notice/mission board: tall thin box
+                var standard = GetFallbackShader();
+                var boardMesh = ProceduralMeshBuilder.BuildBox(new Vector3(1.5f, 2.0f, 0.15f));
+                var child = new GameObject("Board");
+                child.transform.SetParent(go.transform);
+                child.transform.localPosition = new Vector3(0, 1.0f, 0);
+                child.AddComponent<MeshFilter>().mesh = boardMesh;
+                child.AddComponent<MeshRenderer>().material =
+                    new Material(standard) { color = new Color(0.4f, 0.3f, 0.15f) };
+                child.AddComponent<BoxCollider>();
+                return go;
+            }
+            else
+            {
+                // Generic prop: use BuildProp which already handles crates, barrels, etc.
+                Destroy(go);
+                return BuildProp(assetId, position, rotation);
+            }
         }
 
         private CharacterSpec ResolveCharacterSpec(string assetId)

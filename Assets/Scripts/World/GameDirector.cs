@@ -53,7 +53,7 @@ namespace Orlo.World
             public string AssetId;
 
             public SpawnPoint(Vector3 position, string archetype, float startHour, float endHour,
-                uint entityType = ProceduralEntityFactory.TYPE_HUMANOID_NPC, string assetId = "")
+                uint entityType = ProceduralEntityFactory.TYPE_NPC, string assetId = "")
             {
                 Position = position;
                 Archetype = archetype;

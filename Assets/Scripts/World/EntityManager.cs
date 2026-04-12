@@ -53,8 +53,9 @@ namespace Orlo.World
             _entities[entityId] = go;
             _entityPrevPos[entityId] = position;
 
-            // Attach procedural animation to humanoid entity types
+            // Attach procedural animation to humanoid entity types only
             // 1 = player, 3 = humanoid NPC
+            // 4 = static prop — no animation, no character controller
             if (entityType == 1 || entityType == 3)
             {
                 if (go.GetComponent<CharacterAnimator>() == null)

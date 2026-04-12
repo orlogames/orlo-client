@@ -1,5 +1,7 @@
 #if UNITY_EDITOR
 using UnityEditor;
+using UnityEditor.Build;
+using UnityEditor.Build.Reporting;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -8,6 +10,7 @@ using System.IO;
 /// <summary>
 /// Automatically creates and assigns URP pipeline assets when the project opens.
 /// This runs once via [InitializeOnLoad] — idempotent if assets already exist.
+/// Also runs as a build preprocessor so CI batch-mode builds get URP configured.
 /// </summary>
 [InitializeOnLoad]
 public static class URPSetup
@@ -24,12 +27,24 @@ public static class URPSetup
 
     private static void SetupURP()
     {
+        EnsureURPConfigured();
+    }
+
+    /// <summary>
+    /// Public entry point called by both [InitializeOnLoad] and the build preprocessor.
+    /// Creates URP assets if missing, configures them, and assigns to GraphicsSettings.
+    /// Idempotent — safe to call multiple times.
+    /// </summary>
+    public static void EnsureURPConfigured()
+    {
         // Check if URP is already assigned
         if (GraphicsSettings.currentRenderPipeline != null)
         {
             Debug.Log("[URPSetup] URP already configured, skipping setup.");
             return;
         }
+
+        Debug.Log("[URPSetup] No render pipeline active — configuring URP...");
 
         // Create Settings directory if needed
         if (!AssetDatabase.IsValidFolder(SETTINGS_PATH))
@@ -147,6 +162,33 @@ public static class URPSetup
         EditorUtility.SetDirty(rendererData);
 
         Debug.Log("[URPSetup] Added SSAO Renderer Feature");
+    }
+}
+
+/// <summary>
+/// Build preprocessor that ensures URP is configured before every build.
+/// This is critical for CI batch-mode builds where [InitializeOnLoad] may not
+/// have triggered or where the URP .asset files aren't committed to git.
+/// </summary>
+public class URPBuildPreprocessor : IPreprocessBuildWithReport
+{
+    public int callbackOrder => -100; // Run early, before other preprocessors
+
+    public void OnPreprocessBuild(BuildReport report)
+    {
+        Debug.Log("[URPBuildPreprocessor] Pre-build URP check...");
+        URPSetup.EnsureURPConfigured();
+
+        // Double-check that URP is actually assigned after setup
+        if (GraphicsSettings.currentRenderPipeline == null)
+        {
+            Debug.LogError("[URPBuildPreprocessor] CRITICAL: URP still not assigned after EnsureURPConfigured! " +
+                "Build will have broken rendering.");
+        }
+        else
+        {
+            Debug.Log("[URPBuildPreprocessor] URP verified: " + GraphicsSettings.currentRenderPipeline.name);
+        }
     }
 }
 #endif
