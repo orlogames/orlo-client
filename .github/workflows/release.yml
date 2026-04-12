@@ -163,7 +163,12 @@ jobs:
             '-buildPath', 'build/windows/OrloClient.exe'
           ) -Wait -PassThru -NoNewWindow
           if ($proc.ExitCode -ne 0) {
-            if (Test-Path build-log.txt) { Get-Content build-log.txt -Tail 50 }
+            if (Test-Path build-log.txt) {
+              Write-Host "=== COMPILATION ERRORS ==="
+              Select-String -Path build-log.txt -Pattern "error CS|error:|CompilerError" | Select-Object -First 30 | ForEach-Object { Write-Host $_.Line }
+              Write-Host "=== LAST 100 LINES ==="
+              Get-Content build-log.txt -Tail 100
+            }
             exit 1
           }
 

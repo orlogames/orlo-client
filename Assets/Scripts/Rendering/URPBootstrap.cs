@@ -23,19 +23,24 @@ namespace Orlo.Rendering
 
             Debug.LogWarning("[URPBootstrap] No render pipeline active! Creating runtime URP...");
 
-            // Create minimal URP renderer
-            var rendererData = ScriptableObject.CreateInstance<UniversalRendererData>();
+            try
+            {
+                // ScriptableObject.CreateInstance works at runtime for URP assets.
+                // UniversalRenderPipelineAsset.Create() is editor-only, so we use
+                // CreateInstance and accept default settings.
+                var urpAsset = ScriptableObject.CreateInstance<UniversalRenderPipelineAsset>();
+                urpAsset.name = "RuntimeURPAsset";
 
-            // Create URP asset with renderer
-            var urpAsset = UniversalRenderPipelineAsset.Create(rendererData);
-            urpAsset.name = "RuntimeURPAsset";
+                // Assign pipeline — this activates URP immediately
+                GraphicsSettings.defaultRenderPipeline = urpAsset;
+                QualitySettings.renderPipeline = urpAsset;
 
-            // Assign pipeline — this activates URP immediately
-            GraphicsSettings.defaultRenderPipeline = urpAsset;
-            QualitySettings.renderPipeline = urpAsset;
-
-            Debug.Log("[URPBootstrap] Runtime URP pipeline created and assigned. " +
-                "Note: build preprocessor should handle this — check URPSetup.cs");
+                Debug.Log("[URPBootstrap] Runtime URP pipeline created and assigned.");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError("[URPBootstrap] Failed to create runtime URP: " + e.Message);
+            }
         }
     }
 }
