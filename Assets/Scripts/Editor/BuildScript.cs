@@ -90,12 +90,30 @@ public class BuildScript
         SetProp(so, "m_SupportsCameraOpaqueTexture", true);
         so.ApplyModifiedPropertiesWithoutUndo();
 
-        // Assign to graphics settings
+        // Assign to graphics settings — must mark dirty and save explicitly
         GraphicsSettings.defaultRenderPipeline = urpAsset;
         QualitySettings.renderPipeline = urpAsset;
 
+        // Force-save the pipeline asset
+        EditorUtility.SetDirty(urpAsset);
+        EditorUtility.SetDirty(renderer);
+
+        // Explicitly write GraphicsSettings and QualitySettings to disk
+        // AssetDatabase.SaveAssets() only saves asset files, not ProjectSettings
+        var gfxSettings = new SerializedObject(
+            AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/GraphicsSettings.asset")[0]);
+        gfxSettings.Update();
+        var srpProp = gfxSettings.FindProperty("m_CustomRenderPipeline");
+        if (srpProp != null)
+        {
+            srpProp.objectReferenceValue = urpAsset;
+            gfxSettings.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
         Debug.Log($"[BuildScript] URP pipeline created and assigned: {urpAsset.name}");
+        Debug.Log($"[BuildScript] GraphicsSettings.currentRenderPipeline = {GraphicsSettings.currentRenderPipeline?.name ?? "null"}");
     }
 
     private static void SetProp(SerializedObject so, string name, bool val)
