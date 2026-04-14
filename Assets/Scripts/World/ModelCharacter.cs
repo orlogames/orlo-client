@@ -12,7 +12,7 @@ namespace Orlo.World
     /// material colors from AppearanceData. Replaces ProceduralCharacter for player characters.
     ///
     /// Uses a built-in minimal GLB parser — no external packages required.
-    /// Phase 0: Single model, color-driven materials only (no blendshapes yet).
+    /// Supports morph targets (blendshapes) from glTF targets[] array.
     /// </summary>
     public class ModelCharacter : MonoBehaviour
     {
@@ -115,8 +115,20 @@ namespace Orlo.World
                 _renderers = _modelRoot.GetComponentsInChildren<Renderer>(true);
                 CacheInstancedMaterials();
 
+                // Count total blendshapes across all meshes
+                int totalBlendShapes = 0;
+                foreach (var r in _renderers)
+                {
+                    var mf = r.GetComponent<MeshFilter>();
+                    if (mf != null && mf.sharedMesh != null)
+                        totalBlendShapes += mf.sharedMesh.blendShapeCount;
+                    var smr = r as SkinnedMeshRenderer;
+                    if (smr != null && smr.sharedMesh != null)
+                        totalBlendShapes += smr.sharedMesh.blendShapeCount;
+                }
+
                 Debug.Log($"[ModelCharacter] Loaded {glbFileName}: {meshes.Count} mesh(es), " +
-                          $"{_renderers.Length} renderers");
+                          $"{_renderers.Length} renderers, {totalBlendShapes} blendshapes");
 
                 _loaded = true;
 
@@ -195,6 +207,13 @@ namespace Orlo.World
         }
 
         // ─── GLB Parser ───────────────────────────────────────────────────
+
+        private struct BlendShapeData
+        {
+            public string name;
+            public Vector3[] deltaVertices;
+            public Vector3[] deltaNormals;
+        }
 
         private struct ParsedMesh
         {
@@ -345,6 +364,70 @@ namespace Orlo.World
 
                     if (normals == null) mesh.RecalculateNormals();
                     mesh.RecalculateBounds();
+
+                    // ─── Morph Targets (Blendshapes) ──────────────────────────
+                    var targets = prim.GetArray("targets");
+                    if (targets != null && targets.Count > 0)
+                    {
+                        // Get target names from mesh.extras.targetNames (Blender/standard extension)
+                        var targetNames = new List<string>();
+                        var meshExtras = gltfMesh.GetObject("extras");
+                        if (meshExtras != null)
+                        {
+                            var namesArr = meshExtras.GetArray("targetNames");
+                            if (namesArr != null)
+                            {
+                                foreach (var n in namesArr)
+                                    targetNames.Add(n.AsString(""));
+                            }
+                        }
+
+                        int vertexCount = positions.Length;
+                        for (int t = 0; t < targets.Count; t++)
+                        {
+                            var target = targets[t];
+                            string shapeName = t < targetNames.Count && !string.IsNullOrEmpty(targetNames[t])
+                                ? targetNames[t]
+                                : $"Shape_{t}";
+
+                            // Read POSITION deltas
+                            int posIdx = target.GetInt("POSITION", -1);
+                            Vector3[] deltaVerts = null;
+                            if (posIdx >= 0 && posIdx < accessors.Count)
+                            {
+                                deltaVerts = ReadVec3Accessor(accessors[posIdx], bufferViews, binData);
+                                // Flip Z for right-to-left handed conversion
+                                if (deltaVerts != null)
+                                    for (int dv = 0; dv < deltaVerts.Length; dv++)
+                                        deltaVerts[dv].z = -deltaVerts[dv].z;
+                            }
+
+                            // Read NORMAL deltas (optional)
+                            int normIdx = target.GetInt("NORMAL", -1);
+                            Vector3[] deltaNorms = null;
+                            if (normIdx >= 0 && normIdx < accessors.Count)
+                            {
+                                deltaNorms = ReadVec3Accessor(accessors[normIdx], bufferViews, binData);
+                                if (deltaNorms != null)
+                                    for (int dn = 0; dn < deltaNorms.Length; dn++)
+                                        deltaNorms[dn].z = -deltaNorms[dn].z;
+                            }
+
+                            // Ensure arrays match vertex count
+                            if (deltaVerts == null || deltaVerts.Length != vertexCount)
+                            {
+                                deltaVerts = new Vector3[vertexCount];
+                            }
+                            if (deltaNorms == null || deltaNorms.Length != vertexCount)
+                            {
+                                deltaNorms = new Vector3[vertexCount];
+                            }
+
+                            mesh.AddBlendShapeFrame(shapeName, 100f, deltaVerts, deltaNorms, null);
+                        }
+
+                        Debug.Log($"[ModelCharacter] Parsed {targets.Count} morph targets for mesh '{meshName}'");
+                    }
 
                     // Extract full PBR material properties
                     var matData = new AssetLoader.MaterialData
@@ -666,6 +749,13 @@ namespace Orlo.World
             public JsonNode(Dictionary<string, object> dict) { _dict = dict; }
             public JsonNode(List<object> list) { _list = list; }
             public JsonNode(object value) { _value = value; }
+
+            /// <summary>Get the raw string value of this node (for array elements that are plain strings).</summary>
+            public string AsString(string def = "")
+            {
+                if (_value is string s) return s;
+                return def;
+            }
 
             public string GetString(string key, string def = "")
             {

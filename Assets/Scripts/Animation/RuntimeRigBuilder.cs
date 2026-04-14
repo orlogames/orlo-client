@@ -107,9 +107,32 @@ namespace Orlo.Animation
         {
             if (originalMesh == null) return;
 
-            // Clone mesh to add bone data
+            // Clone mesh to add bone data (Instantiate preserves blendshapes)
             var mesh = Object.Instantiate(originalMesh);
             mesh.name = originalMesh.name + "_skinned";
+
+            // Safety net: if Instantiate didn't copy blendshapes, copy them explicitly
+            if (originalMesh.blendShapeCount > 0 && mesh.blendShapeCount == 0)
+            {
+                Debug.Log($"[RuntimeRigBuilder] Explicitly copying {originalMesh.blendShapeCount} blendshapes");
+                for (int bs = 0; bs < originalMesh.blendShapeCount; bs++)
+                {
+                    string shapeName = originalMesh.GetBlendShapeName(bs);
+                    int frameCount = originalMesh.GetBlendShapeFrameCount(bs);
+                    for (int f = 0; f < frameCount; f++)
+                    {
+                        float weight = originalMesh.GetBlendShapeFrameWeight(bs, f);
+                        var dv = new Vector3[originalMesh.vertexCount];
+                        var dn = new Vector3[originalMesh.vertexCount];
+                        var dt = new Vector3[originalMesh.vertexCount];
+                        originalMesh.GetBlendShapeFrameVertices(bs, f, dv, dn, dt);
+                        mesh.AddBlendShapeFrame(shapeName, weight, dv, dn, dt);
+                    }
+                }
+            }
+
+            if (mesh.blendShapeCount > 0)
+                Debug.Log($"[RuntimeRigBuilder] Rigging mesh '{mesh.name}' with {mesh.blendShapeCount} blendshapes");
 
             // Compute bone weights per vertex
             var vertices = mesh.vertices;

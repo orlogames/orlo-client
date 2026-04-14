@@ -431,14 +431,25 @@ namespace Orlo.Character
             var mesh = state.Renderer.sharedMesh;
             if (mesh == null || mesh.blendShapeCount == 0) return;
 
+            int mapped = 0;
             // Map our AppearanceData slider names to blendshape names
             for (int i = 0; i < mesh.blendShapeCount; i++)
             {
                 string shapeName = mesh.GetBlendShapeName(i).ToLower();
                 float value = GetBlendshapeValue(shapeName, a);
                 if (value >= 0f)
+                {
                     state.Renderer.SetBlendShapeWeight(i, value * 100f); // Unity uses 0-100
+                    mapped++;
+                }
+                else
+                {
+                    Debug.LogWarning($"[ModularCharacter] Unmapped blendshape: '{mesh.GetBlendShapeName(i)}' on {state.Renderer.name}");
+                }
             }
+
+            if (mapped > 0)
+                Debug.Log($"[ModularCharacter] Applied {mapped}/{mesh.blendShapeCount} blendshapes on {state.Renderer.name}");
         }
 
         private float GetBlendshapeValue(string shapeName, AppearanceData a)
