@@ -11,6 +11,7 @@ using Orlo.UI.CharacterCreation;
 using Orlo.UI.Lobby;
 using Orlo.UI.Panels;
 using Orlo.UI.TMD;
+using Orlo.Interaction;
 using Orlo.Proto;
 using ProtoAuth = Orlo.Proto.Auth;
 using Color = UnityEngine.Color;
@@ -965,6 +966,10 @@ namespace Orlo
                     hairPhysics.AttachLineRenderer(new Color(0.3f, 0.2f, 0.1f));
                 }
             }
+
+            // Attach interaction controller for NPC interactions
+            if (player.GetComponent<InteractionController>() == null)
+                player.AddComponent<InteractionController>();
 
             player.tag = "Player";
             player.name = $"Player_{playerName}";
