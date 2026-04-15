@@ -266,8 +266,7 @@ namespace Orlo.UI
             if (DrawMenuButton(new Rect(bx, by, bw, bh), "Exit to Lobby"))
             {
                 CloseMenu();
-                Network.NetworkManager.Instance?.Disconnect();
-                FindFirstObjectByType<GameBootstrap>()?.ShowLoginAfterLogout();
+                FindFirstObjectByType<GameBootstrap>()?.ReturnToLobby();
             }
             by += bh + gap;
 

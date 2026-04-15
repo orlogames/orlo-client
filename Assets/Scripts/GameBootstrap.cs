@@ -1099,6 +1099,47 @@ namespace Orlo
             ShowLoginUI();
         }
 
+        /// <summary>
+        /// Exit to the character-select lobby without fully logging out.
+        /// Disconnects, tears down the world, reconnects, and re-authenticates
+        /// using the preserved launcher token or cached username — the server
+        /// will respond with the character list and OnCharacterListReceived
+        /// will route to ShowCharacterSelect.
+        /// </summary>
+        public void ReturnToLobby()
+        {
+            Debug.Log("[Orlo] Returning to character select lobby");
+
+            // Reset session state (keep _launcherToken / _pendingUsername so we can reauth)
+            _sessionId = 0;
+            _accountId = 0;
+            _characterSpawned = false;
+            InWorld = false;
+
+            // Tear down world-side UI so it doesn't linger behind the lobby
+            _charSelectUI?.Hide();
+            _charCreationManager?.Hide();
+
+            // Disconnect — OnConnected (after reconnect) will auto-send login
+            // using token / pending credentials, and the server responds with
+            // the character list which routes through OnCharacterListReceived.
+            NetworkManager.Instance?.Disconnect();
+
+            bool haveToken = !string.IsNullOrEmpty(_launcherToken);
+            bool haveCreds = !string.IsNullOrEmpty(_pendingUsername);
+
+            if (!haveToken && !haveCreds)
+            {
+                // Nothing to re-auth with — fall back to login screen.
+                ShowLoginUI();
+                return;
+            }
+
+            _connectionUI?.Show("Returning to lobby");
+            _connectionUI?.SetStatus("Reconnecting");
+            NetworkManager.Instance?.Connect();
+        }
+
         private void OnDisconnected()
         {
             Debug.Log("[Orlo] Disconnected from server");

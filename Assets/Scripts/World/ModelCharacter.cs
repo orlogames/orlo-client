@@ -185,6 +185,8 @@ namespace Orlo.World
             float maxY = 0;
             foreach (var r in _renderers)
             {
+                // Skip destroyed renderers (hair swaps, mesh rebuilds can leave stale refs)
+                if (r == null) continue;
                 float top = r.bounds.max.y - transform.position.y;
                 if (top > maxY) maxY = top;
             }
@@ -199,9 +201,18 @@ namespace Orlo.World
             if (_renderers == null || _renderers.Length == 0)
                 return transform.position + Vector3.up * 0.9f;
 
-            Bounds combinedBounds = _renderers[0].bounds;
-            for (int i = 1; i < _renderers.Length; i++)
-                combinedBounds.Encapsulate(_renderers[i].bounds);
+            // Find first live renderer as seed (hair swaps / mesh rebuilds can leave null entries)
+            Bounds combinedBounds = default;
+            bool seeded = false;
+            for (int i = 0; i < _renderers.Length; i++)
+            {
+                if (_renderers[i] == null) continue;
+                if (!seeded) { combinedBounds = _renderers[i].bounds; seeded = true; }
+                else combinedBounds.Encapsulate(_renderers[i].bounds);
+            }
+
+            if (!seeded)
+                return transform.position + Vector3.up * 0.9f;
 
             return combinedBounds.center;
         }
