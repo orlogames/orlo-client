@@ -75,7 +75,14 @@ namespace Orlo.Rendering
 
             // Use additive particle material
             var shader = OrloShaders.ParticlesUnlit;
+            if (shader == null) shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
             if (shader == null) shader = Shader.Find("Particles/Standard Unlit");
+            if (shader == null)
+            {
+                Debug.LogWarning("[GodRaysEffect] No particle shader available; god rays disabled");
+                enabled = false;
+                return;
+            }
             var mat = new Material(shader);
             mat.SetColor("_BaseColor", new Color(1f, 0.92f, 0.75f, 0.06f));
 

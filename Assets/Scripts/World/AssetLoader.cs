@@ -21,9 +21,11 @@ namespace Orlo.World
 
         // ─── CDN Download ──────────────────────────────────────────────
         private const string CDN_BASE_URL = "https://cdn.orlo.games/assets/models/";
+        private const float CDN_RETRY_COOLDOWN_SEC = 30f;
 
         private readonly HashSet<string> _downloading = new();
-        private readonly HashSet<string> _downloadFailed = new();
+        /// <summary>assetId → Time.realtimeSinceStartup of last failed attempt. After CDN_RETRY_COOLDOWN_SEC, a new attempt is allowed.</summary>
+        private readonly Dictionary<string, float> _downloadFailedAt = new();
         private readonly Queue<(string assetId, Action<GameObject> callback)> _downloadQueue = new();
         private int _activeDownloads = 0;
         private const int MAX_CONCURRENT_DOWNLOADS = 4;
@@ -249,18 +251,41 @@ namespace Orlo.World
         }
 
         /// <summary>
-        /// Returns true if a previous CDN download for this assetId failed (404 or error).
+        /// Returns true if a previous CDN download for this assetId failed within the retry cooldown window.
+        /// After CDN_RETRY_COOLDOWN_SEC elapses since the failure, the entry is considered stale and retryable.
         /// </summary>
-        public bool IsDownloadFailed(string assetId) => _downloadFailed.Contains(assetId);
+        public bool IsDownloadFailed(string assetId)
+        {
+            if (!_downloadFailedAt.TryGetValue(assetId, out float failedAt)) return false;
+            return (Time.realtimeSinceStartup - failedAt) < CDN_RETRY_COOLDOWN_SEC;
+        }
+
+        /// <summary>
+        /// Clear all CDN failure + missing-asset records, allowing every previously-failed asset to retry immediately.
+        /// Use when the player requests a manual retry (e.g. "retry missing assets" UI button) or when network connectivity is restored.
+        /// </summary>
+        public void RetryAllFailed()
+        {
+            _downloadFailedAt.Clear();
+            _missingAssets.Clear();
+        }
 
         /// <summary>
         /// Queue a CDN download for a missing GLB model.
         /// When the download completes, onComplete is called with the new GameObject (or null on failure).
+        /// Failures are remembered for CDN_RETRY_COOLDOWN_SEC; after that, QueueDownload will retry.
         /// </summary>
         public void QueueDownload(string assetId, Action<GameObject> onComplete)
         {
             if (string.IsNullOrEmpty(assetId)) { onComplete?.Invoke(null); return; }
-            if (_downloading.Contains(assetId) || _downloadFailed.Contains(assetId)) return;
+            if (_downloading.Contains(assetId)) return;
+
+            // Honour cooldown: if we recently failed, skip. If enough time has passed, drop the entry and retry.
+            if (_downloadFailedAt.TryGetValue(assetId, out float failedAt))
+            {
+                if ((Time.realtimeSinceStartup - failedAt) < CDN_RETRY_COOLDOWN_SEC) return;
+                _downloadFailedAt.Remove(assetId);
+            }
 
             _downloading.Add(assetId);
             _downloadQueue.Enqueue((assetId, onComplete));
@@ -288,8 +313,8 @@ namespace Orlo.World
 
                 if (request.result != UnityWebRequest.Result.Success)
                 {
-                    Debug.LogWarning($"[AssetLoader] CDN download failed for {assetId}: {request.error} (HTTP {request.responseCode})");
-                    _downloadFailed.Add(assetId);
+                    Debug.LogWarning($"[AssetLoader] CDN download failed for {assetId}: {request.error} (HTTP {request.responseCode}) — will retry after {CDN_RETRY_COOLDOWN_SEC}s");
+                    _downloadFailedAt[assetId] = Time.realtimeSinceStartup;
                     _downloading.Remove(assetId);
                     _activeDownloads--;
                     ProcessDownloadQueue();
@@ -328,14 +353,14 @@ namespace Orlo.World
                     }
                     else
                     {
-                        Debug.LogWarning($"[AssetLoader] CDN model {assetId}.glb contained no meshes");
-                        _downloadFailed.Add(assetId);
+                        Debug.LogWarning($"[AssetLoader] CDN model {assetId}.glb contained no meshes — will retry after {CDN_RETRY_COOLDOWN_SEC}s");
+                        _downloadFailedAt[assetId] = Time.realtimeSinceStartup;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"[AssetLoader] Failed to parse CDN model {assetId}.glb: {ex.Message}");
-                    _downloadFailed.Add(assetId);
+                    Debug.LogError($"[AssetLoader] Failed to parse CDN model {assetId}.glb: {ex.Message} — will retry after {CDN_RETRY_COOLDOWN_SEC}s");
+                    _downloadFailedAt[assetId] = Time.realtimeSinceStartup;
                 }
 
                 _downloading.Remove(assetId);
@@ -352,7 +377,7 @@ namespace Orlo.World
         {
             _cache.Clear();
             _missingAssets.Clear();
-            _downloadFailed.Clear();
+            _downloadFailedAt.Clear();
         }
 
         // ─── Instantiation ──────────────────────────────────────────────

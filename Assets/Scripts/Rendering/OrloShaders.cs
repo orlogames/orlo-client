@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Orlo.Rendering
@@ -8,6 +9,43 @@ namespace Orlo.Rendering
     /// </summary>
     public static class OrloShaders
     {
+        /// <summary>
+        /// Strong references to URP stock shaders to prevent Unity from stripping them
+        /// out of builds when no scene material references them directly.
+        /// Paired with entries in ProjectSettings/GraphicsSettings.asset m_AlwaysIncludedShaders
+        /// for belt-and-braces inclusion. Populated at startup by ForceShaderLoad().
+        /// </summary>
+        private static readonly List<Shader> _keepAlive = new List<Shader>();
+
+        /// <summary>
+        /// Force-load critical URP shaders at startup so they are retained in the player build.
+        /// Runs before the first scene loads; results are stashed in a static list to prevent GC.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void ForceShaderLoad()
+        {
+            _keepAlive.Clear();
+
+            TryAddShader("Universal Render Pipeline/Lit");
+            TryAddShader("Universal Render Pipeline/Unlit");
+            TryAddShader("Universal Render Pipeline/Simple Lit");
+            TryAddShader("Universal Render Pipeline/Particles/Unlit");
+            TryAddShader("Universal Render Pipeline/Particles/Lit");
+        }
+
+        private static void TryAddShader(string name)
+        {
+            var s = Shader.Find(name);
+            if (s != null)
+            {
+                _keepAlive.Add(s);
+            }
+            else
+            {
+                Debug.LogWarning($"[OrloShaders] Shader not found at startup: '{name}'. Materials using it will render magenta. Ensure it is in GraphicsSettings m_AlwaysIncludedShaders.");
+            }
+        }
+
         // URP Lit shader name
         private const string URP_LIT = "Universal Render Pipeline/Lit";
         private const string URP_UNLIT = "Universal Render Pipeline/Unlit";
