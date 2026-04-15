@@ -168,12 +168,26 @@ namespace Orlo.World
         /// <summary>
         /// Try to load a GLB model for the item via AssetLoader.
         /// Returns an instantiated GameObject or null if no GLB exists.
+        /// Prefers the server-authoritative AssetId; falls back to client-side
+        /// mapping from item name / id if AssetId is empty or load fails.
         /// </summary>
         private GameObject TryLoadGlbVisual(InventoryUI.ItemSlot item)
         {
             if (AssetLoader.Instance == null) return null;
 
-            // Try loading by item name converted to asset ID (lowercase, underscored)
+            // 1) Server-authoritative asset_id (preferred path)
+            if (!string.IsNullOrEmpty(item.AssetId))
+            {
+                var authoritative = AssetLoader.Instance.TryLoadModel(item.AssetId);
+                if (authoritative != null)
+                {
+                    Debug.Log($"[EquipVisual] Loaded GLB model for '{item.Name}' via server AssetId='{item.AssetId}'");
+                    return authoritative;
+                }
+                // Fall through to legacy fallbacks so we never silently show nothing.
+            }
+
+            // 2) Legacy fallback: item name converted to asset ID (lowercase, underscored)
             string assetId = item.Name.ToLowerInvariant().Replace(' ', '_');
             var model = AssetLoader.Instance.TryLoadModel(assetId);
             if (model != null)
@@ -182,7 +196,7 @@ namespace Orlo.World
                 return model;
             }
 
-            // Also try with item ID if available
+            // 3) Legacy fallback: numeric item id
             if (item.ItemId > 0)
             {
                 string idAsset = $"item_{item.ItemId}";

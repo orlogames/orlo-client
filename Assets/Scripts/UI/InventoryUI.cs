@@ -67,6 +67,7 @@ namespace Orlo.UI
             public float MaxCondition;
             public string CraftedBy;
             public uint[] ResourceAttrs; // 11 quality attributes (0-1000), null if not a resource
+            public string AssetId;     // Server-authoritative GLB model name (empty = use fallback)
         }
 
         private ItemSlot[] _slots;

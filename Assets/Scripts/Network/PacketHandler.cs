@@ -1037,7 +1037,8 @@ namespace Orlo.Network
                 Condition = item.Condition > 0 ? item.Condition : 1f,
                 MaxCondition = item.MaxCondition > 0 ? item.MaxCondition : 1f,
                 CraftedBy = item.CraftedBy ?? "",
-                ResourceAttrs = resAttrs
+                ResourceAttrs = resAttrs,
+                AssetId = item.AssetId ?? ""
             };
         }
 

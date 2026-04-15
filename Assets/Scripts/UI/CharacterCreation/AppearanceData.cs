@@ -132,6 +132,7 @@ namespace Orlo.UI.CharacterCreation
 
         // ─── Hair ──────────────────────────────────────────────────────────
         public int HairStyle = 0;         // 0-7 male, 8-15 female (gender-specific)
+        public string HairAssetId = "";   // Server-authoritative GLB mesh name (empty = fall back to HairStyle table)
         public float HairLength = 0.5f;
         public float HairThickness = 0.5f;
         public float HairCurl = 0f;
@@ -411,6 +412,7 @@ namespace Orlo.UI.CharacterCreation
             if (proto.HairParams != null)
             {
                 HairStyle = (int)proto.HairParams.BaseStyle;
+                HairAssetId = proto.HairParams.AssetId ?? "";
                 HairLength = proto.HairParams.Length;
                 HairThickness = proto.HairParams.Thickness;
                 HairCurl = proto.HairParams.CurlAmount;

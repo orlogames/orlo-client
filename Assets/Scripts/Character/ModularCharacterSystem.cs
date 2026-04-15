@@ -210,8 +210,12 @@ namespace Orlo.Character
             if (!_initialized || appearance == null) return;
             _appearance = appearance;
 
-            // Swap hair mesh if style changed
-            UpdateHairStyle(appearance.HairStyle);
+            // Swap hair mesh if style changed — prefer server-authoritative AssetId
+            // when it's been populated, otherwise fall back to the enum-indexed table.
+            if (!string.IsNullOrEmpty(appearance.HairAssetId))
+                UpdateHairStyle(appearance.HairAssetId);
+            else
+                UpdateHairStyle(appearance.HairStyle);
 
             foreach (var kvp in _slots)
             {
@@ -511,6 +515,7 @@ namespace Orlo.Character
         };
 
         private int _lastHairStyle = -1;
+        private string _lastHairAssetId = null;
 
         /// <summary>
         /// Swap the hair mesh when hair style changes.
@@ -521,6 +526,7 @@ namespace Orlo.Character
             if (!_initialized) return;
             if (hairStyle == _lastHairStyle) return;
             _lastHairStyle = hairStyle;
+            _lastHairAssetId = null;
 
             if (hairStyle < 0 || hairStyle >= HairAssetIds.Length)
             {
@@ -537,6 +543,37 @@ namespace Orlo.Character
             SetSlotFromAsset(BodySlot.Hair, assetId);
 
             // Make sure hair slot is visible
+            if (_slots.TryGetValue(BodySlot.Hair, out var hairState))
+            {
+                if (hairState.Renderer != null)
+                    hairState.Renderer.enabled = true;
+            }
+        }
+
+        /// <summary>
+        /// Swap the hair mesh using the server-authoritative asset id string
+        /// (e.g. "hair_f_long"). Empty string = hide the hair slot (bald).
+        /// </summary>
+        public void UpdateHairStyle(string hairAssetId)
+        {
+            if (!_initialized) return;
+            if (hairAssetId == _lastHairAssetId) return;
+            _lastHairAssetId = hairAssetId;
+            _lastHairStyle = -1;
+
+            if (string.IsNullOrEmpty(hairAssetId))
+            {
+                // Empty asset_id = no mesh (e.g. HairStyle::Bald)
+                if (_slots.TryGetValue(BodySlot.Hair, out var state))
+                {
+                    if (state.Renderer != null)
+                        state.Renderer.enabled = false;
+                }
+                return;
+            }
+
+            SetSlotFromAsset(BodySlot.Hair, hairAssetId);
+
             if (_slots.TryGetValue(BodySlot.Hair, out var hairState))
             {
                 if (hairState.Renderer != null)
