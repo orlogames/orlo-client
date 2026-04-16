@@ -294,8 +294,15 @@ namespace Orlo.UI.CharacterCreation
 
                 GUI.DrawTexture(texRect, _preview.PreviewTexture, ScaleMode.ScaleToFit);
 
-                // Handle orbit input
-                _preview.HandleOrbitInput(texRect);
+                // Direct-manipulation pivot circles on tabs that benefit from them.
+                // Process pivots BEFORE orbit input so a pivot drag consumes the event
+                // and the camera doesn't also rotate.
+                if (TabUsesFacePivots(_currentTab))
+                    FacePivotOverlay.Draw(texRect, _data);
+
+                // Handle orbit input (suppressed if a pivot is being dragged)
+                if (!FacePivotOverlay.IsDragging)
+                    _preview.HandleOrbitInput(texRect);
             }
             else
             {
@@ -531,6 +538,13 @@ namespace Orlo.UI.CharacterCreation
             GUI.Label(new Rect(4, y, w, 30), RaceDescriptions[_data.Race], _descStyle);
 
             GUI.EndScrollView();
+        }
+
+        // Pivots only make sense on tabs that show the face up close.
+        private static bool TabUsesFacePivots(int tab)
+        {
+            // 1=Face, 4=Hair, 5=Eyes, 6=Makeup, 7=Scars/Voice, 9=Race Features
+            return tab == 1 || tab == 4 || tab == 5 || tab == 6 || tab == 7 || tab == 9;
         }
 
         // ─── Tab Changes ───────────────────────────────────────────────────

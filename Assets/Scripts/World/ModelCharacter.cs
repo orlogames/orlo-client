@@ -79,9 +79,17 @@ namespace Orlo.World
                 _modelRoot = new GameObject("CharacterModel");
                 _modelRoot.transform.SetParent(transform, false);
 
-                // Auto-detect model orientation from mesh bounds:
-                // If the model is taller in Z than Y, it's Z-up and needs -90° X.
-                // If it's taller in Y, it's already Y-up (no correction needed).
+                // Auto-detect model orientation from mesh bounds. Different tools
+                // export GLBs with different up-axis conventions and even different
+                // head-polarity along that axis. We handle four cases:
+                //
+                //   Y-up, head at +Y       → (0, 180, 0)    normal glTF
+                //   Y-up, head at -Y       → (0, 180, 180)  inverted (e.g. Blender origin at top)
+                //   Z-up, head at +Z       → (-90, 180, 0)  standard Blender export (Z was flipped
+                //                                           for handedness, so head is now at -Z)
+                //   Z-up, head at -Z       → (90, 180, 0)   inverted Z-up
+                //
+                // The 180° Y flip is always applied so the GLB's -Z forward faces the camera.
                 Bounds combinedBounds = default;
                 bool boundsInit = false;
                 foreach (var m in meshes)
@@ -89,12 +97,35 @@ namespace Orlo.World
                     if (!boundsInit) { combinedBounds = m.mesh.bounds; boundsInit = true; }
                     else combinedBounds.Encapsulate(m.mesh.bounds);
                 }
-                bool isZUp = boundsInit && combinedBounds.size.z > combinedBounds.size.y * 1.2f;
-                if (isZUp)
-                    _modelRoot.transform.localRotation = Quaternion.Euler(-90f, 180f, 0f);
-                else
-                    _modelRoot.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
-                // 180° Y flips model to face away from camera (GLB models face -Z by default)
+
+                Quaternion orientationFix = Quaternion.Euler(0f, 180f, 0f); // fallback
+                if (boundsInit)
+                {
+                    Vector3 sz = combinedBounds.size;
+                    Vector3 ctr = combinedBounds.center;
+                    bool yIsTallest = sz.y >= sz.x && sz.y >= sz.z;
+                    bool zIsTallest = !yIsTallest && sz.z > sz.x;
+
+                    if (yIsTallest)
+                    {
+                        // Y is the head-feet axis. Positive center.y → head at +Y (standard).
+                        // Negative center.y → head at -Y (inverted; flip via Z-axis 180°).
+                        orientationFix = ctr.y >= 0f
+                            ? Quaternion.Euler(0f, 180f, 0f)
+                            : Quaternion.Euler(0f, 180f, 180f);
+                    }
+                    else if (zIsTallest)
+                    {
+                        // Z was flipped during handedness conversion. If the original model
+                        // was standard Z-up (head at +Z), bounds now center at negative Z.
+                        // If it was inverted Z-up (head at -Z originally), bounds center at +Z.
+                        orientationFix = ctr.z <= 0f
+                            ? Quaternion.Euler(-90f, 180f, 0f)
+                            : Quaternion.Euler(90f, 180f, 0f);
+                    }
+                    // X-tallest → unusual (character lying on side). Leave default.
+                }
+                _modelRoot.transform.localRotation = orientationFix;
 
                 // Create a combined mesh from all primitives
                 foreach (var meshData in meshes)

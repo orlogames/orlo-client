@@ -114,22 +114,33 @@ namespace Orlo.UI.CharacterCreation
         public void SetFocusMode(FocusMode mode)
         {
             _currentFocus = mode;
+
+            // Scale all framing to the loaded model's height so Face mode zooms
+            // to the actual face regardless of model size.
+            float h = 1.8f;
+            if (_modelCharacter != null && _modelCharacter.IsLoaded)
+                h = Mathf.Clamp(_modelCharacter.GetModelHeight(), 0.8f, 3.5f);
+
             switch (mode)
             {
                 case FocusMode.FullBody:
-                    _orbitTarget = new Vector3(0f, 0.9f, 0f);
-                    _orbitDistance = 3f;
+                    // Frame the whole body. LateUpdate also re-targets to GetModelCenter().
+                    _orbitTarget = new Vector3(0f, h * 0.5f, 0f);
+                    _orbitDistance = h * 1.8f;
                     _orbitPitch = 10f;
                     break;
                 case FocusMode.Face:
-                    _orbitTarget = new Vector3(0f, 1.65f, 0f);
-                    _orbitDistance = 1.2f;
-                    _orbitPitch = 5f;
+                    // Face is near the top. Eye level ~0.93 of model height, chin ~0.88.
+                    _orbitTarget = new Vector3(0f, h * 0.92f, 0f);
+                    _orbitDistance = h * 0.35f;   // close-up for sculpting
+                    _orbitPitch = 0f;             // look straight on
+                    // Reset yaw so the face is centered when the tab is opened.
+                    _orbitYaw = 180f;
                     break;
                 case FocusMode.UpperBody:
-                    _orbitTarget = new Vector3(0f, 1.2f, 0f);
-                    _orbitDistance = 2f;
-                    _orbitPitch = 8f;
+                    _orbitTarget = new Vector3(0f, h * 0.7f, 0f);
+                    _orbitDistance = h * 1.1f;
+                    _orbitPitch = 5f;
                     break;
             }
         }
@@ -193,11 +204,26 @@ namespace Orlo.UI.CharacterCreation
         {
             if (_previewCamera == null) return;
 
-            // If model loaded, adjust orbit target to model center
-            if (_usingModel && _modelCharacter != null && _modelCharacter.IsLoaded &&
-                _currentFocus == FocusMode.FullBody)
+            // If model loaded, auto-track orbit target to the right region per focus mode.
+            // This keeps the camera glued to the head when the model's proportions change
+            // (e.g. racial height) or after body morph sliders move vertices.
+            if (_usingModel && _modelCharacter != null && _modelCharacter.IsLoaded)
             {
-                _orbitTarget = _modelCharacter.GetModelCenter();
+                var center = _modelCharacter.GetModelCenter();
+                float mh = Mathf.Max(0.8f, _modelCharacter.GetModelHeight());
+                switch (_currentFocus)
+                {
+                    case FocusMode.FullBody:
+                        _orbitTarget = center;
+                        break;
+                    case FocusMode.Face:
+                        // Head is near the top. Track Y, keep X/Z centered.
+                        _orbitTarget = new Vector3(center.x, mh * 0.92f, center.z);
+                        break;
+                    case FocusMode.UpperBody:
+                        _orbitTarget = new Vector3(center.x, mh * 0.7f, center.z);
+                        break;
+                }
             }
 
             float yawRad = _orbitYaw * Mathf.Deg2Rad;
@@ -355,9 +381,10 @@ namespace Orlo.UI.CharacterCreation
                 _vertexDeformer = _characterGO.AddComponent<Orlo.Animation.VertexDeformer>();
                 _vertexDeformer.Initialize();
 
-                // Adjust camera for real model dimensions
-                _orbitTarget = new Vector3(0f, modelHeight * 0.5f, 0f);
-                _orbitDistance = modelHeight * 1.8f;
+                // Adjust camera framing now that we know the real model height.
+                // Re-apply whichever focus mode is currently selected (Face, Body, etc.)
+                // so switching between tabs BEFORE the model loaded still zooms correctly.
+                SetFocusMode(_currentFocus);
 
                 Debug.Log($"[CharacterPreview] Loaded {modelFile} (height: {modelHeight:F2}m) " +
                     $"with ModularCharacterSystem + VertexDeformer");
