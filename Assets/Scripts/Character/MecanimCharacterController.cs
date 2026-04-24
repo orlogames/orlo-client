@@ -73,26 +73,27 @@ namespace Orlo.Character
 
             if (_animator == null)
             {
-                // If the model has a SkinnedMeshRenderer but no Animator,
-                // add one. It won't animate without a controller, but it
-                // prevents errors and allows animation clips to be assigned later.
+                // Only create an Animator component when a valid controller is available.
+                // Adding a blank Animator (no controller) to a GameObject that owns a
+                // SkinnedMeshRenderer causes Unity to claim the bone Transforms and force
+                // them to T-pose every frame, overriding whatever CharacterAnimator sets.
+                // Until animation clips are wired in, CharacterAnimator handles all
+                // procedural locomotion; we simply don't touch the Mecanim stack.
                 var smr = GetComponentInChildren<SkinnedMeshRenderer>();
                 if (smr != null)
                 {
-                    _animator = gameObject.AddComponent<Animator>();
-                    _animator.applyRootMotion = false;
-
-                    // Try to load a runtime animator controller from Resources
                     var controller = Resources.Load<RuntimeAnimatorController>("Animation/HumanoidController");
                     if (controller != null)
                     {
+                        _animator = gameObject.AddComponent<Animator>();
+                        _animator.applyRootMotion = false;
                         _animator.runtimeAnimatorController = controller;
                         Debug.Log("[MecanimChar] Loaded HumanoidController from Resources");
                     }
                     else
                     {
-                        Debug.LogWarning("[MecanimChar] No HumanoidController in Resources/Animation/ — " +
-                                       "character will be in T-pose until animation clips are added");
+                        Debug.Log("[MecanimChar] No HumanoidController in Resources/Animation/ — " +
+                                  "CharacterAnimator will handle procedural locomotion until clips are added");
                     }
                 }
             }

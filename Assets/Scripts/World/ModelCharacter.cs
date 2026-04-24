@@ -136,15 +136,29 @@ namespace Orlo.World
                     }
                     // X-tallest → unusual (character lying on side). Leave default.
                 }
-                _modelRoot.transform.localRotation = orientationFix;
+                // For skinned meshes the bindposes are baked in the GLB coordinate space
+                // (after the Z-flip handedness conversion applied in ParseGlb). Applying an
+                // additional orientationFix rotation to _modelRoot would shift the deformed
+                // mesh because the bindposes don't account for the extra rotation.
+                // Skinned characters face the correct direction via the player root's rotation
+                // driven by PlayerController; unskinned props/static meshes still need the fix.
+                bool hasSkin = skinNodes != null && skinNodes.nodeIndices.Count > 0;
+                _modelRoot.transform.localRotation = hasSkin ? Quaternion.identity : orientationFix;
 
                 // Y-offset the rotated mesh so its feet (lowest post-rotation Y) sit at the parent
                 // transform's origin. Without this, GLBs whose source mesh origin is at the body
                 // centre — e.g. Z-up Blender exports centred on (0,0,0) — render with the navel
                 // landing at transform.position and the feet buried below ground.
+                //
+                // For SKINNED meshes the static parse-time bounds don't reflect the runtime
+                // skinned bounds — the root bone's bind-pose translation does. The armorer's
+                // bind-pose feet sit at Y≈0 already (POSITION min y ≈ 0.007), so applying
+                // the static offset floats the character ~5cm above the ground. We compute
+                // the static offset here for the unskinned path and skip it on skinned ones
+                // (see the post-renderer-loop assignment below).
                 Vector3 rotMin = orientationFix * combinedBounds.min;
                 Vector3 rotMax = orientationFix * combinedBounds.max;
-                _modelRoot.transform.localPosition = new Vector3(0f, -Mathf.Min(rotMin.y, rotMax.y), 0f);
+                float staticFeetOffset = -Mathf.Min(rotMin.y, rotMax.y);
 
                 // Build a shared Transform for every glTF node referenced by any skin.
                 // Each such Transform becomes a skeleton bone under _modelRoot and the
@@ -201,6 +215,13 @@ namespace Orlo.World
                         meshRenderer.material = mat;
                     }
                 }
+
+                // Apply the deferred Y-offset. For unskinned meshes we keep the historical
+                // static-bounds correction (fixes the navel-sink for body-centred exports).
+                // For skinned meshes the bind pose already places feet at Y≈0, so applying
+                // any static offset just floats the character — leave it at zero.
+                _modelRoot.transform.localPosition =
+                    new Vector3(0f, anySkinned ? 0f : staticFeetOffset, 0f);
 
                 _renderers = _modelRoot.GetComponentsInChildren<Renderer>(true);
                 CacheInstancedMaterials();
@@ -1107,12 +1128,19 @@ namespace Orlo.World
                     }
                 }
 
-                // DDS found → warn, skip. Proper DDS decoding is a separate work item.
+                // DDS sidecar — decoded via DdsTextureLoader (DXT1/3/5 supported; DX10 +
+                // BC4/5/6/7 return null with a warning). Falls through to the next
+                // basename on unsupported formats so we keep probing alternates.
                 string dds = Path.Combine(dir, bn + ".dds");
                 if (File.Exists(dds))
                 {
-                    Debug.LogWarning($"[ModelCharacter] DDS sidecar found but not yet supported: {dds} " +
-                                     "(TODO: implement DDS → Texture2D decode)");
+                    var ddsTex = DdsTextureLoader.Load(File.ReadAllBytes(dds), dds);
+                    if (ddsTex != null)
+                    {
+                        tex = ddsTex;
+                        matchedPath = dds;
+                        return true;
+                    }
                 }
             }
 
