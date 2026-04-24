@@ -917,19 +917,40 @@ namespace Orlo
                     var existingSMR = modelChar.GetModelRoot().GetComponentInChildren<SkinnedMeshRenderer>();
                     if (existingSMR != null && existingSMR.bones != null && existingSMR.bones.Length > 5)
                     {
-                        // Model is properly rigged — use modular character system + Mecanim
+                        // Model is properly rigged — use modular character system.
                         var modular = player.AddComponent<Orlo.Character.ModularCharacterSystem>();
                         modular.InitializeFromRiggedModel(modelChar.GetModelRoot());
 
-                        // Mecanim animation controller (replaces procedural walk cycle)
-                        var mecanim = player.AddComponent<Orlo.Character.MecanimCharacterController>();
+                        // Animation routing decision:
+                        //   • If a Mecanim RuntimeAnimatorController ships in
+                        //     Resources/Animation/HumanoidController, use Mecanim.
+                        //   • Otherwise (current state — no controller authored yet),
+                        //     drive the rig procedurally via CharacterAnimator. We must
+                        //     NOT instantiate MecanimCharacterController in this case,
+                        //     because its TryInitialize would add a controllerless Animator
+                        //     to the player root that pins the rig at bind pose (T-pose)
+                        //     and pre-empts CharacterAnimator's bone writes.
+                        var mecanimController = Resources.Load<RuntimeAnimatorController>(
+                            "Animation/HumanoidController");
+                        if (mecanimController != null)
+                        {
+                            player.AddComponent<Orlo.Character.MecanimCharacterController>();
+                            Debug.Log("[Orlo] Using ModularCharacterSystem + Mecanim (HumanoidController found)");
+                        }
+                        else
+                        {
+                            // Procedural fallback: CharacterAnimator finds the rigged bones
+                            // by alias (PR #10's bone-remap table) and drives them itself.
+                            player.AddComponent<CharacterAnimator>();
+                            Debug.Log("[Orlo] Using ModularCharacterSystem + procedural CharacterAnimator " +
+                                     "(no HumanoidController in Resources/Animation/ — Mecanim disabled to avoid T-pose)");
+                        }
 
                         // Apply appearance from server spawn data
                         var appearance = AppearanceFromSpawn(spawn);
                         modular.ApplyAppearance(appearance);
 
                         useModular = true;
-                        Debug.Log("[Orlo] Using ModularCharacterSystem + Mecanim (rigged model detected)");
                     }
                 }
 

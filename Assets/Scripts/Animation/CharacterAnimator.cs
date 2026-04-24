@@ -124,7 +124,23 @@ namespace Orlo.Animation
             CaptureBindPose(_rightFoot);
 
             _initialized = true;
+
+            // One-shot discovery report so Stepo can see exactly which bones the
+            // alias resolver picked up (or didn't). Names come from the rigged GLB
+            // — typically SWG-style "root" / "lthigh" / "larm" rather than the
+            // canonical Unity Humanoid keys we ask for. SetBone already null-guards
+            // so any "<null>" entries below are silently skipped during playback.
+            Debug.Log(
+                $"[CharacterAnimator] Initialized. Found bones: " +
+                $"Hips={Name(_hips)}, Spine={Name(_spine)}, Chest={Name(_chest)}, " +
+                $"Neck={Name(_neck)}, Head={Name(_head)}, " +
+                $"LUpperArm={Name(_leftUpperArm)}, LLowerArm={Name(_leftLowerArm)}, " +
+                $"RUpperArm={Name(_rightUpperArm)}, RLowerArm={Name(_rightLowerArm)}, " +
+                $"LUpperLeg={Name(_leftUpperLeg)}, LLowerLeg={Name(_leftLowerLeg)}, LFoot={Name(_leftFoot)}, " +
+                $"RUpperLeg={Name(_rightUpperLeg)}, RLowerLeg={Name(_rightLowerLeg)}, RFoot={Name(_rightFoot)}");
         }
+
+        private static string Name(Transform t) => t == null ? "<null>" : t.name;
 
         private void UpdateState()
         {
