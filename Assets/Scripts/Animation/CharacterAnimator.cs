@@ -12,6 +12,31 @@ namespace Orlo.Animation
     {
         public enum AnimState { Idle, Walk, Run, Jump, Fall }
 
+        // Aliases for the canonical Unity Humanoid bone names we drive procedurally.
+        // Entry 0 for each key is always the canonical name, so the existing lookup
+        // behaviour remains the first attempt. Subsequent aliases cover SWG-style
+        // Orlo rig names (root/spine1/larm/lforearm/lthigh/lshin/lankle/...),
+        // generic Blender/Unity-bridge names (LeftArm, LeftForeArm), and the
+        // underscore/lowercase variants Stepo's bone generator emits.
+        private static readonly Dictionary<string, string[]> BoneAliases = new()
+        {
+            ["Hips"]          = new[] { "Hips", "hips", "root", "Root", "pelvis" },
+            ["Spine"]         = new[] { "Spine", "spine", "spine1", "spine_01" },
+            ["Chest"]         = new[] { "Chest", "chest", "spine2", "spine3", "spine_02", "spine_03" },
+            ["Neck"]          = new[] { "Neck", "neck" },
+            ["Head"]          = new[] { "Head", "head" },
+            ["LeftUpperArm"]  = new[] { "LeftUpperArm", "l_upper_arm", "larm", "l_arm", "LeftArm" },
+            ["LeftLowerArm"]  = new[] { "LeftLowerArm", "l_forearm", "lforearm", "LeftForeArm" },
+            ["RightUpperArm"] = new[] { "RightUpperArm", "r_upper_arm", "rarm", "r_arm", "RightArm" },
+            ["RightLowerArm"] = new[] { "RightLowerArm", "r_forearm", "rforearm", "RightForeArm" },
+            ["LeftUpperLeg"]  = new[] { "LeftUpperLeg", "l_thigh", "lthigh", "LeftLeg" },
+            ["LeftLowerLeg"]  = new[] { "LeftLowerLeg", "l_shin", "lshin", "LeftCalf" },
+            ["LeftFoot"]      = new[] { "LeftFoot", "l_ankle", "lankle", "l_foot" },
+            ["RightUpperLeg"] = new[] { "RightUpperLeg", "r_thigh", "rthigh", "RightLeg" },
+            ["RightLowerLeg"] = new[] { "RightLowerLeg", "r_shin", "rshin", "RightCalf" },
+            ["RightFoot"]     = new[] { "RightFoot", "r_ankle", "rankle", "r_foot" },
+        };
+
         private AnimationProfile _profile = AnimationProfile.Humanoid;
         private AnimState _currentState = AnimState.Idle;
         private AnimState _targetState = AnimState.Idle;
@@ -270,8 +295,25 @@ namespace Orlo.Animation
         private Transform FindBone(string name)
         {
             var all = GetComponentsInChildren<Transform>(true);
+
+            // First attempt: preserve historical behaviour — exact-match on the requested
+            // name. Anything that worked before this PR continues to resolve identically.
             foreach (var t in all)
                 if (t.name == name) return t;
+
+            // Second attempt: if the requested name has an alias set, iterate the aliases
+            // in priority order and do a case-insensitive match against every descendant.
+            if (BoneAliases.TryGetValue(name, out var aliases))
+            {
+                foreach (var alias in aliases)
+                {
+                    if (alias == name) continue; // already tried as exact match
+                    foreach (var t in all)
+                        if (string.Equals(t.name, alias, System.StringComparison.OrdinalIgnoreCase))
+                            return t;
+                }
+            }
+
             return null;
         }
     }
