@@ -20,6 +20,9 @@ namespace Orlo.World
         private Renderer[] _renderers;
         private Material[] _instancedMaterials;
         private bool _loaded;
+        // Set when LoadModel resolves the GLB from a loose file on disk (vs. from a pak
+        // archive). Used by TryLoadTextureSidecars to probe the same directory for PNGs.
+        private string _glbDiskPath;
 
         /// <summary>Whether the model has finished loading.</summary>
         public bool IsLoaded => _loaded;
@@ -38,6 +41,9 @@ namespace Orlo.World
                 assetId = assetId.Substring(0, assetId.Length - 4);
 
             byte[] glbData = null;
+            // Disk path the GLB was loaded from (null when sourced from a pak archive);
+            // drives the sidecar texture probe below.
+            string loadedFromPath = null;
 
             // Try pak archive chain via AssetLoader first
             var loader = AssetLoader.Instance;
@@ -55,8 +61,12 @@ namespace Orlo.World
             {
                 string path = Path.Combine(Application.streamingAssetsPath, "Characters", glbFileName);
                 if (File.Exists(path))
+                {
                     glbData = File.ReadAllBytes(path);
+                    loadedFromPath = path;
+                }
             }
+            _glbDiskPath = loadedFromPath;
 
             if (glbData == null)
             {
@@ -168,6 +178,14 @@ namespace Orlo.World
 
                 Debug.Log($"[ModelCharacter] Loaded {glbFileName}: {meshes.Count} mesh(es), " +
                           $"{_renderers.Length} renderers, {totalBlendShapes} blendshapes");
+
+                // ─── Sidecar texture probing ──────────────────────────────
+                // Orlo character GLBs do not embed textures. Probe the GLB's own
+                // directory for the canonical PNG sidecars Stepo's export pipeline
+                // writes (*_diffuse/_albedo, *_normal, *_metallic_roughness/_orm,
+                // *_emissive). Any slot that came back null from the GLB is filled
+                // from disk and the material is re-applied on each renderer.
+                TryLoadTextureSidecars(glbFileName, meshes);
 
                 _loaded = true;
 
@@ -619,6 +637,108 @@ namespace Orlo.World
                 }
             }
             return result;
+        }
+
+        /// <summary>
+        /// Probe the GLB's on-disk directory for per-slot sidecar PNGs
+        /// (_diffuse/_albedo, _normal, _metallic_roughness/_orm, _emissive). When a
+        /// material slot came back null from the GLB and a matching sidecar is found,
+        /// load it into a Texture2D, stuff it into the MaterialData, and re-apply the
+        /// PBR material onto each renderer so the new texture takes effect immediately.
+        /// No-op when the GLB was sourced from a pak archive (we don't have a directory
+        /// to probe) or when no sidecars exist on disk.
+        /// </summary>
+        private void TryLoadTextureSidecars(string glbFileName, List<ParsedMesh> meshes)
+        {
+            if (string.IsNullOrEmpty(_glbDiskPath)) return;
+            string dir = Path.GetDirectoryName(_glbDiskPath);
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
+
+            string baseName = Path.GetFileNameWithoutExtension(glbFileName);
+
+            // Per-slot candidate sidecar basenames (relative to the GLB directory, no extension).
+            // Extensions are tried in order: .png, .jpg, then .dds (warn-only).
+            string[] albedoCandidates    = { $"{baseName}_diffuse", $"{baseName}_albedo", $"{baseName}" };
+            string[] normalCandidates    = { $"{baseName}_normal" };
+            string[] mrCandidates        = { $"{baseName}_metallic_roughness", $"{baseName}_orm" };
+            string[] emissiveCandidates  = { $"{baseName}_emissive" };
+
+            bool anyApplied = false;
+            for (int mi = 0; mi < meshes.Count; mi++)
+            {
+                var matData = meshes[mi].material;
+                bool changed = false;
+
+                if (matData.albedoTex == null && TryLoadSidecar(dir, albedoCandidates, out var albedo, out var albedoPath))
+                { matData.albedoTex = albedo; changed = true;
+                  Debug.Log($"[ModelCharacter] Sidecar albedo: {albedoPath}"); }
+
+                if (matData.normalTex == null && TryLoadSidecar(dir, normalCandidates, out var normal, out var normalPath))
+                { matData.normalTex = normal; changed = true;
+                  Debug.Log($"[ModelCharacter] Sidecar normal: {normalPath}"); }
+
+                if (matData.metallicRoughnessTex == null && TryLoadSidecar(dir, mrCandidates, out var mr, out var mrPath))
+                { matData.metallicRoughnessTex = mr; changed = true;
+                  Debug.Log($"[ModelCharacter] Sidecar metallic/roughness: {mrPath}"); }
+
+                if (matData.emissiveTex == null && TryLoadSidecar(dir, emissiveCandidates, out var em, out var emPath))
+                { matData.emissiveTex = em; changed = true;
+                  Debug.Log($"[ModelCharacter] Sidecar emissive: {emPath}"); }
+
+                if (changed && _renderers != null && mi < _renderers.Length && _renderers[mi] != null)
+                {
+                    // Re-apply on the renderer's instanced material. CacheInstancedMaterials
+                    // has already run at this point, so each renderer owns a unique material.
+                    foreach (var m in _renderers[mi].materials)
+                        AssetLoader.ApplyPbrMaterial(m, matData);
+                    anyApplied = true;
+                }
+            }
+
+            if (anyApplied)
+            {
+                // Refresh the instanced-material cache so UpdateAppearance tints the new mats.
+                CacheInstancedMaterials();
+            }
+        }
+
+        /// <summary>
+        /// Try each basename against .png/.jpg (loaded as Texture2D) and .dds (warn-only).
+        /// Returns the first hit, or false if nothing matches.
+        /// </summary>
+        private static bool TryLoadSidecar(string dir, string[] baseNames, out Texture2D tex, out string matchedPath)
+        {
+            tex = null;
+            matchedPath = null;
+
+            foreach (var bn in baseNames)
+            {
+                // Prefer PNG, then JPG.
+                foreach (var ext in new[] { ".png", ".jpg", ".jpeg" })
+                {
+                    string p = Path.Combine(dir, bn + ext);
+                    if (File.Exists(p))
+                    {
+                        var t = new Texture2D(2, 2);
+                        if (t.LoadImage(File.ReadAllBytes(p)))
+                        {
+                            tex = t;
+                            matchedPath = p;
+                            return true;
+                        }
+                    }
+                }
+
+                // DDS found → warn, skip. Proper DDS decoding is a separate work item.
+                string dds = Path.Combine(dir, bn + ".dds");
+                if (File.Exists(dds))
+                {
+                    Debug.LogWarning($"[ModelCharacter] DDS sidecar found but not yet supported: {dds} " +
+                                     "(TODO: implement DDS → Texture2D decode)");
+                }
+            }
+
+            return false;
         }
 
         private void CacheInstancedMaterials()
