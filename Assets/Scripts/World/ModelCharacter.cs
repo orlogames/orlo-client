@@ -127,6 +127,14 @@ namespace Orlo.World
                 }
                 _modelRoot.transform.localRotation = orientationFix;
 
+                // Y-offset the rotated mesh so its feet (lowest post-rotation Y) sit at the parent
+                // transform's origin. Without this, GLBs whose source mesh origin is at the body
+                // centre — e.g. Z-up Blender exports centred on (0,0,0) — render with the navel
+                // landing at transform.position and the feet buried below ground.
+                Vector3 rotMin = orientationFix * combinedBounds.min;
+                Vector3 rotMax = orientationFix * combinedBounds.max;
+                _modelRoot.transform.localPosition = new Vector3(0f, -Mathf.Min(rotMin.y, rotMax.y), 0f);
+
                 // Create a combined mesh from all primitives
                 foreach (var meshData in meshes)
                 {
