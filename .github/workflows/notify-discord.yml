@@ -1,0 +1,26 @@
+name: Notify Discord on deploy
+on:
+  workflow_run:
+    workflows: ["Release — Client Build & Publish"]
+    types: [completed]
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_DEPLOY_WEBHOOK }}
+          STATUS: ${{ github.event.workflow_run.conclusion }}
+          NAME: ${{ github.event.workflow_run.name }}
+          TITLE: ${{ github.event.workflow_run.display_title }}
+          URL: ${{ github.event.workflow_run.html_url }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          EMOJI="✅"
+          [ "$STATUS" = "failure" ] && EMOJI="❌"
+          [ "$STATUS" = "cancelled" ] && EMOJI="⚪"
+          SHORT_SHA=$(echo "$SHA" | cut -c1-7)
+          CONTENT="$EMOJI **$REPO** — $NAME ($STATUS)\n\`$SHORT_SHA\` $TITLE\n<$URL>"
+          jq -n --arg c "$(printf '%b' "$CONTENT")" '{content: $c}' \
+            | curl -sSf -H "Content-Type: application/json" -d @- "$WEBHOOK"
