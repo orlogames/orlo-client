@@ -110,6 +110,20 @@ jobs:
 
       # Assets are delivered independently via content manifest — not bundled in client builds
 
+      - name: Activate Unity (Personal)
+        shell: pwsh
+        env:
+          UNITY_LICENSE_ULF: ${{ secrets.UNITY_LICENSE_ULF }}
+        run: |
+          if (-not $env:UNITY_LICENSE_ULF) {
+            throw "UNITY_LICENSE_ULF secret is not set"
+          }
+          $licDir = Join-Path $env:LOCALAPPDATA "Unity\licenses"
+          New-Item -ItemType Directory -Force -Path $licDir | Out-Null
+          $licPath = Join-Path $licDir "UnityEntitlementLicense.xml"
+          [IO.File]::WriteAllBytes($licPath, [Convert]::FromBase64String($env:UNITY_LICENSE_ULF))
+          Write-Host "Wrote Unity license to $licPath ($((Get-Item $licPath).Length) bytes)"
+
       - name: Build with Unity
         shell: powershell
         run: |
@@ -129,6 +143,16 @@ jobs:
               Get-Content build-log.txt -Tail 100
             }
             exit 1
+          }
+
+      - name: Deactivate / cleanup Unity license
+        if: always()
+        shell: pwsh
+        run: |
+          $licPath = Join-Path $env:LOCALAPPDATA "Unity\licenses\UnityEntitlementLicense.xml"
+          if (Test-Path $licPath) {
+            Remove-Item $licPath -Force -ErrorAction SilentlyContinue
+            Write-Host "Removed Unity license file"
           }
 
       - name: Generate file manifest
