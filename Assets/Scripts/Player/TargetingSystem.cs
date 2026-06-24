@@ -3,6 +3,7 @@ using UnityEngine;
 using Orlo.Network;
 using Orlo.World;
 using Orlo.UI;
+using Orlo.Interaction;
 
 namespace Orlo.Player
 {
@@ -241,6 +242,10 @@ namespace Orlo.Player
         {
             _showNpcPrompt = false;
 
+            // If InteractionController is active, it handles NPC prompts
+            if (InteractionController.Instance != null)
+                return;
+
             if (TargetEntityId == 0 || _targetEntityType != 3)
                 return;
 
@@ -258,6 +263,10 @@ namespace Orlo.Player
         /// <summary>F key interacts with targeted NPC (when no loot is nearby).</summary>
         private void HandleNpcInteraction()
         {
+            // If InteractionController is active, it handles NPC interactions
+            if (InteractionController.Instance != null)
+                return;
+
             // Loot pickup takes priority over NPC interaction
             if (_showLootPrompt && NearbyLootEntityId != 0)
                 return;
@@ -402,6 +411,9 @@ namespace Orlo.Player
         /// <summary>Draw "Press F to talk" prompt when targeting a nearby NPC.</summary>
         private void DrawNpcPrompt()
         {
+            // If InteractionController is active, it draws its own NPC prompts
+            if (InteractionController.Instance != null) return;
+
             // Don't show NPC prompt if loot prompt is already showing (loot takes priority)
             if (_showLootPrompt || !_showNpcPrompt) return;
 
