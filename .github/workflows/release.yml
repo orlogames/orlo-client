@@ -90,21 +90,28 @@ jobs:
           key: Library-Windows-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: Library-Windows-
 
-      - name: Find Unity installation
+      - name: Find Unity installation (pinned to ProjectVersion.txt)
         id: unity
         shell: powershell
         run: |
+          # The editor version MUST match the project pin - a newer 6000.x on the
+          # runner compiles against a different URP and breaks overrides
+          # (6000.4 vs pinned 6000.0.5f1 broke FrostedGlassFeature, 2026-07-02).
+          $pin = (Get-Content ProjectSettings/ProjectVersion.txt | Select-String '^m_EditorVersion:').ToString().Split(' ')[1].Trim()
+          Write-Host "Project pins Unity $pin"
           $searchPaths = @(
-            "C:\Program Files\Unity\Hub\Editor\6000.*\Editor\Unity.exe",
-            "F:\Unity\6000.*\Editor\Unity.exe",
-            "D:\Unity\6000.*\Editor\Unity.exe"
+            "C:\Program Files\Unity\Hub\Editor\$pin\Editor\Unity.exe",
+            "F:\Unity\$pin\Editor\Unity.exe",
+            "D:\Unity\$pin\Editor\Unity.exe"
           )
           $unity = $null
           foreach ($p in $searchPaths) {
-            $found = Get-Item $p -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($found) { $unity = $found.FullName; break }
+            if (Test-Path $p) { $unity = $p; break }
           }
-          if (-not $unity) { throw "Unity not found in any search path" }
+          if (-not $unity) {
+            $installed = Get-Item "C:\Program Files\Unity\Hub\Editor\*" -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }
+            throw "Unity $pin not installed on this runner (found: $($installed -join ', ')). Install the pinned version via Unity Hub - do NOT build with a mismatched editor."
+          }
           Write-Host "Found Unity at: $unity"
           echo "path=$unity" >> $env:GITHUB_OUTPUT
 

@@ -1,0 +1,136 @@
+name: EditMode Tests
+
+on:
+  pull_request:
+    paths:
+      - 'Assets/Scripts/**'
+      - 'Packages/**'
+      - '.github/workflows/tests.yml'
+  workflow_dispatch:
+
+jobs:
+  editmode-tests:
+    name: Unity EditMode Tests
+    runs-on: [self-hosted, client]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      # Assembly-CSharp needs the generated proto sources to compile — a fresh
+      # checkout has no Assets/Scripts/Proto (mirrors release.yml exactly).
+      - name: Checkout orlo-proto
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/orlo-proto
+          path: orlo-proto
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Install protoc
+        shell: powershell
+        run: |
+          $version = "29.3"
+          $url = "https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-win64.zip"
+          Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\protoc.zip"
+          Expand-Archive -Path "$env:TEMP\protoc.zip" -DestinationPath "$env:TEMP\protoc" -Force
+          echo "$env:TEMP\protoc\bin" >> $env:GITHUB_PATH
+
+      - name: Generate C# proto sources
+        shell: powershell
+        run: |
+          $protoDir = "orlo-proto/proto"
+          $outDir = "Assets/Scripts/Proto"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          $protos = Get-ChildItem "$protoDir/orlo" -Filter "*.proto" | ForEach-Object { "orlo/$($_.Name)" }
+          & protoc --proto_path=$protoDir --csharp_out=$outDir @protos
+          Write-Host "Generated C# files:"
+          Get-ChildItem $outDir
+
+      # Shares the release build's Library cache (same key family) instead of
+      # duplicating a multi-GB Library against the 10GB Actions cache quota.
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-Windows-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-Windows-
+
+      - name: Find Unity installation (pinned to ProjectVersion.txt)
+        id: unity
+        shell: powershell
+        run: |
+          # The editor version MUST match the project pin - a newer 6000.x on the
+          # runner compiles against a different URP and breaks overrides
+          # (6000.4 vs pinned 6000.0.5f1 broke FrostedGlassFeature, 2026-07-02).
+          $pin = (Get-Content ProjectSettings/ProjectVersion.txt | Select-String '^m_EditorVersion:').ToString().Split(' ')[1].Trim()
+          Write-Host "Project pins Unity $pin"
+          $searchPaths = @(
+            "C:\Program Files\Unity\Hub\Editor\$pin\Editor\Unity.exe",
+            "F:\Unity\$pin\Editor\Unity.exe",
+            "D:\Unity\$pin\Editor\Unity.exe"
+          )
+          $unity = $null
+          foreach ($p in $searchPaths) {
+            if (Test-Path $p) { $unity = $p; break }
+          }
+          if (-not $unity) {
+            $installed = Get-Item "C:\Program Files\Unity\Hub\Editor\*" -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }
+            throw "Unity $pin not installed on this runner (found: $($installed -join ', ')). Install the pinned version via Unity Hub - do NOT build with a mismatched editor."
+          }
+          Write-Host "Found Unity at: $unity"
+          echo "path=$unity" >> $env:GITHUB_OUTPUT
+
+      - name: Activate Unity (Personal)
+        shell: pwsh
+        env:
+          UNITY_LICENSE_ULF: ${{ secrets.UNITY_LICENSE_ULF }}
+        run: |
+          if (-not $env:UNITY_LICENSE_ULF) {
+            throw "UNITY_LICENSE_ULF secret is not set"
+          }
+          $licDir = Join-Path $env:LOCALAPPDATA "Unity\licenses"
+          New-Item -ItemType Directory -Force -Path $licDir | Out-Null
+          $licPath = Join-Path $licDir "UnityEntitlementLicense.xml"
+          [IO.File]::WriteAllBytes($licPath, [Convert]::FromBase64String($env:UNITY_LICENSE_ULF))
+          Write-Host "Wrote Unity license to $licPath ($((Get-Item $licPath).Length) bytes)"
+
+      - name: Run EditMode tests
+        shell: powershell
+        run: |
+          $unity = "${{ steps.unity.outputs.path }}"
+          $proc = Start-Process -FilePath $unity -ArgumentList @(
+            "-batchmode", "-nographics",
+            "-projectPath", "$PWD",
+            "-runTests", "-testPlatform", "EditMode",
+            "-testResults", "$PWD\test-results.xml",
+            "-logFile", "$PWD\unity-test.log"
+          ) -PassThru -Wait
+          Get-Content "$PWD\unity-test.log" -Tail 60 -ErrorAction SilentlyContinue
+          if ($proc.ExitCode -ne 0) {
+            Write-Host "::error::EditMode tests failed (exit $($proc.ExitCode))"
+            if (Test-Path "$PWD\test-results.xml") {
+              Select-String -Path "$PWD\test-results.xml" -Pattern 'result="Failed"' | Select-Object -First 20
+            }
+            exit 1
+          }
+          Write-Host "EditMode tests passed."
+
+      - name: Deactivate / cleanup Unity license
+        if: always()
+        shell: pwsh
+        run: |
+          $licPath = Join-Path $env:LOCALAPPDATA "Unity\licenses\UnityEntitlementLicense.xml"
+          if (Test-Path $licPath) {
+            Remove-Item $licPath -Force -ErrorAction SilentlyContinue
+            Write-Host "Removed Unity license file"
+          }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editmode-test-results
+          path: |
+            test-results.xml
+            unity-test.log
+          if-no-files-found: ignore
