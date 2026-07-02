@@ -77,7 +77,13 @@ namespace Orlo.World
                 foreach (var entry in raw.assets)
                 {
                     if (entry == null || string.IsNullOrEmpty(entry.asset_id))
+                    {
+                        // Record it — a generator bug that emits empty entries must
+                        // be visible client-side (qravey review follow-up, PR #17).
+                        refused.Add(string.IsNullOrEmpty(entry?.asset_id) ? "<null-entry>" : entry.asset_id);
+                        Debug.LogWarning("[RuntimeManifest] refused null/empty manifest entry");
                         continue;
+                    }
                     // Per-entry refusal: a bad key never becomes a fetchable URL,
                     // but one bad entry must not take down the whole manifest.
                     //

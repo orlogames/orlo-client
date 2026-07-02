@@ -168,6 +168,12 @@ namespace Orlo.World
 
                     if (request.result != UnityWebRequest.Result.Success)
                     {
+                        // removeFileOnAbort only covers aborts — a ProtocolError
+                        // (404/5xx) leaves the .part behind, and retries mint new
+                        // GUID'd ones. Reap it here (Randy review, PR #17 MINOR-3).
+                        try { if (File.Exists(partPath)) File.Delete(partPath); }
+                        catch (IOException) { /* best-effort */ }
+
                         var verdict = policy.OnNetworkFailure();
                         Debug.LogWarning($"[RuntimeAssetLoader] fetch failed ({request.error}, HTTP {request.responseCode}) for {resolved.AssetId} — {verdict}");
                         if (verdict == FetchRetryPolicy.Verdict.Fail)

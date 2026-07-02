@@ -153,6 +153,35 @@ namespace Orlo.Tests
         }
 
         [Test]
+        public void Cache_StaleOccupantAtFinalPath_IsReplacedNotReturned()
+        {
+            // Randy review MAJOR-2: a wrong-content file at the content-addressed
+            // path (survived eviction) must never short-circuit a commit as success.
+            string root = Path.Combine(Path.GetTempPath(), "orlo_test_cache_" + Path.GetRandomFileName());
+            try
+            {
+                var cache = new RuntimeBlobCache(root);
+                byte[] good = System.Text.Encoding.UTF8.GetBytes("verified-bytes");
+                string sha = RuntimeBlobCache.Sha256Hex(good);
+
+                // Plant a stale occupant directly at the final path.
+                Directory.CreateDirectory(root);
+                File.WriteAllText(cache.PathFor(sha), "stale-wrong-bytes");
+
+                string part = cache.NewPartPath(sha);
+                File.WriteAllBytes(part, good);
+                string result = cache.VerifyAndCommitFile(part, sha);
+
+                Assert.IsNotNull(result);
+                Assert.AreEqual("verified-bytes", File.ReadAllText(result), "stale occupant must be replaced by verified bytes");
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+        }
+
+        [Test]
         public void Cache_WrongSizeHit_EvictsForRefetch()
         {
             string root = Path.Combine(Path.GetTempPath(), "orlo_test_cache_" + Path.GetRandomFileName());

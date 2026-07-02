@@ -96,14 +96,24 @@ namespace Orlo.World
         }
 
         /// <summary>Rename a verified temp file to its content-addressed path.
-        /// Race-safe: losing to a concurrent committer of the same hex is success.</summary>
+        /// Race-safe: losing to a concurrent committer of the same hex is success.
+        /// An EXISTING file at finalPath is only trusted after a hash re-check —
+        /// a locked stale file that survived Contains()' eviction must never be
+        /// returned as verified bytes (Randy review, PR #17 MAJOR-2).</summary>
         private string CommitVerified(string partPath, string sha256Hex)
         {
             string finalPath = PathFor(sha256Hex);
             if (File.Exists(finalPath))
             {
-                TryDelete(partPath);
-                return finalPath; // committed earlier or by a concurrent fetch — identical bytes
+                if (Sha256HexOfFile(finalPath) == sha256Hex)
+                {
+                    TryDelete(partPath);
+                    return finalPath; // genuine earlier/concurrent commit — identical bytes
+                }
+                // Stale or corrupt occupant (e.g. eviction failed on a locked file):
+                // replace it with the verified .part. If it's still locked, throw —
+                // a failed fetch beats unverified bytes.
+                File.Delete(finalPath);
             }
             try
             {
@@ -112,8 +122,8 @@ namespace Orlo.World
             catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
             {
                 TryDelete(partPath);
-                if (File.Exists(finalPath))
-                    return finalPath; // lost the race — fine
+                if (File.Exists(finalPath) && Sha256HexOfFile(finalPath) == sha256Hex)
+                    return finalPath; // lost the race to a verified committer — fine
                 throw;
             }
             return finalPath;
