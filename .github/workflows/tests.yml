@@ -1,0 +1,90 @@
+name: EditMode Tests
+
+on:
+  pull_request:
+    paths:
+      - 'Assets/Scripts/**'
+      - 'Packages/**'
+      - '.github/workflows/tests.yml'
+  workflow_dispatch:
+
+jobs:
+  editmode-tests:
+    name: Unity EditMode Tests
+    runs-on: [self-hosted, client]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-Tests-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-Tests-
+            Library-Windows-
+
+      - name: Find Unity installation
+        id: unity
+        shell: powershell
+        run: |
+          $searchPaths = @(
+            "C:\Program Files\Unity\Hub\Editor\6000.*\Editor\Unity.exe",
+            "F:\Unity\6000.*\Editor\Unity.exe",
+            "D:\Unity\6000.*\Editor\Unity.exe"
+          )
+          $unity = $null
+          foreach ($p in $searchPaths) {
+            $found = Get-Item $p -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($found) { $unity = $found.FullName; break }
+          }
+          if (-not $unity) { throw "Unity not found in any search path" }
+          Write-Host "Found Unity at: $unity"
+          echo "path=$unity" >> $env:GITHUB_OUTPUT
+
+      - name: Activate Unity (Personal)
+        shell: pwsh
+        env:
+          UNITY_LICENSE_ULF: ${{ secrets.UNITY_LICENSE_ULF }}
+        run: |
+          if (-not $env:UNITY_LICENSE_ULF) {
+            throw "UNITY_LICENSE_ULF secret is not set"
+          }
+          $licDir = Join-Path $env:LOCALAPPDATA "Unity\licenses"
+          New-Item -ItemType Directory -Force -Path $licDir | Out-Null
+          $licPath = Join-Path $licDir "UnityEntitlementLicense.xml"
+          [IO.File]::WriteAllBytes($licPath, [Convert]::FromBase64String($env:UNITY_LICENSE_ULF))
+          Write-Host "Wrote Unity license to $licPath ($((Get-Item $licPath).Length) bytes)"
+
+      - name: Run EditMode tests
+        shell: powershell
+        run: |
+          $unity = "${{ steps.unity.outputs.path }}"
+          $proc = Start-Process -FilePath $unity -ArgumentList @(
+            "-batchmode", "-nographics",
+            "-projectPath", "$PWD",
+            "-runTests", "-testPlatform", "EditMode",
+            "-testResults", "$PWD\test-results.xml",
+            "-logFile", "$PWD\unity-test.log"
+          ) -PassThru -Wait
+          Get-Content "$PWD\unity-test.log" -Tail 60 -ErrorAction SilentlyContinue
+          if ($proc.ExitCode -ne 0) {
+            Write-Host "::error::EditMode tests failed (exit $($proc.ExitCode))"
+            if (Test-Path "$PWD\test-results.xml") {
+              Select-String -Path "$PWD\test-results.xml" -Pattern 'result="Failed"' | Select-Object -First 20
+            }
+            exit 1
+          }
+          Write-Host "EditMode tests passed."
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editmode-test-results
+          path: |
+            test-results.xml
+            unity-test.log
+          if-no-files-found: ignore
