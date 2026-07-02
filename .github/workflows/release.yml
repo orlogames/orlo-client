@@ -216,8 +216,12 @@ jobs:
       - name: Install AWS CLI
         run: |
           if ! command -v aws &> /dev/null; then
+            # User-scoped install — self-hosted runners don't grant sudo
+            # (broke 2026-07-02 when jobs moved off a passwordless-sudo temp runner).
             curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip -q awscliv2.zip && sudo ./aws/install
+            unzip -q awscliv2.zip
+            ./aws/install -i "$HOME/.aws-cli" -b "$HOME/.local/bin" --update
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           fi
 
       - name: Download orlo-client-windows from S3
@@ -279,8 +283,12 @@ jobs:
       - name: Install AWS CLI
         run: |
           if ! command -v aws &> /dev/null; then
+            # User-scoped install — self-hosted runners don't grant sudo
+            # (broke 2026-07-02 when jobs moved off a passwordless-sudo temp runner).
             curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip -q awscliv2.zip && sudo ./aws/install
+            unzip -q awscliv2.zip
+            ./aws/install -i "$HOME/.aws-cli" -b "$HOME/.local/bin" --update
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           fi
 
       - name: Download CI artifacts from S3
