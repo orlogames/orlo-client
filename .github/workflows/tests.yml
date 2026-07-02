@@ -17,14 +17,43 @@ jobs:
         with:
           lfs: true
 
+      # Assembly-CSharp needs the generated proto sources to compile — a fresh
+      # checkout has no Assets/Scripts/Proto (mirrors release.yml exactly).
+      - name: Checkout orlo-proto
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/orlo-proto
+          path: orlo-proto
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Install protoc
+        shell: powershell
+        run: |
+          $version = "29.3"
+          $url = "https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-win64.zip"
+          Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\protoc.zip"
+          Expand-Archive -Path "$env:TEMP\protoc.zip" -DestinationPath "$env:TEMP\protoc" -Force
+          echo "$env:TEMP\protoc\bin" >> $env:GITHUB_PATH
+
+      - name: Generate C# proto sources
+        shell: powershell
+        run: |
+          $protoDir = "orlo-proto/proto"
+          $outDir = "Assets/Scripts/Proto"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          $protos = Get-ChildItem "$protoDir/orlo" -Filter "*.proto" | ForEach-Object { "orlo/$($_.Name)" }
+          & protoc --proto_path=$protoDir --csharp_out=$outDir @protos
+          Write-Host "Generated C# files:"
+          Get-ChildItem $outDir
+
+      # Shares the release build's Library cache (same key family) instead of
+      # duplicating a multi-GB Library against the 10GB Actions cache quota.
       - name: Cache Unity Library
         uses: actions/cache@v4
         with:
           path: Library
-          key: Library-Tests-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
-          restore-keys: |
-            Library-Tests-
-            Library-Windows-
+          key: Library-Windows-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-Windows-
 
       - name: Find Unity installation
         id: unity
@@ -78,6 +107,16 @@ jobs:
             exit 1
           }
           Write-Host "EditMode tests passed."
+
+      - name: Deactivate / cleanup Unity license
+        if: always()
+        shell: pwsh
+        run: |
+          $licPath = Join-Path $env:LOCALAPPDATA "Unity\licenses\UnityEntitlementLicense.xml"
+          if (Test-Path $licPath) {
+            Remove-Item $licPath -Force -ErrorAction SilentlyContinue
+            Write-Host "Removed Unity license file"
+          }
 
       - name: Upload test results
         if: always()

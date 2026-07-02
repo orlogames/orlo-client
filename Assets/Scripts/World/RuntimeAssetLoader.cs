@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -8,17 +9,23 @@ namespace Orlo.World
 {
     /// <summary>
     /// Thin CDN loader implementing docs/design/client_loader_contract.md v1.1
-    /// (orlo-assets): runtime_manifest is the ONLY resolver; fetched bytes are
-    /// sha256-verified into a content-addressed cache (RuntimeBlobCache).
+    /// (orlo-assets): runtime_manifest is the ONLY resolver; downloads stream
+    /// straight to disk (.part), are sha256-verified, and commit into the
+    /// content-addressed RuntimeBlobCache.
     ///
-    /// Deliberately separate from the legacy AssetLoader pak/StreamingAssets
-    /// chain: this loader serves manifest-resolved world assets. Contract
-    /// MUST-NOTs enforced here:
+    /// Contract MUST-NOTs enforced here:
     ///   - no URL composition beyond cdn_base + r2_key   (RuntimeManifest.Resolve)
     ///   - no fallback to assets/models/ or staging/ on a manifest miss
     ///   - no unverified bytes handed to callers
-    ///   - no redirects off cdn.orlo.games
+    ///   - no redirects off cdn.orlo.games (redirectLimit = 0)
     ///   - no negative caching (a miss today may resolve after a manifest bump)
+    ///
+    /// Concurrent fetches of the same blob are deduped in-flight: callbacks
+    /// pile onto the first download instead of re-downloading (review MAJOR-3).
+    ///
+    /// Platform note: manifest load uses direct file IO on streamingAssetsPath,
+    /// which is correct for the desktop builds this client ships (release.yml is
+    /// Windows-only). Android/WebGL would need a UnityWebRequest load here.
     /// </summary>
     public class RuntimeAssetLoader : MonoBehaviour
     {
@@ -29,6 +36,9 @@ namespace Orlo.World
         private RuntimeManifest _manifest;
         private RuntimeBlobCache _cache;
 
+        /// <summary>sha256 → callbacks waiting on an in-flight download of that blob.</summary>
+        private readonly Dictionary<string, List<Action<string>>> _inFlight = new();
+
         public bool ManifestLoaded => _manifest != null;
         public int ManifestEntryCount => _manifest?.EntryCount ?? 0;
 
@@ -38,6 +48,12 @@ namespace Orlo.World
             Instance = this;
             _cache = new RuntimeBlobCache();
             LoadManifestFromStreamingAssets();
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this)
+                Instance = null;
         }
 
         /// <summary>
@@ -74,8 +90,9 @@ namespace Orlo.World
 
         /// <summary>
         /// Fetch an asset's verified bytes-on-disk path. onComplete receives the
-        /// content-addressed cache path, or null on hard failure. Misses throw
-        /// AssetNotInManifestException synchronously — no URL probing.
+        /// content-addressed cache path, or null on hard failure — it is ALWAYS
+        /// invoked exactly once (contract §3: every failure surfaces). Misses
+        /// throw AssetNotInManifestException synchronously — no URL probing.
         /// </summary>
         public void Fetch(string assetId, Action<string> onComplete)
         {
@@ -84,25 +101,69 @@ namespace Orlo.World
 
             var resolved = _manifest.Resolve(assetId); // throws on miss (contract §3)
 
-            if (_cache.Contains(resolved.Sha256))
+            if (_cache.Contains(resolved.Sha256, resolved.Size))
             {
                 onComplete?.Invoke(_cache.PathFor(resolved.Sha256));
                 return;
             }
-            StartCoroutine(FetchCoroutine(resolved, onComplete));
+
+            // In-flight dedup: same blob already downloading → queue the callback.
+            if (_inFlight.TryGetValue(resolved.Sha256, out var waiters))
+            {
+                waiters.Add(onComplete);
+                return;
+            }
+            _inFlight[resolved.Sha256] = new List<Action<string>> { onComplete };
+            StartCoroutine(FetchCoroutine(resolved));
         }
 
-        private IEnumerator FetchCoroutine(RuntimeManifest.ResolvedAsset resolved, Action<string> onComplete)
+        private void CompleteAll(string sha256, string resultPath)
+        {
+            if (!_inFlight.TryGetValue(sha256, out var waiters))
+                return;
+            _inFlight.Remove(sha256);
+            foreach (var cb in waiters)
+            {
+                try { cb?.Invoke(resultPath); }
+                catch (Exception e) { Debug.LogException(e); } // one bad callback must not starve the rest
+            }
+        }
+
+        private IEnumerator FetchCoroutine(RuntimeManifest.ResolvedAsset resolved)
         {
             var policy = new FetchRetryPolicy();
+            bool bypassEdgeCache = false;
 
             while (true)
             {
-                using (var request = UnityWebRequest.Get(resolved.Url))
+                // Stream straight to a writer-unique .part — no full in-memory
+                // buffering of multi-MB GLBs (contract §2 "stream to disk cache").
+                string partPath;
+                try
                 {
+                    partPath = _cache.NewPartPath(resolved.Sha256);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[RuntimeAssetLoader] cache unavailable for {resolved.AssetId}: {e.Message}");
+                    CompleteAll(resolved.Sha256, null);
+                    yield break;
+                }
+
+                using (var request = new UnityWebRequest(resolved.Url, UnityWebRequest.kHttpVerbGET))
+                {
+                    request.downloadHandler = new DownloadHandlerFile(partPath) { removeFileOnAbort = true };
                     // Contract MUST-NOT: never follow redirects off cdn.orlo.games.
                     // Simplest safe form: no redirects at all — the CDN serves blobs directly.
                     request.redirectLimit = 0;
+                    if (bypassEdgeCache)
+                    {
+                        // Hash-mismatch retry must not be served the same corrupt
+                        // object from the CDN edge (review MINOR-3). Same URL —
+                        // MUST-NOT intact — just a no-cache request.
+                        request.SetRequestHeader("Cache-Control", "no-cache");
+                        request.SetRequestHeader("Pragma", "no-cache");
+                    }
                     yield return request.SendWebRequest();
 
                     if (request.result != UnityWebRequest.Result.Success)
@@ -111,32 +172,46 @@ namespace Orlo.World
                         Debug.LogWarning($"[RuntimeAssetLoader] fetch failed ({request.error}, HTTP {request.responseCode}) for {resolved.AssetId} — {verdict}");
                         if (verdict == FetchRetryPolicy.Verdict.Fail)
                         {
-                            onComplete?.Invoke(null);
+                            CompleteAll(resolved.Sha256, null);
                             yield break;
                         }
-                        yield return new WaitForSeconds(policy.BackoffFor(policy.NetworkFailures));
+                        // Realtime wait: a paused game (timeScale=0) on a loading
+                        // screen must not freeze retry backoff (review MINOR-2).
+                        yield return new WaitForSecondsRealtime(policy.BackoffFor(policy.NetworkFailures));
                         continue;
                     }
-
-                    byte[] bytes = request.downloadHandler.data;
-                    string cachePath = _cache.VerifyAndCommit(bytes, resolved.Sha256);
-                    if (cachePath != null)
-                    {
-                        onComplete?.Invoke(cachePath);
-                        yield break;
-                    }
-
-                    // sha256 mismatch: discard, refetch once from origin, then fail hard.
-                    var hashVerdict = policy.OnHashMismatch();
-                    Debug.LogWarning($"[RuntimeAssetLoader] sha256 mismatch for {resolved.AssetId} — {hashVerdict}");
-                    if (hashVerdict == FetchRetryPolicy.Verdict.Fail)
-                    {
-                        onComplete?.Invoke(null);
-                        yield break;
-                    }
-                    // RetryBypassCache: loop re-GETs from origin. (The disk cache was
-                    // never written — VerifyAndCommit only commits verified bytes.)
                 }
+
+                // Verify + commit outside the request scope; the handler has
+                // flushed and closed the .part file. Any IO exception surfaces
+                // as a failed fetch, never a stranded callback (review MAJOR-2).
+                string cachePath;
+                try
+                {
+                    cachePath = _cache.VerifyAndCommitFile(partPath, resolved.Sha256);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[RuntimeAssetLoader] cache commit failed for {resolved.AssetId}: {e.Message}");
+                    CompleteAll(resolved.Sha256, null);
+                    yield break;
+                }
+
+                if (cachePath != null)
+                {
+                    CompleteAll(resolved.Sha256, cachePath);
+                    yield break;
+                }
+
+                // sha256 mismatch: discard, refetch once bypassing edge caches, then fail hard.
+                var hashVerdict = policy.OnHashMismatch();
+                Debug.LogWarning($"[RuntimeAssetLoader] sha256 mismatch for {resolved.AssetId} — {hashVerdict}");
+                if (hashVerdict == FetchRetryPolicy.Verdict.Fail)
+                {
+                    CompleteAll(resolved.Sha256, null);
+                    yield break;
+                }
+                bypassEdgeCache = true;
             }
         }
     }

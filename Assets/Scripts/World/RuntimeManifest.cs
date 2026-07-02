@@ -80,11 +80,18 @@ namespace Orlo.World
                         continue;
                     // Per-entry refusal: a bad key never becomes a fetchable URL,
                     // but one bad entry must not take down the whole manifest.
+                    //
+                    // sha256 MUST equal the hex embedded in r2_key: keys are
+                    // content-addressed, so disagreement means the entry is poison
+                    // (either always-fail fetches, or — worse — a crafted sha256
+                    // escaping the cache root via Path.Combine). One equality
+                    // enforces charset, lowercase, and traversal-safety at once.
+                    // (Review findings: Claude MAJOR-1 + Codex MAJOR-3, 2026-07-02.)
                     if (entry.r2_key == null || !R2KeyPattern.IsMatch(entry.r2_key)
-                        || string.IsNullOrEmpty(entry.sha256) || entry.sha256.Length != 64)
+                        || entry.sha256 != entry.r2_key.Substring("blobs/sha256/".Length))
                     {
                         refused.Add(entry.asset_id);
-                        Debug.LogWarning($"[RuntimeManifest] refused entry '{entry.asset_id}': bad r2_key/sha256 ('{entry.r2_key}')");
+                        Debug.LogWarning($"[RuntimeManifest] refused entry '{entry.asset_id}': bad or mismatched r2_key/sha256 ('{entry.r2_key}' / '{entry.sha256}')");
                         continue;
                     }
                     entries[entry.asset_id] = entry;
