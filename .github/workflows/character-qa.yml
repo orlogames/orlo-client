@@ -1,0 +1,95 @@
+name: Character QA Gate
+
+# Enforces the locked Orlo character standard on the character-export path.
+# Hard-blocks a PR whose character base(s) fail rig/geometry/texture QA
+# (tools/character_qa.py).
+#
+# ENFORCEMENT-READY: this runs on EVERY pull request (no paths: filter) and
+# early-exits with a trivial PASS when the PR touches no character GLB. That
+# means it ALWAYS reports a status, so it can safely be marked a *required*
+# status check in branch protection without the skipped-required-check quirk
+# (a path-scoped job would report no status on unrelated PRs and block their
+# merge forever). Marking "Character QA Gate" required on `main` is the switch
+# that turns this from "a check that ran" into "a bald base cannot merge."
+#
+# When a character GLB DID change, it validates EVERY base under
+# Assets/StreamingAssets/Characters/ (not just the diffed file) so a pre-existing
+# bad base can't hide; per-file output names exactly which one failed. Those
+# files ARE git-tracked (unlike the gitignored CDN models), so change detection
+# and the QA loop both actually see them — the PR #17 gitignored-path trap.
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      glb:
+        description: 'Single character GLB to QA (default: all under Characters/)'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  character-qa:
+    name: Character QA Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need the PR base commit to detect character changes
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deps
+        run: pip install --quiet numpy
+
+      - name: QA character bases
+        run: |
+          set -uo pipefail
+          DIR='Assets/StreamingAssets/Characters'
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.glb }}" ]; then
+            # Manual single-file run.
+            TARGETS=( "${{ inputs.glb }}" )
+          else
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              # Early-exit PASS when this PR touches no character GLB, so the job
+              # always reports a status (safe as a required check) without
+              # re-QAing unrelated PRs. git ls-files/diff are recursive, so a
+              # nested base under Characters/ is caught too.
+              BASE="${{ github.event.pull_request.base.sha }}"
+              HEAD="${{ github.event.pull_request.head.sha }}"
+              CHANGED="$(git diff --name-only "$BASE" "$HEAD" -- "$DIR" | grep '\.glb$' || true)"
+              if [ -z "$CHANGED" ]; then
+                echo "No character GLB changes in this PR — QA gate not applicable. ✓"
+                exit 0
+              fi
+              echo "Character GLB(s) changed in this PR:"; echo "$CHANGED"
+            fi
+            # A base changed (or push/dispatch): validate EVERY base in the dir.
+            mapfile -t TARGETS < <(git ls-files -- "$DIR" | grep '\.glb$')
+          fi
+
+          if [ ${#TARGETS[@]} -eq 0 ]; then
+            echo "No character GLBs found under $DIR."
+            exit 0
+          fi
+
+          fail=0
+          for f in "${TARGETS[@]}"; do
+            echo "::group::character QA — $f"
+            if python tools/character_qa.py "$f"; then
+              echo "PASS: $f"
+            else
+              echo "::error file=$f::character_qa FAILED — see checks above"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::One or more character bases failed QA — blocking merge."
+          fi
+          exit $fail
