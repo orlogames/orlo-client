@@ -155,6 +155,13 @@ namespace Orlo.World
 
                             Object.Destroy(placeholder);
                         }
+                        else if (downloadedModel != null)
+                        {
+                            // Entity despawned mid-download (placeholder already gone):
+                            // destroy the freshly-instantiated master, else it leaks
+                            // full-size at world origin with nothing tracking it.
+                            Object.Destroy(downloadedModel);
+                        }
                     });
 
                     return placeholder;
