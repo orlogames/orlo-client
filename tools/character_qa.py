@@ -15,6 +15,23 @@ character .glb against the LOCKED Orlo character standard (settled 2026-07-04):
   8. Skin texture         — a material with a baseColorTexture is present (else
                             it renders as a flat/white mannequin in-client)
 
+plus lints added since the lock (2026-07-11, not part of the settled standard):
+
+  9. Stray geometry       — every mesh node is skinned to the armature (the
+                            client parents unskinned prims to the model root
+                            and discards their node transforms — see
+                            ModelCharacter.cs — so a helper left in the export
+                            rides the character as static geometry, never
+                            animating; deliberate export policy: characters
+                            carry no rigid attachments)
+ 10. Skin binding         — exactly one skin, with a full set of invertible
+                            inverseBindMatrices (missing → binds as identity
+                            and deforms from the origin; zero-scale → bones
+                            render collapsed)
+ 11. Bone placement       — each bone's head sits near the vertices it deforms
+                            (WARN; catches generator placement slips like the
+                            bigtoe built heel→ball, found 2026-07-10)
+
 The client trusts a skinned mesh's bind pose (auto-orient is skipped), so
 checks 4/5/6 are what actually keep a character from hovering or flipping
 once it's loaded. See memory: project_orla_rig_convention.
@@ -28,6 +45,11 @@ Usage:
                 hardcoded v2.3.0 set below (UPDATE when the canon changes).
 
 Exit code: 0 = PASS, 1 = FAIL, 2 = usage/parse error. CI-friendly.
+
+Canonical home: orlo-client/tools/character_qa.py (this file, run by CI).
+A byte-identical copy lives at orlo-scripts/character_qa.py for the local
+audit belt — edit HERE, then `cp` over the belt copy, or the CI gate and the
+local tool silently diverge on the next threshold tweak.
 """
 import sys, json, struct, argparse, re
 import numpy as np
@@ -50,6 +72,25 @@ CANON_BONES = [
 # ride their parent). An unweighted bone NOT in this set is a hard FAIL — e.g.
 # an unbound lower_jaw means the mouth can't move.
 OPTIONAL_UNWEIGHTED = {"l_bigtoe", "r_bigtoe"}
+
+# Bone-placement heuristic (check 11): flag a bone whose head sits far from
+# the vertices it deforms, in BOTH senses at once —
+#   ratio: head→centroid distance ≥ 6× the RMS spread of its own verts
+#          (a long bone's verts spread along it, so thighs stay ~1.5-2.5;
+#          the heel-built bigtoe scored 9.8-10.8 on the 2026-07-10 fixtures)
+#   floor: and ≥ 6% of skinned-mesh height (mutes tiny face-bone clusters
+#          whose spread is millimeters)
+# Calibrated on 7 staged character GLBs 2026-07-11 (fixtures:
+# /home/orlo/staging/world-drop/*.glb). At these thresholds the
+# orlando5c2 base fires on l/r_bigtoe (known heel→ball generator bug) AND on
+# l/r_thumb2 (verified real: head continues down the hand axis while the thumb
+# geometry angles +Z; the conformed Orla rig sits at d=0.012m). WARN (not
+# FAIL) until the skeleton-generator fix lands and a re-gen validates the
+# thresholds. Debugging companion: orlo-scripts/weight_census.py prints the
+# same centroid-vs-head data inside Blender — its numbers differ slightly
+# (0.01 weight cutoff + Blender head_local vs 1e-5 + IBM-derived heads here).
+PLACEMENT_RATIO = 6.0
+PLACEMENT_MIN_FRAC = 0.06
 
 _COMP = {5120: ("b", 1), 5121: ("B", 1), 5122: ("h", 2), 5123: ("H", 2),
          5125: ("I", 4), 5126: ("f", 4)}
@@ -122,7 +163,9 @@ def qa(path, canon):
     names = [n.get("name", "") for n in js.get("nodes", [])]
 
     # ---- gather mesh data ----
-    POS, JNT, WGT, IDX = [], [], [], []
+    # SPOS mirrors JNT/WGT (skinned primitives only) so vertex positions stay
+    # row-aligned with their joint/weight rows for the bone-placement check.
+    POS, SPOS, JNT, WGT, IDX = [], [], [], [], []
     vbase = 0
     for m in js.get("meshes", []):
         for pr in m["primitives"]:
@@ -131,6 +174,7 @@ def qa(path, canon):
                 continue
             P = accessor(js, bn, at["POSITION"]); POS.append(P)
             if "JOINTS_0" in at and "WEIGHTS_0" in at:
+                SPOS.append(P)
                 JNT.append(accessor(js, bn, at["JOINTS_0"]))
                 WGT.append(accessor(js, bn, at["WEIGHTS_0"]))
             if "indices" in pr:
@@ -159,17 +203,25 @@ def qa(path, canon):
     height = ext[1]
 
     # ---- skin / joints ----
-    joints = js["skins"][0]["joints"] if js.get("skins") else []
+    skins = js.get("skins", [])
+    skin0 = skins[0] if skins else None
+    joints = skin0["joints"] if skin0 else []
     jn = [names[j] for j in joints]
+    nj = len(joints)
 
-    # weighted-vert count per joint (skin-joint index)
-    cnt = np.zeros(max(len(joints), 1), int)
+    # One flattened pass over (joint, weight, vert) triples feeds check 3's
+    # counts AND check 11's centroids/spreads, so the 1e-5 influence cutoff
+    # stays single-sourced. Out-of-range joint indices (malformed JOINTS_0)
+    # are dropped rather than crashing.
+    cnt = np.zeros(max(nj, 1), int)
+    jidx = wflat = vidx = SP = None
     if JNT and joints:
-        J = np.vstack(JNT); W = np.vstack(WGT)
-        for row_j, row_w in zip(J, W):
-            for ji, wv in zip(row_j, row_w):
-                if wv > 1e-5:
-                    cnt[int(ji)] += 1
+        J = np.vstack(JNT).astype(int); W = np.vstack(WGT); SP = np.vstack(SPOS)
+        keep = (W.ravel() > 1e-5) & (J.ravel() < nj)
+        jidx = J.ravel()[keep]
+        wflat = W.ravel()[keep]
+        vidx = np.repeat(np.arange(len(SP)), J.shape[1])[keep]
+        cnt = np.bincount(jidx, minlength=nj)[:nj]
 
     # ---- 2. bone-set conformance ----
     jset, cset = set(jn), set(canon)
@@ -269,11 +321,120 @@ def qa(path, canon):
         )
         if n_albedo == 0:
             r.add("skin-texture", "FAIL",
-                  f"{len(mats)} material(s) but 0 baseColorTexture — flat-colour "
+                  f"{len(mats)} material(s) but 0 baseColorTexture — flat-color "
                   f"placeholder, no skin albedo; bake + embed the skin textures")
         else:
             r.add("skin-texture", "PASS",
                   f"{n_albedo}/{len(mats)} material(s) carry a baseColorTexture")
+
+    # ---- 9. stray (non-skinned) geometry ----
+    # A helper object left in the export (prop, placeholder, debug ball) has no
+    # skin binding; ModelCharacter.cs parents unskinned prims to the model root
+    # with their node transform discarded, so it rides the character as static
+    # geometry and never animates. Every mesh node in a character GLB must be
+    # skinned — deliberate export policy, characters carry no rigid attachments.
+    # Unreachable (orphan) mesh nodes count too: the loader iterates meshes,
+    # not the scene graph.
+    meshes = js.get("meshes", [])
+    strays = []
+    for n in js.get("nodes", []):
+        if "mesh" not in n:
+            continue
+        m = meshes[n["mesh"]]
+        unskinned_prims = [pr for pr in m["primitives"]
+                           if "JOINTS_0" not in pr["attributes"]
+                           or "WEIGHTS_0" not in pr["attributes"]]
+        if "skin" not in n:
+            unskinned_prims = m["primitives"]  # nothing on this node binds
+        if unskinned_prims:
+            nv = sum(js["accessors"][pr["attributes"]["POSITION"]]["count"]
+                     for pr in unskinned_prims if "POSITION" in pr["attributes"])
+            strays.append(f"{n.get('name', m.get('name', '?'))} ({nv} verts)")
+    if strays:
+        r.add("stray-geometry", "FAIL",
+              f"{len(strays)} non-skinned mesh node(s): {strays} — rides the "
+              f"character root as static geometry, never animates; delete or "
+              f"skin before export")
+    else:
+        r.add("stray-geometry", "PASS", "all mesh nodes skinned")
+
+    # ---- 10. skin binding + 11. bone placement ----
+    # 10 is deterministic (FAIL): one skin, full set of invertible bind
+    # matrices. 11 is the calibrated heuristic (WARN): head near its weighted
+    # verts. Assumes mesh/armature node transforms are identity (raw POSITION
+    # is world space) — same assumption checks 4/5/6 already rely on.
+    if not joints:
+        pass  # no skin at all — check 2 already FAILed it; nothing to bind
+    elif len(skins) > 1:
+        r.add("skin-binding", "FAIL",
+              f"{len(skins)} skins — canon is a single armature/skin; "
+              f"merge + re-export (placement unchecked)")
+    elif SP is None:
+        r.add("skin-binding", "FAIL",
+              "skin present but no primitive carries JOINTS_0/WEIGHTS_0 — "
+              "nothing binds to the armature")
+    elif "inverseBindMatrices" not in skin0:
+        r.add("skin-binding", "FAIL",
+              "skin has no inverseBindMatrices — joints bind as identity and "
+              "the mesh deforms from the origin in-client; re-export")
+    else:
+        ibm = accessor(js, bn, skin0["inverseBindMatrices"])  # (n, 16) col-major
+        if len(ibm) < nj:
+            r.add("skin-binding", "FAIL",
+                  f"{len(ibm)} inverseBindMatrices for {nj} joints — malformed skin")
+        else:
+            mats = ibm[:nj].reshape(-1, 4, 4).transpose(0, 2, 1)
+            dets = np.abs(np.linalg.det(mats))
+            invertible = dets > 1e-12
+            degen = [jn[i] for i in range(nj) if not invertible[i]]
+            if degen:
+                r.add("skin-binding", "FAIL",
+                      f"degenerate (non-invertible) inverseBindMatrix on {degen} "
+                      f"— zero-scale bind, those bones render collapsed")
+            else:
+                r.add("skin-binding", "PASS", f"{nj} bind matrices, all invertible")
+
+            heads = np.full((nj, 3), np.nan)
+            if invertible.any():
+                heads[invertible] = np.linalg.inv(mats[invertible])[:, :3, 3]
+
+            # height from SKINNED verts only — stray geometry (a forgotten
+            # ground plane) must not inflate the placement floor
+            sheight = float(SP[:, 1].max() - SP[:, 1].min())
+            if sheight < 0.1:
+                r.add("bone-placement", "WARN",
+                      f"skinned-mesh height {sheight:.3f}m is degenerate — "
+                      f"placement unchecked")
+            else:
+                tot = np.bincount(jidx, weights=wflat, minlength=nj)[:nj]
+                sums = np.stack(
+                    [np.bincount(jidx, weights=wflat * SP[vidx, k], minlength=nj)[:nj]
+                     for k in range(3)], axis=1)
+                weighted = tot > 0
+                centroid = np.zeros((nj, 3))
+                centroid[weighted] = sums[weighted] / tot[weighted, None]
+                sq = ((SP[vidx] - centroid[jidx]) ** 2).sum(1)
+                spread = np.zeros(nj)
+                spread[weighted] = np.sqrt(
+                    np.bincount(jidx, weights=wflat * sq, minlength=nj)[:nj][weighted]
+                    / tot[weighted])
+                offenders = []
+                for i in range(nj):
+                    if not (weighted[i] and invertible[i]):
+                        continue  # unweighted → check 3's job; degenerate → check 10's
+                    d = float(np.linalg.norm(centroid[i] - heads[i]))
+                    ratio = d / max(float(spread[i]), 1e-6)
+                    if d >= PLACEMENT_MIN_FRAC * sheight and ratio >= PLACEMENT_RATIO:
+                        offenders.append(f"{jn[i]} (head {d:.2f}m from its verts, "
+                                         f"{ratio:.1f}x their spread)")
+                if offenders:
+                    r.add("bone-placement", "WARN",
+                          f"{len(offenders)} bone(s) far from the verts they "
+                          f"deform: {offenders} — deforms will drag from the "
+                          f"wrong pivot (generator landmark/segment slip?)")
+                else:
+                    r.add("bone-placement", "PASS",
+                          "every weighted bone near its verts")
 
     return r, js
 
