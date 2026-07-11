@@ -397,7 +397,8 @@ jobs:
 
           NOTES=$(git log --pretty=format:'- %s' HEAD~5..HEAD 2>/dev/null | head -10 || echo "Automated release")
 
-          curl -s -X POST "https://updater.orlo.games/admin/client/publish" \
+          HTTP_CODE=$(curl -sS -o /tmp/updater_publish_resp.txt -w "%{http_code}" \
+            -X POST "https://updater.orlo.games/admin/client/publish" \
             -H "Content-Type: application/json" \
             -H "X-Admin-Key: ${{ secrets.UPDATER_ADMIN_KEY }}" \
             -d "{
@@ -407,5 +408,23 @@ jobs:
               \"total_size\": ${TOTAL_SIZE},
               \"files_count\": ${FILES_COUNT},
               \"notes\": \"${NOTES}\"
-            }" && echo "Registered v${VERSION} with updater-api" \
-            || echo "WARNING: Failed to register with updater-api (non-fatal)"
+            }" || echo "000")
+
+          # Non-fatal (S3 manifest is the documented fallback) but must NOT claim
+          # success on an HTTP error. `curl -s` alone exits 0 on 401/5xx, so the old
+          # `&& echo Registered` fired beneath a failure and the `|| WARNING` was dead
+          # code. Gate on the real status code instead.
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "Registered v${VERSION} with updater-api (HTTP $HTTP_CODE)"
+          else
+            echo "::warning title=updater-api registration failed::updater.orlo.games returned HTTP $HTTP_CODE for v${VERSION} — launcher primary update channel may be down (S3 manifest fallback still published)"
+            {
+              echo "### ⚠️ updater-api registration FAILED (HTTP $HTTP_CODE)"
+              echo "v${VERSION} was NOT registered with the updater. S3 manifest fallback is still live."
+              echo ""
+              echo '```'
+              head -c 500 /tmp/updater_publish_resp.txt
+              echo ""
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
