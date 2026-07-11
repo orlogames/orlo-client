@@ -386,25 +386,16 @@ namespace Orlo.World
         {
             var root = new GameObject($"Model_{assetId}");
 
-            // Child pivot for Z-up correction (keeps root free for world positioning).
-            // Auto-detect: if combined mesh bounds are taller in Z than Y, it's Z-up.
+            // Child pivot holds the mesh so the root stays free for world positioning.
+            // glTF is Y-up by spec and the asset store was audited Y-up (34/34,
+            // 2026-07-11), so we do NOT auto-rotate here. The old `size.z > size.y*1.2` heuristic
+            // produced only false positives — e.g. the flat pathway_stone tile
+            // (1.0 x 0.15 x 1.0) was rotated -90deg X and rendered as a 1m-tall wall.
             var pivot = new GameObject("ModelPivot");
             pivot.transform.SetParent(root.transform, false);
 
             Bounds combinedBounds = default;
             bool boundsInitialized = false;
-
-            // Pre-scan bounds to detect orientation
-            foreach (var entry in cached.entries)
-            {
-                if (!boundsInitialized) { combinedBounds = entry.mesh.bounds; boundsInitialized = true; }
-                else combinedBounds.Encapsulate(entry.mesh.bounds);
-            }
-            bool isZUp = boundsInitialized && combinedBounds.size.z > combinedBounds.size.y * 1.2f;
-            if (isZUp)
-                pivot.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
-
-            boundsInitialized = false; // Reset for collider
 
             // Use URP Lit shader for GLB models (supports PBR textures from Meshy)
             var shader = Orlo.Rendering.OrloShaders.Lit;
@@ -441,11 +432,18 @@ namespace Orlo.World
                 }
             }
 
-            // Add a box collider based on combined bounds
+            // Ground-rebase: store masters are center-pivoted (minY ~= -height/2), so
+            // lift the mesh so its base sits on the ground plane instead of sinking
+            // half-under it. Unconditional: a no-op for already base-pivoted models
+            // (minY ~= 0, e.g. the procedural-card trees). Applied on the pivot so the
+            // root transform stays the clean world-placement/scale anchor.
             if (boundsInitialized)
             {
+                float groundOffset = -combinedBounds.min.y;
+                pivot.transform.localPosition = new Vector3(0f, groundOffset, 0f);
+
                 var col = root.AddComponent<BoxCollider>();
-                col.center = combinedBounds.center;
+                col.center = combinedBounds.center + new Vector3(0f, groundOffset, 0f);
                 col.size = combinedBounds.size;
             }
 
