@@ -101,6 +101,11 @@ namespace Orlo.World
             if (pooled != null)
             {
                 pooled.transform.SetPositionAndRotation(position, rotation);
+                // Clear any prior occupant's scale. The server omits Transform.Scale
+                // when it's 1.0 (packet_dispatcher.cpp), so a pooled 4.71x lantern
+                // reused by a scale-1.0 entity would otherwise get no corrective
+                // packet and render giant. A !=1 scale re-applies via PacketHandler.
+                pooled.transform.localScale = Vector3.one;
                 pooled.SetActive(true);
                 return pooled;
             }
@@ -141,6 +146,12 @@ namespace Orlo.World
                             // Transfer PoolTag
                             var newTag = downloadedModel.AddComponent<PoolTag>();
                             newTag.PoolKey = poolKey;
+
+                            // Repoint the entity map from the placeholder to the master
+                            // before destroying it, so later move/scale/despawn packets
+                            // reach the real model (and despawn doesn't leak the master).
+                            if (EntityManager.Instance != null)
+                                EntityManager.Instance.ReplaceEntityObject(placeholder, downloadedModel);
 
                             Object.Destroy(placeholder);
                         }
