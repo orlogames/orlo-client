@@ -106,6 +106,24 @@ namespace Orlo.World
             return go;
         }
 
+        /// <summary>
+        /// Repoint a tracked entity from one GameObject to another — used when a
+        /// CDN-downloaded master swaps in for its procedural placeholder. Without
+        /// this the map still references the destroyed placeholder, so later
+        /// move/scale/despawn packets miss the real model and despawn leaks it.
+        /// </summary>
+        public void ReplaceEntityObject(GameObject oldGo, GameObject newGo)
+        {
+            if (oldGo == null || newGo == null) return;
+            ulong foundId = 0;
+            bool found = false;
+            foreach (var kv in _entities)
+            {
+                if (ReferenceEquals(kv.Value, oldGo)) { foundId = kv.Key; found = true; break; }
+            }
+            if (found) _entities[foundId] = newGo;
+        }
+
         /// <summary>Spawn a loot entity with a glowing visual at the given position.</summary>
         public void SpawnLootEntity(ulong lootEntityId, Vector3 position, string lootName)
         {
