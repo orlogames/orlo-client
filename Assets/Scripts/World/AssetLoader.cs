@@ -387,8 +387,8 @@ namespace Orlo.World
             var root = new GameObject($"Model_{assetId}");
 
             // Child pivot holds the mesh so the root stays free for world positioning.
-            // glTF is Y-up by spec and the asset store is verified Y-up (prop QA gate),
-            // so we do NOT auto-rotate here. The old `size.z > size.y*1.2` heuristic
+            // glTF is Y-up by spec and the asset store was audited Y-up (34/34,
+            // 2026-07-11), so we do NOT auto-rotate here. The old `size.z > size.y*1.2` heuristic
             // produced only false positives — e.g. the flat pathway_stone tile
             // (1.0 x 0.15 x 1.0) was rotated -90deg X and rendered as a 1m-tall wall.
             var pivot = new GameObject("ModelPivot");
