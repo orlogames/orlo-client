@@ -215,14 +215,25 @@ jobs:
 
       - name: Install AWS CLI
         run: |
+          export PATH="$HOME/.local/bin:$PATH"
           if ! command -v aws &> /dev/null; then
             # User-scoped install — self-hosted runners don't grant sudo
             # (broke 2026-07-02 when jobs moved off a passwordless-sudo temp runner).
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip -q awscliv2.zip
+            # Unpack in RUNNER_TEMP, never the checkout: publish-cdn has no
+            # actions/checkout, so nothing ever cleans its workspace and a
+            # leftover aws/ made unzip prompt to overwrite and die on EOF
+            # (broke 2026-07-11).
+            cd "${RUNNER_TEMP:?RUNNER_TEMP is not set}"
+            rm -rf aws awscliv2.zip
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+            unzip -qo awscliv2.zip
             ./aws/install -i "$HOME/.aws-cli" -b "$HOME/.local/bin" --update
-            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           fi
+          # Export unconditionally — the guard above may skip the install, but
+          # later steps still need the dir on PATH ($GITHUB_PATH does not persist
+          # across jobs, so the guard would otherwise re-download 72MB every job).
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          command -v aws > /dev/null || { echo "aws not on PATH after install"; exit 1; }
 
       - name: Download orlo-client-windows from S3
         env:
@@ -282,18 +293,39 @@ jobs:
     steps:
       - name: Install AWS CLI
         run: |
+          export PATH="$HOME/.local/bin:$PATH"
           if ! command -v aws &> /dev/null; then
             # User-scoped install — self-hosted runners don't grant sudo
             # (broke 2026-07-02 when jobs moved off a passwordless-sudo temp runner).
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip -q awscliv2.zip
+            # Unpack in RUNNER_TEMP, never the checkout: publish-cdn has no
+            # actions/checkout, so nothing ever cleans its workspace and a
+            # leftover aws/ made unzip prompt to overwrite and die on EOF
+            # (broke 2026-07-11).
+            cd "${RUNNER_TEMP:?RUNNER_TEMP is not set}"
+            rm -rf aws awscliv2.zip
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+            unzip -qo awscliv2.zip
             ./aws/install -i "$HOME/.aws-cli" -b "$HOME/.local/bin" --update
-            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           fi
+          # Export unconditionally — the guard above may skip the install, but
+          # later steps still need the dir on PATH ($GITHUB_PATH does not persist
+          # across jobs, so the guard would otherwise re-download 72MB every job).
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          command -v aws > /dev/null || { echo "aws not on PATH after install"; exit 1; }
 
       - name: Download CI artifacts from S3
         run: |
           SHA="${{ github.sha }}"
+
+          # This job has no actions/checkout, so nothing cleans the workspace
+          # between runs on a self-hosted runner. Wipe every artifact we are
+          # about to recreate: a stale tree would overlay onto the new build and
+          # `aws s3 sync` (no --delete) would ship the leftovers into this
+          # version's CDN prefix. A stale manifest.json is worse still — the
+          # `if: always()` register step below would read it and publish the
+          # PREVIOUS release's size/file-count against this version.
+          rm -rf client-files dist manifest.json \
+                 orlo-client-files.tar.gz orlo-client-manifest.tar.gz orlo-client-windows.tar.gz
 
           aws s3 cp "s3://${S3_BUCKET}/ci/orlo-client/orlo-client-files-${SHA}.tar.gz" \
             orlo-client-files.tar.gz --endpoint-url "$S3_ENDPOINT"
@@ -389,7 +421,9 @@ jobs:
             --endpoint-url "$S3_ENDPOINT" || true
 
       - name: Register version with updater-api
-        if: always()
+        # was `if: always()` — on a failed artifact download that re-ran this step
+        # against whatever manifest.json was left in the workspace.
+        if: success()
         run: |
           MANIFEST_URL="https://orlo-cdn.fsn1.your-objectstorage.com/releases/client/${VERSION}/manifest.json"
           TOTAL_SIZE=$(python3 -c "import json; print(json.load(open('manifest.json')).get('total_size',0))" 2>/dev/null || echo "0")
@@ -397,7 +431,10 @@ jobs:
 
           NOTES=$(git log --pretty=format:'- %s' HEAD~5..HEAD 2>/dev/null | head -10 || echo "Automated release")
 
-          curl -s -X POST "https://updater.orlo.games/admin/client/publish" \
+          # --fail-with-body: plain `curl -s` exits 0 on an HTTP error, so the
+          # `|| WARNING` branch below was dead code and this step reported
+          # "Registered" even when updater.orlo.games returned 401 (2026-07-11).
+          if curl -sS --fail-with-body -X POST "https://updater.orlo.games/admin/client/publish" \
             -H "Content-Type: application/json" \
             -H "X-Admin-Key: ${{ secrets.UPDATER_ADMIN_KEY }}" \
             -d "{
@@ -407,5 +444,8 @@ jobs:
               \"total_size\": ${TOTAL_SIZE},
               \"files_count\": ${FILES_COUNT},
               \"notes\": \"${NOTES}\"
-            }" && echo "Registered v${VERSION} with updater-api" \
-            || echo "WARNING: Failed to register with updater-api (non-fatal)"
+            }"; then
+            echo "Registered v${VERSION} with updater-api"
+          else
+            echo "::warning::Failed to register v${VERSION} with updater-api (non-fatal — launcher falls back to the rolling S3 manifest)"
+          fi
