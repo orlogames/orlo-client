@@ -688,11 +688,48 @@ namespace Orlo.World
                 }
             }
 
-            foreach (var gltfMesh in gltfMeshes)
+            // Resolve each mesh's world transform from the scene graph. glTF stores
+            // geometry in a flat `meshes` array but positions each instance via `nodes`
+            // (TRS or a 16-float matrix, composed parent→child). Earlier this loader
+            // ignored nodes entirely, silently dropping every node transform: node-scaled
+            // props rendered too small, and NPCs authored with a +90°X (Z-up→Y-up) node
+            // rotation rendered flat on their backs. We now bake each mesh's composed
+            // world matrix into its vertices below, before the handedness Z-flip. On
+            // identity-node masters (all live CDN masters, audited 2026-07-13) this is a
+            // provable no-op — world.isIdentity short-circuits the transform.
+            var meshWorld = new Dictionary<int, Matrix4x4>();
+            var nodes = gltf.GetArray("nodes");
+            if (nodes != null)
             {
+                var roots = new List<int>();
+                var scenes = gltf.GetArray("scenes");
+                int sceneIdx = gltf.GetInt("scene", 0);
+                if (scenes != null && sceneIdx >= 0 && sceneIdx < scenes.Count)
+                {
+                    var rootArr = scenes[sceneIdx].GetIntArray("nodes");
+                    if (rootArr != null) roots.AddRange(rootArr);
+                }
+                // No scene block: treat every node as a root. The DFS visited-set still
+                // resolves the hierarchy so children are never double-composed.
+                if (roots.Count == 0)
+                    for (int i = 0; i < nodes.Count; i++) roots.Add(i);
+
+                var visited = new HashSet<int>();
+                foreach (var r in roots)
+                    ComposeMeshWorldMatrices(nodes, r, Matrix4x4.identity, meshWorld, visited);
+            }
+
+            for (int meshIndex = 0; meshIndex < gltfMeshes.Count; meshIndex++)
+            {
+                var gltfMesh = gltfMeshes[meshIndex];
                 string meshName = gltfMesh.GetString("name", "mesh");
                 var primitives = gltfMesh.GetArray("primitives");
                 if (primitives == null) continue;
+
+                Matrix4x4 world;
+                bool hasWorld = meshWorld.TryGetValue(meshIndex, out world) && !world.isIdentity;
+                // Inverse-transpose transforms normals correctly under non-uniform scale.
+                Matrix4x4 normalMatrix = hasWorld ? world.inverse.transpose : Matrix4x4.identity;
 
                 foreach (var prim in primitives)
                 {
@@ -719,6 +756,17 @@ namespace Orlo.World
 
                     var mesh = new Mesh();
                     mesh.name = meshName;
+
+                    // Bake the node's composed world transform into the geometry (glTF
+                    // space, before the handedness flip). No-op when the node is identity.
+                    if (hasWorld)
+                    {
+                        for (int i = 0; i < positions.Length; i++)
+                            positions[i] = world.MultiplyPoint3x4(positions[i]);
+                        if (normals != null)
+                            for (int i = 0; i < normals.Length; i++)
+                                normals[i] = normalMatrix.MultiplyVector(normals[i]).normalized;
+                    }
 
                     // glTF right-handed to Unity left-handed: flip Z
                     for (int i = 0; i < positions.Length; i++)
@@ -808,6 +856,56 @@ namespace Orlo.World
             }
 
             return meshes;
+        }
+
+        /// <summary>
+        /// Depth-first compose each node's world matrix (parent × local) and record the
+        /// world matrix of every mesh instance. First writer wins for a shared mesh; the
+        /// visited-set prevents a malformed graph from recursing forever.
+        /// </summary>
+        private static void ComposeMeshWorldMatrices(
+            List<SimpleJson.JsonNode> nodes, int idx, Matrix4x4 parent,
+            Dictionary<int, Matrix4x4> meshWorld, HashSet<int> visited)
+        {
+            if (idx < 0 || idx >= nodes.Count || !visited.Add(idx)) return;
+
+            var node = nodes[idx];
+            Matrix4x4 world = parent * GetNodeLocalMatrix(node);
+
+            int meshIdx = node.GetInt("mesh", -1);
+            if (meshIdx >= 0 && !meshWorld.ContainsKey(meshIdx))
+                meshWorld[meshIdx] = world;
+
+            var children = node.GetIntArray("children");
+            if (children != null)
+                foreach (var c in children)
+                    ComposeMeshWorldMatrices(nodes, c, world, meshWorld, visited);
+        }
+
+        /// <summary>
+        /// Read a glTF node's local transform, preferring an explicit 16-float `matrix`
+        /// (column-major) and otherwise composing TRS. Missing fields default to identity.
+        /// </summary>
+        private static Matrix4x4 GetNodeLocalMatrix(SimpleJson.JsonNode node)
+        {
+            var m = node.GetFloatArray("matrix");
+            if (m != null && m.Length == 16)
+            {
+                // glTF matrices are column-major: element (row, col) = m[col*4 + row].
+                var mat = new Matrix4x4();
+                for (int col = 0; col < 4; col++)
+                    for (int row = 0; row < 4; row++)
+                        mat[row, col] = m[col * 4 + row];
+                return mat;
+            }
+
+            var t = node.GetFloatArray("translation");
+            var r = node.GetFloatArray("rotation");
+            var s = node.GetFloatArray("scale");
+            Vector3 tr = (t != null && t.Length >= 3) ? new Vector3(t[0], t[1], t[2]) : Vector3.zero;
+            Quaternion rot = (r != null && r.Length >= 4) ? new Quaternion(r[0], r[1], r[2], r[3]) : Quaternion.identity;
+            Vector3 sc = (s != null && s.Length >= 3) ? new Vector3(s[0], s[1], s[2]) : Vector3.one;
+            return Matrix4x4.TRS(tr, rot, sc);
         }
 
         /// <summary>
