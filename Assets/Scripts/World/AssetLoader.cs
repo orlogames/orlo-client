@@ -688,8 +688,28 @@ namespace Orlo.World
                 }
             }
 
-            foreach (var gltfMesh in gltfMeshes)
+            // Resolve each mesh to its node world-transform by walking the scene graph.
+            // Previously this loop iterated the flat `meshes` array and ignored `nodes`/
+            // `scenes` entirely, silently discarding every node TRS. That dropped both
+            // node scale (masters rendered too small) and node rotation (Z-up authored
+            // assets — e.g. every NPC — rendered flat on their backs). We now bake the
+            // composed node world-matrix into the vertices so mesh.bounds (and therefore
+            // the ground-rebase and BoxCollider in InstantiateFromCache) are correct.
+            // Identity-node masters (all 35 live CDN masters as of 2026-07-13) take the
+            // fast path below and are a byte-for-byte no-op.
+            var meshInstances = BuildMeshInstances(gltf, gltfMeshes.Count);
+
+            foreach (var inst in meshInstances)
             {
+                var gltfMesh = gltfMeshes[inst.meshIndex];
+                Matrix4x4 world = inst.world;
+                bool worldIsIdentity = world.isIdentity;
+                // A Z-flip mirrors handedness (reverses winding). If the node matrix
+                // itself mirrors (negative determinant), the two cancel — so only
+                // reverse winding when the composed world matrix is non-mirroring.
+                bool reverseWinding = world.determinant >= 0f;
+                Matrix4x4 normalMatrix = worldIsIdentity ? Matrix4x4.identity : world.inverse.transpose;
+
                 string meshName = gltfMesh.GetString("name", "mesh");
                 var primitives = gltfMesh.GetArray("primitives");
                 if (primitives == null) continue;
@@ -720,6 +740,12 @@ namespace Orlo.World
                     var mesh = new Mesh();
                     mesh.name = meshName;
 
+                    // Bake the node world-transform into positions (still in glTF space)
+                    // BEFORE the Z-flip, keeping the flip the single, final handedness step.
+                    if (!worldIsIdentity)
+                        for (int i = 0; i < positions.Length; i++)
+                            positions[i] = world.MultiplyPoint3x4(positions[i]);
+
                     // glTF right-handed to Unity left-handed: flip Z
                     for (int i = 0; i < positions.Length; i++)
                         positions[i].z = -positions[i].z;
@@ -727,6 +753,11 @@ namespace Orlo.World
 
                     if (normals != null)
                     {
+                        // Normals transform by the inverse-transpose (correct under
+                        // non-uniform node scale), then take the same Z-flip.
+                        if (!worldIsIdentity)
+                            for (int i = 0; i < normals.Length; i++)
+                                normals[i] = normalMatrix.MultiplyVector(normals[i]).normalized;
                         for (int i = 0; i < normals.Length; i++)
                             normals[i].z = -normals[i].z;
                         mesh.normals = normals;
@@ -736,13 +767,15 @@ namespace Orlo.World
 
                     if (indices != null)
                     {
-                        // Reverse winding order for left-handed conversion
-                        for (int i = 0; i < indices.Length - 2; i += 3)
-                        {
-                            int tmp = indices[i];
-                            indices[i] = indices[i + 2];
-                            indices[i + 2] = tmp;
-                        }
+                        // Reverse winding order for left-handed conversion (skipped when
+                        // the node matrix already mirrors, so the two flips don't cancel).
+                        if (reverseWinding)
+                            for (int i = 0; i < indices.Length - 2; i += 3)
+                            {
+                                int tmp = indices[i];
+                                indices[i] = indices[i + 2];
+                                indices[i + 2] = tmp;
+                            }
                         mesh.triangles = indices;
                     }
 
@@ -808,6 +841,112 @@ namespace Orlo.World
             }
 
             return meshes;
+        }
+
+        private struct MeshInstance
+        {
+            public int meshIndex;
+            public Matrix4x4 world;
+        }
+
+        /// <summary>
+        /// Walk the glTF scene graph and return one (meshIndex, worldMatrix) pair for
+        /// every mesh-bearing node, composing each node's local TRS/matrix down from the
+        /// scene roots. Falls back to one identity instance per mesh when the file has no
+        /// usable node graph, preserving the pre-node-transform behaviour exactly.
+        /// </summary>
+        private static List<MeshInstance> BuildMeshInstances(SimpleJson.JsonNode gltf, int meshCount)
+        {
+            var instances = new List<MeshInstance>();
+            var nodes = gltf.GetArray("nodes");
+
+            if (nodes != null && nodes.Count > 0)
+            {
+                // Determine root nodes: the active scene's node list if present, else every
+                // node that is not referenced as a child (a proper forest root).
+                var roots = new List<int>();
+                var scenes = gltf.GetArray("scenes");
+                int sceneIdx = gltf.GetInt("scene", 0);
+                if (scenes != null && sceneIdx >= 0 && sceneIdx < scenes.Count)
+                {
+                    var sceneNodes = scenes[sceneIdx].GetIntArray("nodes");
+                    if (sceneNodes != null) roots.AddRange(sceneNodes);
+                }
+                if (roots.Count == 0)
+                {
+                    var hasParent = new HashSet<int>();
+                    for (int i = 0; i < nodes.Count; i++)
+                    {
+                        var ch = nodes[i].GetIntArray("children");
+                        if (ch != null) foreach (var c in ch) hasParent.Add(c);
+                    }
+                    for (int i = 0; i < nodes.Count; i++)
+                        if (!hasParent.Contains(i)) roots.Add(i);
+                }
+
+                var visited = new HashSet<int>();
+                var stack = new Stack<KeyValuePair<int, Matrix4x4>>();
+                foreach (var r in roots)
+                    stack.Push(new KeyValuePair<int, Matrix4x4>(r, Matrix4x4.identity));
+
+                while (stack.Count > 0)
+                {
+                    var frame = stack.Pop();
+                    int ni = frame.Key;
+                    if (ni < 0 || ni >= nodes.Count) continue;
+                    if (!visited.Add(ni)) continue;
+
+                    var node = nodes[ni];
+                    Matrix4x4 world = frame.Value * ComposeNodeMatrix(node);
+
+                    int meshIdx = node.GetInt("mesh", -1);
+                    if (meshIdx >= 0 && meshIdx < meshCount)
+                        instances.Add(new MeshInstance { meshIndex = meshIdx, world = world });
+
+                    var children = node.GetIntArray("children");
+                    if (children != null)
+                        foreach (var c in children)
+                            stack.Push(new KeyValuePair<int, Matrix4x4>(c, world));
+                }
+            }
+
+            // No node graph, or a graph that references no meshes: fall back to the legacy
+            // flat-iteration order with identity transforms so nothing regresses.
+            if (instances.Count == 0)
+                for (int mi = 0; mi < meshCount; mi++)
+                    instances.Add(new MeshInstance { meshIndex = mi, world = Matrix4x4.identity });
+
+            return instances;
+        }
+
+        /// <summary>
+        /// Build a node's local transform: the explicit column-major `matrix` if present
+        /// (Unity's Matrix4x4 linear indexer is column-major too, so it copies directly),
+        /// otherwise T * R * S from the translation/rotation/scale channels.
+        /// </summary>
+        private static Matrix4x4 ComposeNodeMatrix(SimpleJson.JsonNode node)
+        {
+            var m = node.GetFloatArray("matrix");
+            if (m != null && m.Length == 16)
+            {
+                var mat = new Matrix4x4();
+                for (int i = 0; i < 16; i++) mat[i] = m[i];
+                return mat;
+            }
+
+            var tArr = node.GetFloatArray("translation");
+            Vector3 t = (tArr != null && tArr.Length >= 3)
+                ? new Vector3(tArr[0], tArr[1], tArr[2]) : Vector3.zero;
+
+            var rArr = node.GetFloatArray("rotation");
+            Quaternion r = (rArr != null && rArr.Length >= 4)
+                ? new Quaternion(rArr[0], rArr[1], rArr[2], rArr[3]) : Quaternion.identity;
+
+            var sArr = node.GetFloatArray("scale");
+            Vector3 s = (sArr != null && sArr.Length >= 3)
+                ? new Vector3(sArr[0], sArr[1], sArr[2]) : Vector3.one;
+
+            return Matrix4x4.TRS(t, r, s);
         }
 
         /// <summary>
