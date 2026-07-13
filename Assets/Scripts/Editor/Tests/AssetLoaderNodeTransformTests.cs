@@ -58,6 +58,24 @@ namespace Orlo.Tests
         }
 
         [Test]
+        public void ParseGlb_MirroredNode_DoesNotDoubleFlipWinding()
+        {
+            // A node scale of [-1,1,1] is a mirror (negative determinant). The RH->LH
+            // Z-flip is itself a reflection, and the unconditional winding reversal exists
+            // only to compensate it — so a mirrored node is a SECOND reflection and the two
+            // cancel. The loader must skip the reversal in that case (reverseWinding =
+            // determinant >= 0). If it reversed anyway, the faces come out inside-out with
+            // no error and no gate. Assert the mirrored mesh keeps the SAME geometric
+            // winding sense as the identity mesh; a double-flip would invert it.
+            int identitySign = WindingSign(ParseFirstMesh(BuildBarGlb(null)));
+            int mirroredSign = WindingSign(ParseFirstMesh(BuildBarGlb(null, new float[] { -1f, 1f, 1f })));
+
+            Assert.AreEqual(identitySign, mirroredSign,
+                "Mirrored node must not double-flip winding — faces would render inside-out. " +
+                "If this fails, the determinant>=0 winding guard has regressed.");
+        }
+
+        [Test]
         public void ParseGlb_IdentityNode_IsUnchanged()
         {
             // No rotation → the bar keeps its authored orientation (tall in Z). This pins
@@ -71,6 +89,59 @@ namespace Orlo.Tests
         }
 
         // ── Helpers ──────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Geometric winding sense of a closed mesh, independent of any render convention:
+        /// for each triangle, sign of (faceNormal · outwardFromCenter), summed. A double-flip
+        /// of the triangle order inverts this sign, which is exactly the mirrored-node
+        /// regression we want to catch.
+        /// </summary>
+        private static int WindingSign(Mesh mesh)
+        {
+            Vector3[] verts = mesh.vertices;
+            int[] tris = mesh.triangles;
+            Vector3 c = mesh.bounds.center;
+            int sum = 0;
+            for (int i = 0; i < tris.Length - 2; i += 3)
+            {
+                Vector3 a = verts[tris[i]], b = verts[tris[i + 1]], d = verts[tris[i + 2]];
+                Vector3 faceN = Vector3.Cross(b - a, d - a);
+                Vector3 outward = ((a + b + d) / 3f) - c;
+                sum += Vector3.Dot(faceN, outward) >= 0f ? 1 : -1;
+            }
+            return sum >= 0 ? 1 : -1;
+        }
+
+        private static Mesh ParseFirstMesh(byte[] glb)
+        {
+            var go = new GameObject("AssetLoaderTestHost");
+            try
+            {
+                var loader = go.AddComponent<AssetLoader>();
+                var parse = typeof(AssetLoader).GetMethod(
+                    "ParseGlb", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(parse, "ParseGlb(byte[]) not found via reflection.");
+
+                var entries = (IEnumerable)parse.Invoke(loader, new object[] { glb });
+                Assert.NotNull(entries, "ParseGlb returned null.");
+
+                FieldInfo meshField = null;
+                foreach (var entry in entries)
+                {
+                    if (meshField == null)
+                        meshField = entry.GetType().GetField("mesh", BindingFlags.Instance | BindingFlags.Public);
+                    var mesh = (Mesh)meshField.GetValue(entry);
+                    Assert.NotNull(mesh, "MeshEntry.mesh was null.");
+                    return mesh;
+                }
+                Assert.Fail("ParseGlb produced no meshes for the fixture GLB.");
+                return null;
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
+        }
 
         private static Bounds ParseAndCombineBounds(byte[] glb)
         {
