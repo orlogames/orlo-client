@@ -267,7 +267,11 @@ namespace Orlo.World
             {
                 var lightGo = new GameObject("LanternLight");
                 lightGo.transform.SetParent(go.transform, false);
-                lightGo.transform.localPosition = Vector3.up * 1.5f;
+                // Lamp head sits at 0.818 of the unit-normalized post height. The root
+                // carries the layout scale, so a unit-space offset keeps the light on the
+                // head at ANY spec height (2.0m, 2.8m, ...). Was 1.5f — >1.0 in unit space,
+                // so the light floated above the whole post and ×scale drifted further off.
+                lightGo.transform.localPosition = Vector3.up * 0.818f;
                 var pl = lightGo.AddComponent<Light>();
                 pl.type = LightType.Point;
                 pl.color = new Color(1.0f, 0.7f, 0.3f);
@@ -279,6 +283,10 @@ namespace Orlo.World
             {
                 var lightGo = new GameObject("BuildingLight");
                 lightGo.transform.SetParent(go.transform, false);
+                // TODO(same float-light bug as lantern): 2.0f is >1.0 in unit space, so this
+                // floats above the building and ×scale drifts further. Needs a MEASURED
+                // per-building emitter fraction (window height / unit height) — resolve in the
+                // building re-aspect/re-gen pass rather than guessing a constant here.
                 lightGo.transform.localPosition = Vector3.up * 2.0f;
                 var pl = lightGo.AddComponent<Light>();
                 pl.type = LightType.Point;
