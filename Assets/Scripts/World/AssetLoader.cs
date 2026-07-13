@@ -625,6 +625,70 @@ namespace Orlo.World
             public MaterialData material;
         }
 
+        /// <summary>
+        /// Build a glTF node's local transform matrix from either its explicit
+        /// column-major "matrix" or its separate translation/rotation/scale.
+        /// Computed in glTF space (Y-up, right-handed); the RH->LH conversion
+        /// happens later via the per-vertex Z-flip.
+        /// </summary>
+        private static Matrix4x4 NodeLocalMatrix(SimpleJson.JsonNode node)
+        {
+            var m = node.GetFloatArray("matrix");
+            if (m != null && m.Length == 16)
+            {
+                // glTF matrix is column-major; Unity Matrix4x4 is column-major too.
+                var mat = new Matrix4x4();
+                mat.SetColumn(0, new Vector4(m[0], m[1], m[2], m[3]));
+                mat.SetColumn(1, new Vector4(m[4], m[5], m[6], m[7]));
+                mat.SetColumn(2, new Vector4(m[8], m[9], m[10], m[11]));
+                mat.SetColumn(3, new Vector4(m[12], m[13], m[14], m[15]));
+                return mat;
+            }
+            var t = node.GetFloatArray("translation");
+            var r = node.GetFloatArray("rotation");
+            var s = node.GetFloatArray("scale");
+            Vector3 tv = (t != null && t.Length >= 3) ? new Vector3(t[0], t[1], t[2]) : Vector3.zero;
+            Quaternion rq = (r != null && r.Length >= 4) ? new Quaternion(r[0], r[1], r[2], r[3]) : Quaternion.identity;
+            Vector3 sv = (s != null && s.Length >= 3) ? new Vector3(s[0], s[1], s[2]) : Vector3.one;
+            return Matrix4x4.TRS(tv, rq, sv);
+        }
+
+        /// <summary>
+        /// Depth-first scene-graph traversal accumulating each node's world matrix
+        /// (world = parent * local) and recording it against the mesh the node draws.
+        /// A cycle guard and a first-writer-wins rule keep a malformed or multi-instanced
+        /// graph from corrupting the result.
+        /// </summary>
+        private static void AccumulateNodeTransform(
+            int nodeIdx, Matrix4x4 parent, List<SimpleJson.JsonNode> nodes,
+            Matrix4x4[] meshMatrix, bool[] meshMatrixSet, HashSet<int> visited)
+        {
+            if (nodeIdx < 0 || nodeIdx >= nodes.Count) return;
+            if (!visited.Add(nodeIdx)) return; // cycle / shared-node guard
+            var node = nodes[nodeIdx];
+            Matrix4x4 world = parent * NodeLocalMatrix(node);
+
+            int meshIdx = node.GetInt("mesh", -1);
+            if (meshIdx >= 0 && meshIdx < meshMatrix.Length)
+            {
+                if (meshMatrixSet[meshIdx])
+                {
+                    if (meshMatrix[meshIdx] != world)
+                        Debug.LogWarning($"[AssetLoader] mesh {meshIdx} instanced at multiple world transforms; keeping first. Shared-at-different-scale meshes are not supported.");
+                }
+                else
+                {
+                    meshMatrix[meshIdx] = world;
+                    meshMatrixSet[meshIdx] = true;
+                }
+            }
+
+            var children = node.GetIntArray("children");
+            if (children != null)
+                foreach (int c in children)
+                    AccumulateNodeTransform(c, world, nodes, meshMatrix, meshMatrixSet, visited);
+        }
+
         private List<MeshEntry> ParseGlb(byte[] data)
         {
             var meshes = new List<MeshEntry>();
@@ -665,6 +729,41 @@ namespace Orlo.World
 
             if (gltfMeshes == null || accessors == null || bufferViews == null) return meshes;
 
+            // Resolve each mesh's world transform from the glTF node graph.
+            // ParseGlb historically read only the flat meshes[] array and ignored
+            // nodes/scenes entirely, silently discarding every node TRS. That dropped
+            // building scale (tiny props) and, worse, laid rotated NPCs flat on their
+            // back (a +90 deg X node rotation was thrown away). We resolve a per-mesh
+            // world matrix here and bake it into the vertices below, BEFORE the RH->LH
+            // Z-flip, so mesh.bounds stays correct and the ground-rebase + BoxCollider
+            // in InstantiateFromCache remain auto-correct. Identity nodes (every live
+            // CDN master) resolve to the identity matrix -> a byte-for-byte no-op.
+            var nodes = gltf.GetArray("nodes");
+            var scenes = gltf.GetArray("scenes");
+            var meshMatrix = new Matrix4x4[gltfMeshes.Count];
+            var meshMatrixSet = new bool[gltfMeshes.Count];
+            for (int i = 0; i < meshMatrix.Length; i++) meshMatrix[i] = Matrix4x4.identity;
+            if (nodes != null && nodes.Count > 0)
+            {
+                List<int> roots = null;
+                if (scenes != null && scenes.Count > 0)
+                {
+                    int sceneIdx = gltf.GetInt("scene", 0);
+                    if (sceneIdx < 0 || sceneIdx >= scenes.Count) sceneIdx = 0;
+                    var sceneNodes = scenes[sceneIdx].GetIntArray("nodes");
+                    if (sceneNodes != null) roots = new List<int>(sceneNodes);
+                }
+                if (roots == null)
+                {
+                    // No scene declared: treat every node as a root.
+                    roots = new List<int>();
+                    for (int i = 0; i < nodes.Count; i++) roots.Add(i);
+                }
+                var visited = new HashSet<int>();
+                foreach (int r in roots)
+                    AccumulateNodeTransform(r, Matrix4x4.identity, nodes, meshMatrix, meshMatrixSet, visited);
+            }
+
             // Parse embedded textures
             var parsedTextures = new Dictionary<int, Texture2D>();
             if (images != null)
@@ -688,8 +787,16 @@ namespace Orlo.World
                 }
             }
 
-            foreach (var gltfMesh in gltfMeshes)
+            for (int meshIndex = 0; meshIndex < gltfMeshes.Count; meshIndex++)
             {
+                var gltfMesh = gltfMeshes[meshIndex];
+                Matrix4x4 worldMatrix = meshMatrix[meshIndex];
+                bool identityMatrix = worldMatrix == Matrix4x4.identity;
+                // A mirrored node (negative determinant) flips winding; that cancels
+                // the unconditional RH->LH reversal below, so we skip the reversal then.
+                bool mirroredMatrix = !identityMatrix && worldMatrix.determinant < 0f;
+                if (mirroredMatrix)
+                    Debug.LogWarning($"[AssetLoader] mesh {meshIndex} node transform is mirrored (negative determinant); compensating winding.");
                 string meshName = gltfMesh.GetString("name", "mesh");
                 var primitives = gltfMesh.GetArray("primitives");
                 if (primitives == null) continue;
@@ -717,6 +824,24 @@ namespace Orlo.World
 
                     if (positions == null || positions.Length == 0) continue;
 
+                    // Bake this mesh's node world-transform into the vertices, in glTF
+                    // (Y-up, right-handed) space, BEFORE the RH->LH Z-flip below. This is
+                    // what makes a rotated NPC stand upright and a scaled prop the right
+                    // size. Identity nodes skip this entirely (no-op on every live master).
+                    if (!identityMatrix)
+                    {
+                        for (int i = 0; i < positions.Length; i++)
+                            positions[i] = worldMatrix.MultiplyPoint3x4(positions[i]);
+                        if (normals != null)
+                        {
+                            // Normals transform by the inverse-transpose so they stay
+                            // correct under non-uniform scale.
+                            Matrix4x4 normalMatrix = worldMatrix.inverse.transpose;
+                            for (int i = 0; i < normals.Length; i++)
+                                normals[i] = normalMatrix.MultiplyVector(normals[i]).normalized;
+                        }
+                    }
+
                     var mesh = new Mesh();
                     mesh.name = meshName;
 
@@ -736,12 +861,17 @@ namespace Orlo.World
 
                     if (indices != null)
                     {
-                        // Reverse winding order for left-handed conversion
-                        for (int i = 0; i < indices.Length - 2; i += 3)
+                        // Reverse winding order for left-handed conversion. A mirrored
+                        // node transform already flipped winding, so skip the reversal
+                        // then to avoid a double-flip (inside-out faces).
+                        if (!mirroredMatrix)
                         {
-                            int tmp = indices[i];
-                            indices[i] = indices[i + 2];
-                            indices[i + 2] = tmp;
+                            for (int i = 0; i < indices.Length - 2; i += 3)
+                            {
+                                int tmp = indices[i];
+                                indices[i] = indices[i + 2];
+                                indices[i + 2] = tmp;
+                            }
                         }
                         mesh.triangles = indices;
                     }
