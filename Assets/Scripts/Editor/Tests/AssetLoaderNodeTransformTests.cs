@@ -43,6 +43,21 @@ namespace Orlo.Tests
         }
 
         [Test]
+        public void ParseGlb_HonoursNodeScale_ScalesBounds()
+        {
+            // Node scale is the ORIGINAL bug class (the Tripo masters authored at 3-4x that
+            // came through too small once node TRS was dropped). This PR activates that path
+            // for the first time, so pin it: a 2x node scale must double every extent.
+            byte[] glb = BuildBarGlb(null, new float[] { 2f, 2f, 2f });
+
+            Bounds b = ParseAndCombineBounds(glb);
+
+            Assert.AreEqual(2f * (2f * HalfZ), b.size.z, 1e-3f, "Tall axis must double under node scale 2x (~4m).");
+            Assert.AreEqual(2f * (2f * HalfXY), b.size.x, 1e-3f, "Thin axis must double under node scale 2x (~0.4m).");
+            Assert.AreEqual(2f * (2f * HalfXY), b.size.y, 1e-3f, "Thin axis must double under node scale 2x (~0.4m).");
+        }
+
+        [Test]
         public void ParseGlb_IdentityNode_IsUnchanged()
         {
             // No rotation → the bar keeps its authored orientation (tall in Z). This pins
@@ -98,9 +113,10 @@ namespace Orlo.Tests
         /// <summary>
         /// Build a minimal single-node GLB of an axis-aligned box (thin X/Y, tall Z).
         /// If <paramref name="rotation"/> is non-null it is set on node[0] as a glTF
-        /// quaternion [x,y,z,w].
+        /// quaternion [x,y,z,w]. If <paramref name="scale"/> is non-null it is set on
+        /// node[0] as a glTF scale [x,y,z].
         /// </summary>
-        private static byte[] BuildBarGlb(float[] rotation)
+        private static byte[] BuildBarGlb(float[] rotation, float[] scale = null)
         {
             // 8 box corners: X,Y in [-HalfXY, HalfXY], Z in [-HalfZ, HalfZ].
             Vector3[] v =
@@ -140,10 +156,14 @@ namespace Orlo.Tests
                 ? ""
                 : $",\"rotation\":[{F(rotation[0])},{F(rotation[1])},{F(rotation[2])},{F(rotation[3])}]";
 
+            string scl = scale == null
+                ? ""
+                : $",\"scale\":[{F(scale[0])},{F(scale[1])},{F(scale[2])}]";
+
             string json =
                 "{\"asset\":{\"version\":\"2.0\"}," +
                 "\"scene\":0,\"scenes\":[{\"nodes\":[0]}]," +
-                "\"nodes\":[{\"mesh\":0" + rot + "}]," +
+                "\"nodes\":[{\"mesh\":0" + rot + scl + "}]," +
                 "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0},\"indices\":1}]}]," +
                 "\"buffers\":[{\"byteLength\":" + bin.Length + "}]," +
                 "\"bufferViews\":[" +
