@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Orlo.Animation;
+using Orlo.Interaction;
 
 namespace Orlo.World
 {
@@ -60,6 +61,14 @@ namespace Orlo.World
             {
                 if (go.GetComponent<CharacterAnimator>() == null)
                     go.AddComponent<CharacterAnimator>();
+            }
+
+            // Attach NPCInteractable component to NPC entities (type 3)
+            if (entityType == 3)
+            {
+                var interactable = go.AddComponent<NPCInteractable>();
+                string npcName = _entityNames.TryGetValue(entityId, out var name) ? name : assetId;
+                interactable.Setup(entityId, npcName);
             }
         }
 
