@@ -992,7 +992,7 @@ namespace Orlo
 
             // --- Fallback starter environment ---
             // Creates visible ground + lighting while server terrain streams in
-            EnsureStarterEnvironment();
+            EnsureStarterEnvironment(pos);
 
             // Set up orbit camera
             var cam = Camera.main;
@@ -1183,7 +1183,7 @@ namespace Orlo
         /// so the player has something to stand on while server terrain streams in.
         /// Server-streamed terrain chunks will replace this once they arrive.
         /// </summary>
-        private void EnsureStarterEnvironment()
+        private void EnsureStarterEnvironment(Vector3 spawnPosition)
         {
             // Sun / directional light — golden hour angle for warm cinematic look
             if (FindFirstObjectByType<Light>() == null)
@@ -1198,12 +1198,22 @@ namespace Orlo
                 sunGo.transform.rotation = Quaternion.Euler(25f, -45f, 0); // low dramatic golden hour angle
             }
 
-            // Ground plane (200x200 flat green surface)
-            if (GameObject.Find("FallbackGround") == null)
+            // Ground plane (200x200 flat green surface), centered on the actual spawn
+            // position -- NOT world origin. Bug found 2026-07-15: this was hardcoded at
+            // Vector3.zero, but World::spawn_player() (orlo-server world.cpp) places
+            // players ~500 units from origin at every real settlement, so the "safety
+            // net" plane wasn't anywhere near the player while real server terrain
+            // streamed in -- they fell through nothing, every login, at any settlement
+            // placed far from the origin. FallbackGround is not currently destroyed once
+            // real terrain streams in; harmless while parked at the origin, worth a
+            // follow-up now that it sits at the live spawn point.
+            var groundCenter = new Vector3(spawnPosition.x, spawnPosition.y, spawnPosition.z);
+            var existingGround = GameObject.Find("FallbackGround");
+            if (existingGround == null)
             {
                 var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
                 ground.name = "FallbackGround";
-                ground.transform.position = Vector3.zero;
+                ground.transform.position = groundCenter;
                 ground.transform.localScale = new Vector3(20f, 1f, 20f); // 200x200m
 
                 var renderer = ground.GetComponent<Renderer>();
@@ -1211,6 +1221,13 @@ namespace Orlo
                 {
                     renderer.material = Orlo.Rendering.OrloShaders.CreateLit(new Color(0.35f, 0.55f, 0.25f));
                 }
+            }
+            else
+            {
+                // Already created in this session (e.g. a prior spawn) -- if this spawn
+                // is at a different location, re-center rather than leave a stale plane
+                // that only covers where the LAST spawn happened.
+                existingGround.transform.position = groundCenter;
             }
 
             // Ambient lighting — trilight for warm golden hour atmosphere
