@@ -66,26 +66,30 @@ namespace Orlo.Character
             "RightUpperLeg", "RightLowerLeg", "RightFoot", "RightToeBase"
         };
 
-        // Alternative bone names (Mixamo, UniRig, etc)
+        // Alternative bone names (Mixamo, UniRig, Orlo Rigging Suite SWG-style)
         private static readonly Dictionary<string, string[]> BoneAliases = new()
         {
-            { "Hips", new[] { "Hips", "mixamorig:Hips", "Armature|Hips", "pelvis" } },
-            { "Spine", new[] { "Spine", "mixamorig:Spine", "spine_01" } },
-            { "Chest", new[] { "Chest", "Spine2", "mixamorig:Spine2", "spine_03" } },
-            { "Neck", new[] { "Neck", "mixamorig:Neck", "neck_01" } },
+            { "Hips", new[] { "Hips", "mixamorig:Hips", "Armature|Hips", "pelvis", "hips", "root", "Root" } },
+            { "Spine", new[] { "Spine", "mixamorig:Spine", "spine_01", "spine", "spine1" } },
+            { "Chest", new[] { "Chest", "Spine2", "mixamorig:Spine2", "spine_03", "chest", "spine2", "spine3", "spine_02" } },
+            { "Neck", new[] { "Neck", "mixamorig:Neck", "neck_01", "neck" } },
             { "Head", new[] { "Head", "mixamorig:Head", "head" } },
-            { "LeftUpperArm", new[] { "LeftUpperArm", "LeftArm", "mixamorig:LeftArm", "upperarm_l" } },
-            { "LeftLowerArm", new[] { "LeftLowerArm", "LeftForeArm", "mixamorig:LeftForeArm", "lowerarm_l" } },
-            { "LeftHand", new[] { "LeftHand", "mixamorig:LeftHand", "hand_l" } },
-            { "RightUpperArm", new[] { "RightUpperArm", "RightArm", "mixamorig:RightArm", "upperarm_r" } },
-            { "RightLowerArm", new[] { "RightLowerArm", "RightForeArm", "mixamorig:RightForeArm", "lowerarm_r" } },
-            { "RightHand", new[] { "RightHand", "mixamorig:RightHand", "hand_r" } },
-            { "LeftUpperLeg", new[] { "LeftUpperLeg", "LeftUpLeg", "mixamorig:LeftUpLeg", "thigh_l" } },
-            { "LeftLowerLeg", new[] { "LeftLowerLeg", "LeftLeg", "mixamorig:LeftLeg", "calf_l" } },
-            { "LeftFoot", new[] { "LeftFoot", "mixamorig:LeftFoot", "foot_l" } },
-            { "RightUpperLeg", new[] { "RightUpperLeg", "RightUpLeg", "mixamorig:RightUpLeg", "thigh_r" } },
-            { "RightLowerLeg", new[] { "RightLowerLeg", "RightLeg", "mixamorig:RightLeg", "calf_r" } },
-            { "RightFoot", new[] { "RightFoot", "mixamorig:RightFoot", "foot_r" } },
+            { "LeftShoulder", new[] { "LeftShoulder", "mixamorig:LeftShoulder", "clavicle_l", "l_clav" } },
+            { "LeftUpperArm", new[] { "LeftUpperArm", "LeftArm", "mixamorig:LeftArm", "upperarm_l", "l_upper_arm", "l_upperarm", "larm", "l_arm" } },
+            { "LeftLowerArm", new[] { "LeftLowerArm", "LeftForeArm", "mixamorig:LeftForeArm", "lowerarm_l", "l_forearm", "lforearm" } },
+            { "LeftHand", new[] { "LeftHand", "mixamorig:LeftHand", "hand_l", "l_hand", "l_wrist" } },
+            { "RightShoulder", new[] { "RightShoulder", "mixamorig:RightShoulder", "clavicle_r", "r_clav" } },
+            { "RightUpperArm", new[] { "RightUpperArm", "RightArm", "mixamorig:RightArm", "upperarm_r", "r_upper_arm", "r_upperarm", "rarm", "r_arm" } },
+            { "RightLowerArm", new[] { "RightLowerArm", "RightForeArm", "mixamorig:RightForeArm", "lowerarm_r", "r_forearm", "rforearm" } },
+            { "RightHand", new[] { "RightHand", "mixamorig:RightHand", "hand_r", "r_hand", "r_wrist" } },
+            { "LeftUpperLeg", new[] { "LeftUpperLeg", "LeftUpLeg", "mixamorig:LeftUpLeg", "thigh_l", "l_thigh", "lthigh" } },
+            { "LeftLowerLeg", new[] { "LeftLowerLeg", "LeftLeg", "mixamorig:LeftLeg", "calf_l", "l_shin", "l_lowerleg", "lshin", "LeftCalf" } },
+            { "LeftFoot", new[] { "LeftFoot", "mixamorig:LeftFoot", "foot_l", "l_ankle", "lankle", "l_foot" } },
+            { "LeftToeBase", new[] { "LeftToeBase", "mixamorig:LeftToeBase", "ball_l", "l_toes" } },
+            { "RightUpperLeg", new[] { "RightUpperLeg", "RightUpLeg", "mixamorig:RightUpLeg", "thigh_r", "r_thigh", "rthigh" } },
+            { "RightLowerLeg", new[] { "RightLowerLeg", "RightLeg", "mixamorig:RightLeg", "calf_r", "r_shin", "r_lowerleg", "rshin", "RightCalf" } },
+            { "RightFoot", new[] { "RightFoot", "mixamorig:RightFoot", "foot_r", "r_ankle", "rankle", "r_foot" } },
+            { "RightToeBase", new[] { "RightToeBase", "mixamorig:RightToeBase", "ball_r", "r_toes" } },
         };
 
         // ─── Public API ────────────────────────────────────────────────────
